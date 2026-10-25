@@ -20,6 +20,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`broken-image`](#broken-image) | error | An image failed to load or has no src. |
 | [`image-distortion`](#image-distortion) | error | An image is rendered at a different aspect ratio than its natural one (stretched or squashed). |
 | [`oversized-icon`](#oversized-icon) | error | An icon-sized SVG (viewBox ≤ 48) renders huge because it has no width/height, so it stretches to fill its container. |
+| [`invisible-content`](#invisible-content) | error | In-flow content (text) that is still fully transparent after scrolling through the page: usually a scroll-reveal animation that never fires (e.g. IntersectionObserver threshold too high for tall sections on phones) or a missing "visible" class. |
 | [`missing-alt`](#missing-alt) | warn | An &lt;img> has no alt attribute. |
 | [`dead-link`](#dead-link) | warn | A link with href="#" (or none) and no click handler: a CTA that goes nowhere. |
 | [`nested-interactive`](#nested-interactive) | error | A link or button nested inside another link or button (invalid HTML; causes hydration errors and unpredictable clicks). |
@@ -181,6 +182,14 @@ An image failed to load or has no src.
 An image is rendered at a different aspect ratio than its natural one (stretched or squashed).
 
 **How to fix:** Set only one dimension (`height: auto`) or use `object-fit: cover` / `contain` with a fixed box.
+
+### invisible-content
+
+**Default:** error
+
+In-flow content (text) that is still fully transparent after scrolling through the page: usually a scroll-reveal animation that never fires (e.g. IntersectionObserver threshold too high for tall sections on phones) or a missing "visible" class.
+
+**How to fix:** Use a low IntersectionObserver threshold (0–0.15) or rootMargin, reveal elements already in view on load, and make content visible by default when JS or animations are unavailable (prefers-reduced-motion).
 
 ### dead-link
 

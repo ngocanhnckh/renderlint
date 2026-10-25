@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="expect" content="invisible-content"><title>t</title>
+<style>body{font-family:sans-serif;margin:0;padding:16px;color:#111;background:#fff}
+.reveal{opacity:0;transition:opacity .6s}.reveal.in{opacity:1}
+.tall{height:2400px;background:#f8fafc}
+.slides{display:grid}.slides>div{grid-area:1/1;padding:16px;background:#eef2ff}.slides>div:not(.active){opacity:0}
+.card{position:relative}.card .hover{position:absolute;inset:0;opacity:0;background:#000;color:#fff}</style></head><body>
+<p class="reveal">This intro paragraph reveals fine because it is short and on screen.</p>
+<section class="reveal tall"><h2>Features</h2><p>This tall section never reaches the 50% visibility threshold on a phone, so it stays invisible forever.</p></section>
+<div class="slides"><div class="active">Slide one is the active testimonial quote</div><div>Slide two is a hidden testimonial quote</div></div>
+<div class="card"><p>Card with a hover overlay</p><div class="hover">Overlay text shown on hover only</div></div>
+<script>
+const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) e.target.classList.add('in'); }), { threshold: 0.5 });
+document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+</script></body></html>

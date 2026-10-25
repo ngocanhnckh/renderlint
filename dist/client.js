@@ -1266,6 +1266,34 @@ RL.rule({
   },
 });
 
+// In-flow content that is still fully transparent after the page was scrolled
+// through and animations finished: typically a scroll-reveal that never fires
+// (IntersectionObserver threshold too high for tall sections on phones).
+RL.rule({
+  id: 'invisible-content',
+  run(ctx) {
+    const reported = [];
+    for (const el of ctx.elements) {
+      const s = RL.cs(el);
+      if (parseFloat(s.opacity) > 0.05 || s.position === 'absolute' || s.position === 'fixed') continue;
+      if (s.display === 'none' || s.visibility === 'hidden') continue;
+      if (reported.some((r) => r.contains(el))) continue;
+      const p = RL.parentOf(el);
+      if (p && p !== document.body && RL.effectiveOpacity(p) <= 0.05) continue; // report the outermost one only
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (text.length < 20 || el.getAttribute('aria-hidden') === 'true' || el.hasAttribute('inert')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 40 || r.height < 16) continue;
+      if (RL.isIgnored(el, 'invisible-content')) continue;
+      // stacked slides/tabs: a visible sibling occupies the same box
+      const sib = p ? Array.from(p.children).find((c) => c !== el && parseFloat(RL.cs(c).opacity) > 0.5 && (() => { const i = RL.intersect(RL.rectOf(c), RL.rectOf(el)); return i && i.w * i.h > 0.5 * r.width * r.height; })()) : null;
+      if (sib) continue;
+      reported.push(el);
+      ctx.report({ rule: 'invisible-content', el, message: 'Content stays invisible (opacity: ' + s.opacity + ') even after scrolling through the page — a reveal animation that never triggers?', details: { opacity: s.opacity } });
+    }
+  },
+});
+
 // ---- rules/a11y.js
 // Readability / usability rules: tap targets, tiny text, unlabeled controls,
 // wrapping button labels, overly long lines, contrast (DOM approximation),

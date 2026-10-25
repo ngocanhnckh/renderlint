@@ -86,6 +86,12 @@ export const RULES = {
     summary: 'An icon-sized SVG (viewBox ≤ 48) renders huge because it has no width/height, so it stretches to fill its container.',
     fix: 'Give icons an explicit size: width/height attributes or CSS (e.g. `width: 1.25rem; height: 1.25rem`, Tailwind `size-5`), and `flex-shrink: 0` in flex rows.',
   },
+  'invisible-content': {
+    severity: 'error',
+    category: 'content',
+    summary: 'In-flow content (text) that is still fully transparent after scrolling through the page: usually a scroll-reveal animation that never fires (e.g. IntersectionObserver threshold too high for tall sections on phones) or a missing "visible" class.',
+    fix: 'Use a low IntersectionObserver threshold (0–0.15) or rootMargin, reveal elements already in view on load, and make content visible by default when JS or animations are unavailable (prefers-reduced-motion).',
+  },
   'missing-alt': {
     severity: 'warn',
     category: 'a11y',
