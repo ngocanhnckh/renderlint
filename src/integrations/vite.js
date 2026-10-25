@@ -48,7 +48,7 @@ start(${JSON.stringify({ rules: rules || {}, overlay })}, (report) => { if (impo
       const outDir = resolve(config.root, config.build.outDir);
       if (!existsSync(join(outDir, 'index.html'))) return; // SSR frameworks: use the CLI against a preview server
       const { check, formatPretty } = await import('../index.js');
-      const result = await check({ targets: [outDir], cwd: config.root, config: { rules: rules || {}, ...checkConfig } });
+      const result = await check({ targets: [outDir], cwd: config.root, config: { base: config.base, rules: rules || {}, ...checkConfig } });
       const text = formatPretty(result, { cwd: config.root });
       if (!result.ok) {
         const err = new Error(`renderlint: ${result.stats.errors} UI defect(s) — build failed.\n\n${text}\n`);

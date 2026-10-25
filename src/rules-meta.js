@@ -158,6 +158,12 @@ export const RULES = {
     summary: 'Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names).',
     fix: 'Design for longer content: allow wrapping, avoid fixed heights/widths on text containers, add `min-width: 0` to flex children and `overflow-wrap: anywhere` for long words.',
   },
+  'page-error': {
+    severity: 'error',
+    category: 'runtime',
+    summary: 'The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx).',
+    fix: 'Make sure the page exists and the server is running (check the URL, routes and `serve` command), then fix any server error.',
+  },
   'console-error': {
     severity: 'error',
     category: 'runtime',

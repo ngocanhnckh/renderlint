@@ -37,6 +37,14 @@ async function readStdin() {
 }
 
 export async function hook() {
+  // A hook must never trap the agent because of renderlint's own failures.
+  try { return await runHook(); } catch (e) {
+    process.stderr.write(`renderlint hook error (ignored): ${String(e && e.message || e).split('\n')[0]}\n`);
+    return 0;
+  }
+}
+
+async function runHook() {
   const input = await readStdin();
   const cwd = input.cwd || process.cwd();
   process.chdir(cwd);
@@ -52,6 +60,7 @@ export async function hook() {
     state.blocks = 0;
   }
   state.lastSeen = fp;
+  writeFileSync(statePath, JSON.stringify(state)); // saved before checking, so a crash doesn't re-run every turn
 
   const { check, formatPretty } = await import('./index.js');
   let result;

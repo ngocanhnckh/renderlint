@@ -71,3 +71,24 @@ test('removing ignore directives makes intentional defects fire', async () => {
   const rules = Array.from(new Set(res.issues.filter((i) => i.severity === 'error').map((i) => i.rule))).sort();
   assert.deepEqual(rules, ['contrast', 'emoji', 'text-clipped']);
 });
+
+test('static server survives malformed URLs and blocks traversal', async () => {
+  const { serveStatic } = await import('../src/server.js');
+  const dir = mkdtempSync(join(tmpdir(), 'rl-'));
+  writeFileSync(join(dir, 'index.html'), '<p>hi</p>');
+  const srv = await serveStatic(dir, { base: '/repo/' });
+  try {
+    assert.equal((await fetch(srv.url + '/100%.png')).status, 400);
+    assert.equal((await fetch(srv.url.replace('/repo', '') + '/repo/index.html')).status, 200);
+    assert.equal((await fetch(srv.url + '/..%2F..%2Fetc%2Fpasswd')).status, 403);
+  } finally { await srv.close(); }
+});
+
+test('cli keeps the target after a bare --stress', async () => {
+  const { parseArgs } = await import('node:util');
+  const argv = ['--stress', 'dist', '--no-scan'].flatMap((a, i, all) => (a === '--stress' && !/^\d+(\.\d+)?$/.test(all[i + 1] || '') ? ['--stress', '1.5'] : [a]));
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options: { stress: { type: 'string' }, 'no-scan': { type: 'boolean' } } });
+  assert.equal(values.stress, '1.5');
+  assert.deepEqual(positionals, ['dist']);
+  assert.equal(values['no-scan'], true);
+});

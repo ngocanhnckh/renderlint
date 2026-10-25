@@ -20,6 +20,7 @@ Targets
 Options
   --serve "<cmd>"        start this server command first (URL auto-detected from its output, or --url)
   --url <url>            base URL (with --serve)
+  --base /repo/          public base path of a static build (Vite \`base\`, GitHub Pages)
   --pages /,/pricing     entry pages (default /)
   --no-crawl             do not follow links
   --max-pages <n>        page limit when crawling (default 12)
@@ -37,6 +38,8 @@ Options
 `;
 
 export async function main(argv) {
+  // `--stress` may be used without a value: don't let it swallow the next argument.
+  argv = argv.flatMap((a, i) => (a === '--stress' && !/^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? ['--stress', '1.5'] : [a]));
   const cmd = ['init', 'scan', 'explain', 'watch', 'hook', 'check'].includes(argv[0]) ? argv.shift() : 'check';
   if (argv.includes('-h') || argv.includes('--help')) { process.stdout.write(HELP); return 0; }
   if (argv.includes('-v') || argv.includes('--version')) {
@@ -58,15 +61,13 @@ export async function main(argv) {
   const { values, positionals } = parseArgs({
     args: argv, allowPositionals: true, strict: false,
     options: {
-      serve: { type: 'string' }, url: { type: 'string' }, pages: { type: 'string' }, crawl: { type: 'boolean' }, 'no-crawl': { type: 'boolean' },
+      serve: { type: 'string' }, url: { type: 'string' }, base: { type: 'string' }, pages: { type: 'string' }, crawl: { type: 'boolean' }, 'no-crawl': { type: 'boolean' },
       'max-pages': { type: 'string' }, viewports: { type: 'string' }, dark: { type: 'boolean' }, light: { type: 'boolean' },
       rules: { type: 'string' }, stress: { type: 'string' }, 'fail-on': { type: 'string' }, format: { type: 'string' }, json: { type: 'boolean' },
       'no-screenshots': { type: 'boolean' }, 'no-stress': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' },
     },
   });
-  // `--stress` without a value
-  if (argv.includes('--stress') && (values.stress === undefined || values.stress === true || /^-/.test(String(values.stress)))) values.stress = '1.5';
 
   const rules = {};
   for (const pair of (values.rules || '').split(',').filter(Boolean)) {
@@ -74,7 +75,7 @@ export async function main(argv) {
     rules[k.trim()] = (v || 'error').trim();
   }
   const config = {
-    serve: values.serve, url: values.url, rules,
+    serve: values.serve, url: values.url, base: values.base, rules,
     pages: values.pages ? values.pages.split(',') : undefined,
     crawl: values['no-crawl'] ? false : undefined,
     maxPages: values['max-pages'] ? +values['max-pages'] : undefined,
@@ -136,12 +137,20 @@ async function watch(argv) {
   await run();
   const dirs = ['src', 'app', 'pages', 'components', 'public', 'styles', 'lib'].map((d) => join(cwd, d)).filter((d) => existsSync(d));
   if (!dirs.length) dirs.push(cwd);
+  const onChange = (ev, file) => {
+    if (file && /node_modules|\.renderlint|\.git/.test(file)) return;
+    clearTimeout(timer);
+    timer = setTimeout(run, 1200);
+  };
+  const { readdirSync } = await import('node:fs');
+  const watchTree = (d, depth = 0) => {
+    // recursive fs.watch is unavailable on Linux before Node 20: watch each directory
+    fsWatch(d, onChange);
+    if (depth > 8) return;
+    for (const e of readdirSync(d, { withFileTypes: true })) if (e.isDirectory() && !/^(node_modules|\.git|\.renderlint|dist|build)$/.test(e.name)) watchTree(join(d, e.name), depth + 1);
+  };
   for (const d of dirs) {
-    fsWatch(d, { recursive: true }, (ev, file) => {
-      if (file && /node_modules|\.renderlint|\.git/.test(file)) return;
-      clearTimeout(timer);
-      timer = setTimeout(run, 1200);
-    });
+    try { fsWatch(d, { recursive: true }, onChange); } catch { watchTree(d); }
   }
   console.error('Watching ' + dirs.map((d) => d.replace(cwd + '/', '')).join(', ') + ' — Ctrl+C to stop.');
   await new Promise((resolve) => process.on('SIGINT', resolve));

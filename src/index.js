@@ -34,9 +34,33 @@ async function reachable(url) {
   try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); return r.status < 500; } catch { return false; }
 }
 
+// Is the server on this port really this project's dev server (and not some other app)?
+async function looksLikeDevServer(url, fw) {
+  try {
+    if (['vite', 'sveltekit', 'astro', 'remix', 'react-router', 'qwik', 'nuxt', 'solid-start'].includes(fw.id)) {
+      const r = await fetch(url + (fw.id === 'nuxt' ? '/_nuxt/@vite/client' : '/@vite/client'), { signal: AbortSignal.timeout(1500) });
+      return r.status === 200;
+    }
+    if (fw.id === 'next') {
+      const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      return /next\.js/i.test(r.headers.get('x-powered-by') || '') || /\/_next\//.test(await r.text());
+    }
+  } catch { /* not reachable */ }
+  return false;
+}
+
 // Decide what to check: returns { base, pages, cleanup[] }
 export async function resolveTargets(targets, config, cwd, log) {
   const cleanup = [];
+  try {
+    return await resolveTargetsInner(targets, config, cwd, log, cleanup);
+  } catch (e) {
+    for (const fn of cleanup.reverse()) await Promise.resolve(fn()).catch(() => {});
+    throw e;
+  }
+}
+
+async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
   const pages = [];
   let base;
   const urls = targets.filter((t) => /^https?:\/\//.test(t));
@@ -50,7 +74,7 @@ export async function resolveTargets(targets, config, cwd, log) {
     if (!existsSync(p)) throw new Error(`renderlint: ${paths[0]} does not exist`);
     const isDir = statSync(p).isDirectory();
     const root = isDir ? p : dirname(p);
-    const srv = await serveStatic(root, { spa: isDir && existsSync(join(root, 'index.html')) });
+    const srv = await serveStatic(root, { spa: isDir && existsSync(join(root, 'index.html')), base: config.base });
     cleanup.push(srv.close);
     base = srv.url;
     if (isDir) {
@@ -78,7 +102,7 @@ export async function resolveTargets(targets, config, cwd, log) {
     base = new URL(s.url).origin;
     log(`Server ready at ${base}`);
   } else if (config.dir) {
-    const srv = await serveStatic(resolve(cwd, config.dir));
+    const srv = await serveStatic(resolve(cwd, config.dir), { base: config.base });
     cleanup.push(srv.close);
     base = srv.url;
   } else {
@@ -86,7 +110,7 @@ export async function resolveTargets(targets, config, cwd, log) {
     const proj = detectProject(cwd);
     const ports = proj.framework ? [proj.framework.port, ...COMMON_PORTS.filter((p) => p !== proj.framework.port)] : [];
     for (const port of proj.pkg ? ports.slice(0, 1) : []) {
-      if (await reachable(`http://localhost:${port}`)) { base = `http://localhost:${port}`; log(`Using the dev server already running at ${base}`); break; }
+      if (await looksLikeDevServer(`http://localhost:${port}`, proj.framework)) { base = `http://localhost:${port}`; log(`Using the dev server already running at ${base}`); break; }
     }
     if (!base && proj.devCommand) {
       log(`Starting ${proj.framework ? proj.framework.name + ' ' : ''}dev server: ${proj.devCommand}`);
@@ -95,7 +119,7 @@ export async function resolveTargets(targets, config, cwd, log) {
       base = new URL(s.url).origin + new URL(s.url).pathname.replace(/\/$/, '');
     }
     if (!base && proj.staticDirs.length) {
-      const srv = await serveStatic(join(cwd, proj.staticDirs[0]));
+      const srv = await serveStatic(join(cwd, proj.staticDirs[0]), { base: config.base });
       cleanup.push(srv.close);
       base = srv.url;
       log(`Serving static build ${proj.staticDirs[0]}/ at ${base}`);
@@ -120,11 +144,15 @@ export async function resolveTargets(targets, config, cwd, log) {
 export async function check(options = {}) {
   const cwd = options.cwd || process.cwd();
   const log = options.log || (() => {});
-  const { config: fileConfig } = options.configFile === false ? { config: normalize({ ...DEFAULTS }) } : await loadConfig(cwd, options.configFile);
-  const config = normalize({ ...fileConfig, ...stripUndefined(options.config || {}), rules: { ...fileConfig.rules, ...((options.config || {}).rules || {}) } });
+  const { config: fileConfig } = options.configFile === false ? { config: normalize({ ...DEFAULTS }, cwd) } : await loadConfig(cwd, options.configFile);
+  const config = normalize({ ...fileConfig, ...stripUndefined(options.config || {}), rules: { ...fileConfig.rules, ...((options.config || {}).rules || {}) } }, cwd);
   const started = Date.now();
   const targets = options.targets || (options.url ? [options.url] : []);
   const { pages: urls, cleanup } = await resolveTargets(targets, config, cwd, log);
+  // Make sure dev servers we started die with us (Ctrl+C, hook timeout, SIGTERM).
+  const onSignal = (sig) => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } process.exit(sig === 'SIGINT' ? 130 : 143); };
+  const onExit = () => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } };
+  process.once('SIGINT', onSignal); process.once('SIGTERM', onSignal); process.once('exit', onExit);
   let browser;
   try {
     browser = options.browser || await launchBrowser({ log });
@@ -149,6 +177,7 @@ export async function check(options = {}) {
     writeFileSync(join(config.outputDir, 'report.md'), formatMarkdown(result));
     return result;
   } finally {
+    process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal); process.removeListener('exit', onExit);
     if (browser && !options.browser) await browser.close().catch(() => {});
     for (const fn of cleanup.reverse()) await Promise.resolve(fn()).catch(() => {});
   }

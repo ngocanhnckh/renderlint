@@ -1641,6 +1641,7 @@ RL.analyze = function (options) {
     errors: [],
     report(issue) {
       const { el, related, ...rest } = issue;
+      if (options.alsoIgnore && el && (RL.isIgnored(el, options.alsoIgnore) || (related && RL.isIgnored(related, options.alsoIgnore)))) return;
       if (el && el.nodeType === 1 && /^(text-overflow|text-clipped|obscured-content|viewport-overflow)$/.test(issue.rule)) RL.flagged.add(el);
       this.issues.push({ ...rest, ...RL.issueBase(el, related) });
     },

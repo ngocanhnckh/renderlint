@@ -7,6 +7,7 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `url` | — | Base URL of an already-running app. Combined with `serve`, the server is only started if the URL is not reachable. |
 | `serve` | — | Command that starts a server, e.g. `"npm run dev"`. The URL is detected from its output (`Local: http://localhost:5173`) unless `url` is set. The process is stopped afterwards. |
 | `dir` | — | Static directory to serve (SPA fallback to `index.html`). |
+| `base` | — | Public base path the build expects, e.g. `"/my-repo/"` (Vite `base`, GitHub Pages). The Vite plugin passes it automatically. CLI: `--base`. |
 | `pages` | `["/"]` | Entry pages (paths or absolute URLs). |
 | `crawl` | `true` | Follow same-origin links found on checked pages. |
 | `maxPages` | `12` | Page limit when crawling. |

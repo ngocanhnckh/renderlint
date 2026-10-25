@@ -7,6 +7,7 @@ export const DEFAULTS = {
   url: undefined,          // base URL of a running app
   serve: undefined,        // command that starts a server (e.g. "npm run dev")
   dir: undefined,          // static directory to serve (e.g. "dist")
+  base: undefined,         // public base path the build expects, e.g. "/my-repo/" (Vite `base`)
   pages: ['/'],            // entry pages (paths or absolute URLs)
   crawl: true,             // follow same-origin links from entry pages
   maxPages: 12,
@@ -53,10 +54,10 @@ export async function loadConfig(cwd = process.cwd(), explicit) {
   } else if (existsSync(join(cwd, 'package.json'))) {
     try { user = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8')).renderlint || {}; } catch { /* ignore */ }
   }
-  return { config: normalize({ ...DEFAULTS, ...user }), file };
+  return { config: normalize({ ...DEFAULTS, ...user }, cwd), file };
 }
 
-export function normalize(c) {
+export function normalize(c, cwd = process.cwd()) {
   const out = { ...c };
   out.viewports = (Array.isArray(c.viewports) ? c.viewports : String(c.viewports).split(',')).map((v) => {
     if (typeof v === 'object') return { width: +v.width, height: +(v.height || defaultHeight(+v.width)) };
@@ -73,7 +74,16 @@ export function normalize(c) {
   if (out.stress === true) out.stress = 1.5;
   if (typeof out.colorSchemes === 'string' && out.colorSchemes !== 'auto') out.colorSchemes = out.colorSchemes.split(',');
   if (typeof out.pages === 'string') out.pages = out.pages.split(',');
-  out.outputDir = resolve(out.outputDir);
+  out.outputDir = resolve(cwd, out.outputDir);
+  if (!out.viewports.length || out.viewports.some((v) => !Number.isFinite(v.width) || !Number.isFinite(v.height))) {
+    throw new Error(`renderlint: invalid viewports ${JSON.stringify(c.viewports)} (use widths like 375,768,1280 or WxH like 390x844)`);
+  }
+  for (const k of ['maxPages', 'timeout', 'serverTimeout', 'concurrency', 'minTapTarget', 'minFontSize', 'maxLineLength', 'maxScreenshotHeight']) {
+    if (out[k] !== undefined && !(Number.isFinite(+out[k]) && +out[k] > 0)) throw new Error(`renderlint: "${k}" must be a positive number (got ${JSON.stringify(c[k])})`);
+    if (out[k] !== undefined) out[k] = +out[k];
+  }
+  if (out.stress !== false && out.stress !== undefined && !(Number.isFinite(+out.stress) && +out.stress >= 1)) throw new Error(`renderlint: "stress" must be a factor >= 1 or false (got ${JSON.stringify(c.stress)})`);
+  if (!['error', 'warn', 'never'].includes(out.failOn)) throw new Error(`renderlint: "failOn" must be error | warn | never`);
   return out;
 }
 

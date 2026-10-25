@@ -12,10 +12,14 @@ const TYPES = {
   '.wasm': 'application/wasm', '.mp4': 'video/mp4', '.webm': 'video/webm', '.xml': 'application/xml', '.pdf': 'application/pdf',
 };
 
-export function serveStatic(dir, { port = 0, spa = true } = {}) {
+export function serveStatic(dir, { port = 0, spa = true, base = '/' } = {}) {
   const root = resolve(dir);
+  const prefix = ('/' + String(base || '/').replace(/^\.?\/+|\/+$/g, '')).replace(/^\/$/, '');
   const server = createServer((req, res) => {
-    let path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+    let path;
+    try { path = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400); return res.end(); }
+    // apps built with a sub-path base (e.g. GitHub Pages "/repo/") request /repo/assets/...
+    if (prefix && (path === prefix || path.startsWith(prefix + '/'))) path = path.slice(prefix.length) || '/';
     let file = normalize(join(root, path));
     if (file !== root && !file.startsWith(root + sep)) { res.writeHead(403); return res.end(); }
     const candidates = [file, join(file, 'index.html'), file + '.html'];
@@ -36,7 +40,7 @@ export function serveStatic(dir, { port = 0, spa = true } = {}) {
     server.once('error', fail);
     server.listen(port, '127.0.0.1', () => {
       const { port: p } = server.address();
-      ok({ url: `http://127.0.0.1:${p}`, close: () => new Promise((c) => server.close(() => c())) });
+      ok({ url: `http://127.0.0.1:${p}${prefix}`, close: () => new Promise((c) => server.close(() => c())) });
     });
   });
 }
@@ -44,9 +48,9 @@ export function serveStatic(dir, { port = 0, spa = true } = {}) {
 export async function waitForUrl(url, { timeout = 120000, proc } = {}) {
   const start = Date.now();
   let exited = null;
-  proc && proc.once('exit', (code) => { exited = code; });
+  proc && proc.once('exit', (code, signal) => { exited = code ?? signal ?? 'killed'; });
   while (Date.now() - start < timeout) {
-    if (exited !== null) throw new Error(`Server command exited with code ${exited} before ${url} became reachable.`);
+    if (exited !== null || (proc && proc.signalCode)) throw new Error(`Server command exited (${exited ?? proc.signalCode}) before ${url} became reachable.`);
     try {
       const res = await fetch(url, { redirect: 'manual' });
       if (res.status < 500) return;
@@ -87,7 +91,7 @@ export async function startAndWait(cmd, { url, cwd, timeout = 120000, log } = {}
   while (!target) {
     if (Date.now() - start > timeout) { handle.stop(); throw new Error('Could not detect the server URL from the command output. Pass --url.'); }
     target = handle.detectUrl();
-    if (handle.proc.exitCode !== null) throw new Error(`Server command exited (${handle.proc.exitCode}):\n${handle.output().slice(-2000)}`);
+    if (handle.proc.exitCode !== null || handle.proc.signalCode) throw new Error(`Server command exited (${handle.proc.exitCode}):\n${handle.output().slice(-2000)}`);
     if (!target) await new Promise((r) => setTimeout(r, 300));
   }
   try {

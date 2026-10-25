@@ -63,7 +63,10 @@ const STRESS_SCRIPT = (factor) => {
 function slugFor(url) {
   const u = new URL(url);
   const s = (u.pathname.replace(/\/+$/, '') || '/index').replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'index';
-  return (s + (u.search ? '-' + u.search.replace(/[^a-z0-9]+/gi, '-') : '')).slice(0, 80);
+  const name = (s + (u.search ? '-' + u.search.replace(/[^a-z0-9]+/gi, '-') : '')).slice(0, 60);
+  let h = 0;
+  for (const ch of u.pathname + u.search) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return name + '-' + h.toString(36).slice(0, 5);
 }
 
 const NAV_SKIP = /\.(pdf|zip|png|jpe?g|gif|svg|webp|avif|mp4|webm|mp3|xml|txt|json|css|js|ico|woff2?)(\?|#|$)/i;
@@ -107,9 +110,9 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
       for (const { vp, res, ms } of results) {
         pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error });
         for (const is of res.issues) allIssues.push({ ...is, page: pageInfo.path, url, viewport: vp.width, scheme, screenshot: res.screenshot });
-        if (res.error) allIssues.push({ rule: 'console-error', severity: 'error', message: 'renderlint could not analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
+        if (res.error) allIssues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
         if (config.colorSchemes === 'auto' && scheme === 'light' && res.meta && res.meta.darkModeCss && !schemes.includes('dark')) schemes.push('dark');
-        if (config.crawl && res.meta && scheme === 'light') {
+        if (config.crawl && res.meta && si === 0) {
           for (const link of res.meta.links) {
             let u;
             try { u = new URL(link); } catch { continue; }
@@ -126,6 +129,14 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     }
   }
   return { issues: allIssues, pages };
+}
+
+// In the stress pass, selectors ignored for fragile-layout apply to every stressed rule.
+function ignoreSelectorsFor(sel) {
+  const out = { ...sel };
+  const extra = sel['fragile-layout'] || [];
+  for (const r of ['text-overflow', 'text-clipped', 'content-overflow', 'viewport-overflow', 'text-overlap', 'element-overlap']) out[r] = [...(out[r] || []), ...extra];
+  return out;
 }
 
 async function mapLimit(items, limit, fn) {
@@ -195,7 +206,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       }
     }
     if (resp && resp.status() >= 400) {
-      issues.push({ rule: 'console-error', severity: 'error', message: `Page responded with HTTP ${resp.status()}.` });
+      issues.push({ rule: 'page-error', severity: 'error', message: `Page responded with HTTP ${resp.status()}.` });
     }
     lap('goto');
     await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
@@ -254,7 +265,8 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       await page.evaluate(STRESS_SCRIPT, config.stress);
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, ['text-overflow', 'text-clipped', 'content-overflow', 'viewport-overflow', 'text-overlap', 'element-overlap'].includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
-      const sres = await page.evaluate((o) => window.__renderlint.analyze(o), { ...analyzeOpts, rules: stressRules, contrastCandidates: false });
+      const stressIgnore = { ...ignoreSelectorsFor(analyzeOpts.ignoreSelectors) };
+      const sres = await page.evaluate((o) => window.__renderlint.analyze(o), { ...analyzeOpts, ignoreSelectors: stressIgnore, alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false });
       const seen = new Set();
       for (const i of sres.issues) {
         if (baseline.has(i.rule + '|' + i.selector)) continue;

@@ -32,6 +32,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`line-length`](#line-length) | warn | Paragraph lines are very long (>120 characters), which is tiring to read. |
 | [`focus-indicator`](#focus-indicator) | warn | A focusable element shows no visible change when focused (outline removed without replacement). |
 | [`fragile-layout`](#fragile-layout) | warn | Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names). |
+| [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
 | [`console-error`](#console-error) | error | Uncaught JavaScript error or console.error while rendering (hydration mismatches, crashed components). |
 | [`broken-resource`](#broken-resource) | error | A same-origin stylesheet, script, font or image request failed (404/500), or a web font failed to load. |
 
@@ -260,6 +261,14 @@ Paragraph lines are very long (>120 characters), which is tiring to read.
 **How to fix:** Constrain text width, e.g. `max-width: 65ch` (Tailwind `max-w-prose`).
 
 ## Runtime
+
+### page-error
+
+**Default:** error
+
+The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx).
+
+**How to fix:** Make sure the page exists and the server is running (check the URL, routes and `serve` command), then fix any server error.
 
 ### console-error
 
