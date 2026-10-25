@@ -55,7 +55,7 @@ Agents are great at writing frontend code, but they can't see what they built. T
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
 | Hydration errors and crashes | `console-error`, `broken-resource` |
 
-See [docs/rules.md](docs/rules.md) for all 28 rules, their defaults and fix guidance.
+See [docs/rules.md](docs/rules.md) for all 29 rules, their defaults and fix guidance.
 
 ## Does it work?
 
