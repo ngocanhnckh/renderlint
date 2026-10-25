@@ -18,6 +18,8 @@
 ✖ 4 error(s), 2 warning(s) · screenshots in .renderlint/screens
 ```
 
+<p align="center"><img src="docs/images/example-annotated.png" width="300" alt="renderlint's annotated screenshot of a page at 375px: numbered boxes mark a hidden CTA button, text spilling out of a fixed-height pricing card, and a clipped chart label"><br><sub>Every run saves annotated screenshots like this one, at 375px here, so agents with vision (and humans) can see each finding.</sub></p>
+
 ESLint and TypeScript read your code. renderlint opens the page in a real headless Chromium at phone, tablet and desktop widths (plus dark mode when your CSS supports it). It measures what was actually painted, then reports each defect with the element, the component and source file when it can find them, an annotated screenshot, and a concrete fix.
 
 It doesn't care which framework you use. If it renders in a browser, renderlint can lint it: React, Next.js, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, Solid, Qwik, Remix, plain HTML, and anything else.
@@ -45,14 +47,15 @@ Agents are great at writing frontend code, but they can't see what they built. T
 | Chart and diagram labels collide or get cut off | `text-overlap`, `text-clipped` (works on SVG charts) |
 | A fixed header covers the hero, or a decoration covers a button | `obscured-content` |
 | `undefined`, `NaN`, `[object Object]`, `Invalid Date`, lorem ipsum | `placeholder-text` |
-| Broken or stretched images | `broken-image`, `image-distortion` |
+| Broken or stretched images, giant unsized SVG icons | `broken-image`, `image-distortion`, `oversized-icon` |
+| Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No viewport meta, so the page is zoomed out on phones | `missing-viewport-meta` |
 | A 3px overflow that adds a pointless scrollbar | `accidental-scrollbar` |
 | `href="#"` buttons that go nowhere | `dead-link` |
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
 | Hydration errors and crashes | `console-error`, `broken-resource` |
 
-See [docs/rules.md](docs/rules.md) for all 26 rules, their defaults and fix guidance.
+See [docs/rules.md](docs/rules.md) for all 28 rules, their defaults and fix guidance.
 
 ## Quick start
 
