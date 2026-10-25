@@ -9,13 +9,14 @@ export function mergeIssues(raw, config) {
     const severity = effectiveSeverity(i, config);
     if (severity === 'off') continue;
     if ((config.ignore || []).some((ig) => !ig.selector && (!ig.rule || ig.rule === i.rule) && (!ig.page || globLike(ig.page, i.page || '')) && (!ig.message || new RegExp(ig.message).test(i.message)))) continue;
-    const key = [i.rule, i.selector || i.message, i.related ? i.related.selector : '', i.file || '', i.line || '', i.scheme || ''].join('|');
+    const key = [i.rule, i.selector || i.message, i.related ? i.related.selector : '', i.file || '', i.line || ''].join('|');
     let g = groups.get(key);
     if (!g) {
-      g = { ...i, severity, viewports: [], pages: [], markers: [] };
-      delete g.viewport; delete g.page; delete g.url; delete g.marker;
+      g = { ...i, severity, viewports: [], pages: [], markers: [], schemes: [] };
+      delete g.viewport; delete g.page; delete g.url; delete g.marker; delete g.scheme;
       groups.set(key, g);
     }
+    if (i.scheme && !g.schemes.includes(i.scheme)) g.schemes.push(i.scheme);
     if (i.viewport && !g.viewports.includes(i.viewport)) g.viewports.push(i.viewport);
     if (i.page && !g.pages.includes(i.page)) g.pages.push(i.page);
     if (i.marker && i.screenshot) g.markers.push({ screenshot: i.screenshot, n: i.marker, viewport: i.viewport });
@@ -26,7 +27,7 @@ export function mergeIssues(raw, config) {
   for (const g of groups.values()) {
     const shape = (sel) => (sel || '').replace(/:nth-of-type\(\d+\)/g, '');
     const msgShape = g.message.replace(/"[^"]*"/g, '""').replace(/\d+(\.\d+)?/g, '#');
-    const key = g.selector ? [g.rule, shape(g.selector), shape(g.related && g.related.selector), msgShape, g.scheme || ''].join('|') : 'u|' + similar.size;
+    const key = g.selector ? [g.rule, shape(g.selector), shape(g.related && g.related.selector), msgShape, g.schemes.join()].join('|') : 'u|' + similar.size;
     const first = similar.get(key);
     if (!first) { g.count = 1; similar.set(key, g); continue; }
     first.count++;
@@ -82,7 +83,7 @@ export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = 
       if (i.pages.length) where.push('page ' + i.pages.slice(0, 4).join(', ') + (i.pages.length > 4 ? ` +${i.pages.length - 4}` : ''));
       if (i.viewports.length && i.viewports.length < config.viewports.length) where.push('at ' + i.viewports.sort((a, b) => a - b).map((v) => v + 'px').join(', '));
       else if (i.viewports.length) where.push('all viewports');
-      if (i.scheme === 'dark') where.push('dark mode');
+      if (i.schemes && i.schemes.length === 1 && i.schemes[0] === 'dark') where.push('dark mode only');
       if (i.markers.length) where.push('see ' + relative(cwd, i.markers[0].screenshot) + ' #' + i.markers[0].n);
       if (where.length) lines.push(dim('        ' + where.join(' · ')));
       if (i.details && i.details.suggestion) lines.push(dim('       fix ') + `use ${i.details.suggestion} (currently ${i.details.fg} on ${i.details.bg})`);
@@ -109,7 +110,7 @@ export function formatMarkdown(result) {
     out.push(`- **${i.severity}** \`${i.rule}\` — ${i.message}`);
     if (i.file) out.push(`  - at \`${i.file}:${i.line}\``);
     if (i.selector) out.push(`  - element \`${i.selector}\`${i.text ? ` "${i.text}"` : ''}${i.source ? ` — ${sourceStr(i.source)}` : ''}`);
-    if (i.pages.length) out.push(`  - pages ${i.pages.join(', ')} · viewports ${i.viewports.join(', ')}${i.scheme === 'dark' ? ' · dark' : ''}`);
+    if (i.pages.length) out.push(`  - pages ${i.pages.join(', ')} · viewports ${i.viewports.join(', ')}${i.schemes && i.schemes.length === 1 && i.schemes[0] === 'dark' ? ' · dark mode only' : ''}`);
     if (i.markers.length) out.push(`  - screenshot \`${i.markers[0].screenshot}\` marker #${i.markers[0].n}`);
   }
   return out.join('\n');

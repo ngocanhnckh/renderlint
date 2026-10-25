@@ -178,3 +178,31 @@ RL.rule({
     ctx.report({ rule: 'missing-viewport-meta', el: document.body, message: 'No <meta name="viewport"> tag: phones will render the page at desktop width and zoom out.' });
   },
 });
+
+RL.rule({
+  id: 'oversized-icon',
+  run(ctx) {
+    for (const el of ctx.elements) {
+      if (el.tagName.toLowerCase() !== 'svg' || (el.parentElement && el.parentElement.closest('svg'))) continue;
+      const vb = el.viewBox && el.viewBox.baseVal;
+      if (!vb || !vb.width || !vb.height || Math.max(vb.width, vb.height) > 48) continue; // only icon-sized artwork
+      if (!RL.isVisible(el) || RL.isIgnored(el, 'oversized-icon')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
+        ctx.report({ rule: 'oversized-icon', el, message: 'A ' + vb.width + '×' + vb.height + ' icon is rendered at ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px — it has no size, so it stretches to fill its container.', details: { viewBox: [vb.width, vb.height], rendered: [Math.round(r.width), Math.round(r.height)] } });
+      }
+    }
+  },
+});
+
+RL.rule({
+  id: 'broken-resource',
+  run(ctx) {
+    if (!document.fonts) return;
+    const failed = new Set();
+    document.fonts.forEach((f) => { if (f.status === 'error') failed.add(f.family.replace(/["']/g, '')); });
+    for (const family of failed) {
+      ctx.report({ rule: 'broken-resource', el: document.body, message: 'Web font "' + family + '" failed to load; text falls back to a different font.', details: { font: family } });
+    }
+  },
+});

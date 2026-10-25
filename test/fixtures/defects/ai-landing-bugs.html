@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="expect" content="text-overflow,viewport-overflow,text-clipped,contrast,obscured-content">
+<title>Typical AI landing bugs</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;color:#0f172a;background:#fff}
+@media (prefers-color-scheme: dark){body{background:#0b1120}.feature h3{color:#e2e8f0}}
+nav{display:flex;gap:28px;padding:16px 24px;white-space:nowrap;border-bottom:1px solid #e2e8f0}
+nav a{color:#0f172a;text-decoration:none;font-weight:500}
+.hero{position:relative;padding:48px 24px}
+.blob{position:absolute;left:0;top:120px;width:100%;height:240px;background:#6366f1;border-radius:40px;pointer-events:none}
+.cta{display:inline-block;margin-top:140px;padding:12px 20px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none}
+.pricing{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px;padding:24px}
+.plan{border:1px solid #e2e8f0;border-radius:12px;padding:20px;height:220px}
+.feature p{color:#334155}
+.feature{padding:24px}
+.chart{padding:24px}
+</style></head><body>
+<nav><strong>Acme</strong><a href="/product">Product</a><a href="/solutions">Solutions</a><a href="/pricing">Pricing</a><a href="/customers">Customers</a><a href="/docs">Documentation</a></nav>
+<section class="hero"><div class="blob"></div><h1>Build faster</h1><a class="cta" href="/signup">Start free trial</a></section>
+<section class="pricing">
+<div class="plan"><h3>Starter</h3><ul><li>Unlimited projects and workspaces</li><li>Advanced analytics with custom dashboards</li><li>Priority email and chat support</li><li>Single sign-on and audit logs</li><li>99.99% uptime SLA</li></ul></div>
+</section>
+<section class="feature"><h3>Dark mode heading</h3><p>Body copy.</p></section>
+<section class="chart"><svg viewBox="0 0 300 120" width="300" height="120"><line x1="30" y1="90" x2="290" y2="90" stroke="#94a3b8"/>
+<text x="40" y="112" transform="rotate(30 40 112)" font-size="12" fill="#334155">Enterprise accounts</text><text x="150" y="105" font-size="12" fill="#334155">Q1</text></svg></section>
+</body></html>

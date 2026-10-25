@@ -160,7 +160,6 @@ RL.rule({
     for (const tg of targets) {
       if (checks++ > 2500) break;
       if (RL.isIgnored(tg.el, 'obscured-content')) continue;
-      if (RL.cs(tg.el).pointerEvents === 'none') continue;
       const { stack, scrolled } = RL.stackAt(tg.x, tg.y);
       const idx = stack.findIndex((e) => e === tg.el || RL.containsComposed(tg.el, e));
       if (idx <= 0) continue;

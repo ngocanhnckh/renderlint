@@ -45,8 +45,16 @@ RL.analyze = function (options) {
   };
   const rules = RL.rules.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
   const timings = {};
+  let peStyle = null;
   for (const rule of rules) {
     if (!enabled(rule.id)) continue;
+    if (rule.order >= 90 && !peStyle) {
+      // Hit-test decorative layers too (pointer-events:none still paints over content).
+      peStyle = document.createElement('style');
+      peStyle.id = '__renderlint_pe';
+      peStyle.textContent = '*{pointer-events:auto!important}';
+      document.head.appendChild(peStyle);
+    }
     if (rule.domOnly && options.skipDomContrast) continue;
     const s = performance.now();
     try { rule.run(ctx); } catch (e) { ctx.errors.push(rule.id + ': ' + (e && e.stack || e)); }
@@ -54,6 +62,7 @@ RL.analyze = function (options) {
     if (rule.order >= 90) scrollTop();
   }
   scrollTop();
+  if (peStyle) peStyle.remove();
 
   let contrast;
   if (options.contrastCandidates) {

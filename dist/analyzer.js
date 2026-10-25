@@ -1005,7 +1005,6 @@ RL.rule({
     for (const tg of targets) {
       if (checks++ > 2500) break;
       if (RL.isIgnored(tg.el, 'obscured-content')) continue;
-      if (RL.cs(tg.el).pointerEvents === 'none') continue;
       const { stack, scrolled } = RL.stackAt(tg.x, tg.y);
       const idx = stack.findIndex((e) => e === tg.el || RL.containsComposed(tg.el, e));
       if (idx <= 0) continue;
@@ -1216,6 +1215,34 @@ RL.rule({
     if (document.querySelector('meta[name="viewport" i]')) return;
     if (RL.isIgnored(document.body, 'missing-viewport-meta')) return;
     ctx.report({ rule: 'missing-viewport-meta', el: document.body, message: 'No <meta name="viewport"> tag: phones will render the page at desktop width and zoom out.' });
+  },
+});
+
+RL.rule({
+  id: 'oversized-icon',
+  run(ctx) {
+    for (const el of ctx.elements) {
+      if (el.tagName.toLowerCase() !== 'svg' || (el.parentElement && el.parentElement.closest('svg'))) continue;
+      const vb = el.viewBox && el.viewBox.baseVal;
+      if (!vb || !vb.width || !vb.height || Math.max(vb.width, vb.height) > 48) continue; // only icon-sized artwork
+      if (!RL.isVisible(el) || RL.isIgnored(el, 'oversized-icon')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
+        ctx.report({ rule: 'oversized-icon', el, message: 'A ' + vb.width + '×' + vb.height + ' icon is rendered at ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px — it has no size, so it stretches to fill its container.', details: { viewBox: [vb.width, vb.height], rendered: [Math.round(r.width), Math.round(r.height)] } });
+      }
+    }
+  },
+});
+
+RL.rule({
+  id: 'broken-resource',
+  run(ctx) {
+    if (!document.fonts) return;
+    const failed = new Set();
+    document.fonts.forEach((f) => { if (f.status === 'error') failed.add(f.family.replace(/["']/g, '')); });
+    for (const family of failed) {
+      ctx.report({ rule: 'broken-resource', el: document.body, message: 'Web font "' + family + '" failed to load; text falls back to a different font.', details: { font: family } });
+    }
   },
 });
 
@@ -1566,8 +1593,16 @@ RL.analyze = function (options) {
   };
   const rules = RL.rules.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
   const timings = {};
+  let peStyle = null;
   for (const rule of rules) {
     if (!enabled(rule.id)) continue;
+    if (rule.order >= 90 && !peStyle) {
+      // Hit-test decorative layers too (pointer-events:none still paints over content).
+      peStyle = document.createElement('style');
+      peStyle.id = '__renderlint_pe';
+      peStyle.textContent = '*{pointer-events:auto!important}';
+      document.head.appendChild(peStyle);
+    }
     if (rule.domOnly && options.skipDomContrast) continue;
     const s = performance.now();
     try { rule.run(ctx); } catch (e) { ctx.errors.push(rule.id + ': ' + (e && e.stack || e)); }
@@ -1575,6 +1610,7 @@ RL.analyze = function (options) {
     if (rule.order >= 90) scrollTop();
   }
   scrollTop();
+  if (peStyle) peStyle.remove();
 
   let contrast;
   if (options.contrastCandidates) {

@@ -80,6 +80,12 @@ export const RULES = {
     summary: 'An image is rendered at a different aspect ratio than its natural one (stretched or squashed).',
     fix: 'Set only one dimension (`height: auto`) or use `object-fit: cover` / `contain` with a fixed box.',
   },
+  'oversized-icon': {
+    severity: 'error',
+    category: 'polish',
+    summary: 'An icon-sized SVG (viewBox ≤ 48) renders huge because it has no width/height, so it stretches to fill its container.',
+    fix: 'Give icons an explicit size: width/height attributes or CSS (e.g. `width: 1.25rem; height: 1.25rem`, Tailwind `size-5`), and `flex-shrink: 0` in flex rows.',
+  },
   'missing-alt': {
     severity: 'warn',
     category: 'a11y',
@@ -155,7 +161,7 @@ export const RULES = {
   'broken-resource': {
     severity: 'error',
     category: 'runtime',
-    summary: 'A same-origin stylesheet, script, font or image request failed (404/500).',
+    summary: 'A same-origin stylesheet, script, font or image request failed (404/500), or a web font failed to load.',
     fix: 'Fix the asset path or remove the reference.',
   },
 };

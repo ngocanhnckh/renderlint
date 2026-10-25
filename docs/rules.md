@@ -19,6 +19,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`placeholder-text`](#placeholder-text) | error | Leaked placeholders or broken data: [object Object], undefined, NaN, Invalid Date, {{template}}, lorem ipsum, TODO. |
 | [`broken-image`](#broken-image) | error | An image failed to load or has no src. |
 | [`image-distortion`](#image-distortion) | error | An image is rendered at a different aspect ratio than its natural one (stretched or squashed). |
+| [`oversized-icon`](#oversized-icon) | error | An icon-sized SVG (viewBox ≤ 48) renders huge because it has no width/height, so it stretches to fill its container. |
 | [`missing-alt`](#missing-alt) | warn | An &lt;img> has no alt attribute. |
 | [`dead-link`](#dead-link) | warn | A link with href="#" (or none) and no click handler: a CTA that goes nowhere. |
 | [`nested-interactive`](#nested-interactive) | error | A link or button nested inside another link or button (invalid HTML; causes hydration errors and unpredictable clicks). |
@@ -31,7 +32,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`focus-indicator`](#focus-indicator) | warn | A focusable element shows no visible change when focused (outline removed without replacement). |
 | [`fragile-layout`](#fragile-layout) | warn | Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names). |
 | [`console-error`](#console-error) | error | Uncaught JavaScript error or console.error while rendering (hydration mismatches, crashed components). |
-| [`broken-resource`](#broken-resource) | error | A same-origin stylesheet, script, font or image request failed (404/500). |
+| [`broken-resource`](#broken-resource) | error | A same-origin stylesheet, script, font or image request failed (404/500), or a web font failed to load. |
 
 ## Layout
 
@@ -138,6 +139,14 @@ Text does not have enough contrast with what is actually behind it (WCAG AA: 4.5
 Emoji used as icons or decoration in the interface.
 
 **How to fix:** Replace emoji with icons from a real icon set rendered as SVG (lucide, heroicons, phosphor, tabler, material symbols…). If emoji are genuinely content (chat messages, user input), mark the element with data-renderlint-ignore="emoji".
+
+### oversized-icon
+
+**Default:** error
+
+An icon-sized SVG (viewBox ≤ 48) renders huge because it has no width/height, so it stretches to fill its container.
+
+**How to fix:** Give icons an explicit size: width/height attributes or CSS (e.g. `width: 1.25rem; height: 1.25rem`, Tailwind `size-5`), and `flex-shrink: 0` in flex rows.
 
 ### button-text-wrap
 
@@ -255,7 +264,7 @@ Uncaught JavaScript error or console.error while rendering (hydration mismatches
 
 **Default:** error
 
-A same-origin stylesheet, script, font or image request failed (404/500).
+A same-origin stylesheet, script, font or image request failed (404/500), or a web font failed to load.
 
 **How to fix:** Fix the asset path or remove the reference.
 
