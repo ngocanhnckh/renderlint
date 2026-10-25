@@ -953,14 +953,21 @@ RL.rule({
   id: 'element-overlap',
   order: 91,
   run(ctx) {
-    const solids = ctx.elements.filter((el) => {
+    let solids = ctx.elements.filter((el) => {
       if (el === document.body || el === document.documentElement) return false;
       if (!RL.isSolid(el) || !RL.isVisible(el)) return false;
       if (el.namespaceURI === 'http://www.w3.org/2000/svg' && el.tagName.toLowerCase() !== 'svg') return false;
       const r = el.getBoundingClientRect();
       return r.width >= 8 && r.height >= 8 && !RL.isIgnored(el, 'element-overlap');
     });
-    const rects = new Map(solids.map((el) => [el, RL.rectOf(el)]));
+    // Only the visible part of each box counts: content scrolled/clipped out of view can't overlap anything.
+    const rects = new Map();
+    for (const el of solids) {
+      const clip = RL.clipBoxOf(RL.parentOf(el));
+      const r = clip ? RL.intersect(RL.rectOf(el), clip) : RL.rectOf(el);
+      if (r && r.w >= 4 && r.h >= 4) rects.set(el, r);
+    }
+    solids = solids.filter((el) => rects.has(el));
     const reported = [];
     spatialPairs(solids, (el) => [rects.get(el)], (a, b, ra, rb, inter) => {
       if (RL.containsComposed(a, b) || RL.containsComposed(b, a)) return true;
@@ -995,8 +1002,9 @@ RL.rule({
     }
     for (const el of ctx.elements) {
       if (!RL.isInteractive(el) || seenEl.has(el) || !RL.isVisible(el)) continue;
-      const r = RL.rectOf(el);
-      if (r.w < 2 || r.h < 2) continue;
+      const clip = RL.clipBoxOf(RL.parentOf(el));
+      const r = clip ? RL.intersect(RL.rectOf(el), clip) : RL.rectOf(el);
+      if (!r || r.w < 2 || r.h < 2) continue;
       targets.push({ el, x: r.x + r.w / 2, y: r.y + r.h / 2, kind: 'control' });
     }
     targets.sort((a, b) => a.y - b.y);
