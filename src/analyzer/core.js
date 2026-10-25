@@ -313,6 +313,9 @@ RL.snippet = function (el, max) {
   return t.length > max ? t.slice(0, max - 1) + '…' : t;
 };
 
+const BAD_FRAME = /node_modules|react-dom|react\.|jsx-dev-runtime|chunk-|\/\.next\/|\/_next\/|\/chunks\/|about:\/\/|react_stack|fakeJSXCallSite|<anonymous>/;
+const INTERNAL_COMPONENT = /^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence|SegmentViewNode|SegmentStateProvider|InnerLayoutRouter|OuterLayoutRouter|LayoutRouter|RenderFromTemplateContext|ScrollAndFocusHandler|InnerScrollAndFocusHandler|RedirectBoundary|RedirectErrorBoundary|NotFoundBoundary|HTTPAccessFallbackBoundary|HTTPAccessFallbackErrorBoundary|DevRootHTTPAccessFallbackBoundary|LoadingBoundary|AppRouter|ServerRoot|HotReload|ClientPageRoot|ClientSegmentRoot|MetadataBoundary|ViewportBoundary|OutletBoundary|ReactDevOverlay|AppDevOverlay|_c\d*|[a-z].*)$/;
+
 // Best-effort mapping from a DOM node back to the component / source file.
 RL.sourceOf = function (el) {
   const out = {};
@@ -339,27 +342,31 @@ RL.sourceOf = function (el) {
       out.component = t.__name || t.name || (t.__file ? t.__file.split('/').pop() : undefined);
       if (!out.file && t.__file) out.file = t.__file;
     }
-    // React (16-19)
+    // React (16-19, incl. Server Components via _debugOwner)
     if (!out.component) {
       const key = Object.keys(n).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
       if (key) {
-        let f = n[key];
+        const f = n[key];
         if (!out.file && f && f._debugSource) { out.file = f._debugSource.fileName; out.line = f._debugSource.lineNumber; }
         if (!out.file && f && f._debugStack && f._debugStack.stack) {
-          const fr = f._debugStack.stack.split('\n').slice(1).find((l) => !/node_modules|react-dom|react\.|jsx-dev-runtime|chunk-/.test(l) && /:\d+:\d+/.test(l));
+          const fr = f._debugStack.stack.split('\n').slice(1).find((l) => /:\d+:\d+/.test(l) && !BAD_FRAME.test(l));
           if (fr) {
-            const m = /(?:\(|at |@)?((?:https?:\/\/[^/]+)?\/[^\s()]+?):(\d+):\d+\)?\s*$/.exec(fr);
+            const m = /((?:https?:\/\/[^/\s]+)?\/[^\s()]+?):(\d+):\d+\)?\s*$/.exec(fr);
             if (m) { out.file = m[1].replace(/^https?:\/\/[^/]+/, '').replace(/\?.*$/, ''); out.line = +m[2]; }
           }
         }
-        for (let g = f, i = 0; g && i < 60; g = g.return, i++) {
+        for (let o = f && f._debugOwner, i = 0; o && i < 15; o = o.owner || o._debugOwner, i++) {
+          const t = o.type && (o.type.render || o.type.type || o.type);
+          const name = o.name || (o.type && (o.type.displayName || (t && (t.displayName || t.name))));
+          if (name && !INTERNAL_COMPONENT.test(name)) { out.component = name; break; }
+        }
+        for (let g = f, i = 0; !out.component && g && i < 60; g = g.return, i++) {
           if (typeof g.type === 'function' || (g.type && typeof g.type === 'object' && (g.type.render || g.type.type))) {
             const t = typeof g.type === 'function' ? g.type : (g.type.render || g.type.type);
             const name = (g.type.displayName || t.displayName || t.name);
-            if (name && !/^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence)$/.test(name) && name.length > 1) {
+            if (name && !INTERNAL_COMPONENT.test(name)) {
               out.component = name;
               if (!out.file && g._debugSource) { out.file = g._debugSource.fileName; out.line = g._debugSource.lineNumber; }
-              break;
             }
           }
         }
@@ -474,6 +481,7 @@ RL.isDisabled = function (el) {
 RL.stackAt = function (x, y) {
   const vy = y - scrollY, vx = x - scrollX;
   if (vy < 0 || vy >= innerHeight || vx < 0 || vx >= innerWidth) {
+    if (RL.options.noScroll) return { stack: [], scrolled: scrollY !== 0 || scrollX !== 0 };
     window.scrollTo({ left: Math.max(0, x - innerWidth / 2), top: Math.max(0, y - innerHeight / 2), behavior: 'instant' });
   }
   return { stack: document.elementsFromPoint(x - scrollX, y - scrollY), scrolled: scrollY !== 0 || scrollX !== 0 };

@@ -19,6 +19,7 @@ RL.analyze = function (options) {
     minTapTarget: options.minTapTarget,
     minFontSize: options.minFontSize,
     maxLineLength: options.maxLineLength,
+    noScroll: !!options.noScroll,
   };
   const enabled = (id) => !options.rules || options.rules[id] === undefined || options.rules[id] !== 'off';
   RL.resetCaches();
@@ -27,8 +28,9 @@ RL.analyze = function (options) {
   const startX = scrollX, startY = scrollY;
   const html = document.documentElement;
   const prevBehavior = html.style.scrollBehavior;
-  html.style.scrollBehavior = 'auto';
-  window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+  if (!options.noScroll) html.style.scrollBehavior = 'auto';
+  const scrollTop = () => { if (!options.noScroll) window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); };
+  scrollTop();
 
   const ctx = {
     texts: RL.collectText(),
@@ -49,9 +51,9 @@ RL.analyze = function (options) {
     const s = performance.now();
     try { rule.run(ctx); } catch (e) { ctx.errors.push(rule.id + ': ' + (e && e.stack || e)); }
     timings[rule.id] = Math.round(performance.now() - s);
-    if (rule.order >= 90) window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+    if (rule.order >= 90) scrollTop();
   }
-  window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+  scrollTop();
 
   let contrast;
   if (options.contrastCandidates) {
@@ -76,8 +78,8 @@ RL.analyze = function (options) {
     links: Array.from(document.querySelectorAll('a[href]')).map((a) => a.href).filter((h) => /^https?:/.test(h)).slice(0, 500),
     suppressed: document.querySelectorAll('[data-renderlint-ignore]').length,
   };
-  if (options.restoreScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
-  html.style.scrollBehavior = prevBehavior;
+  if (options.restoreScroll && !options.noScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
+  if (!options.noScroll) html.style.scrollBehavior = prevBehavior;
   return { issues: ctx.issues, errors: ctx.errors, contrast, meta };
 };
 

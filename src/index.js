@@ -35,7 +35,7 @@ async function reachable(url) {
 }
 
 // Decide what to check: returns { base, pages, cleanup[] }
-async function resolveTargets(targets, config, cwd, log) {
+export async function resolveTargets(targets, config, cwd, log) {
   const cleanup = [];
   const pages = [];
   let base;

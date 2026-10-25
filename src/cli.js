@@ -46,6 +46,7 @@ export async function main(argv) {
   if (cmd === 'explain') return explain(argv[0]);
   if (cmd === 'init') return (await import('./init.js')).init(argv);
   if (cmd === 'hook') return (await import('./hook.js')).hook(argv);
+  if (cmd === 'watch') return watch(argv);
   if (cmd === 'scan') {
     const { scanSources } = await import('./scan.js');
     const issues = scanSources({ dirs: argv.filter((a) => !a.startsWith('-')) });
@@ -106,5 +107,45 @@ function explain(rule) {
     const r = RULES[id];
     console.log(`${id}  [${r.severity}] (${r.category})\n  ${r.summary}\n  Fix: ${r.fix}\n`);
   }
+  return 0;
+}
+
+async function watch(argv) {
+  const { watch: fsWatch, existsSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { check, formatPretty } = await import('./index.js');
+  const { launchBrowser } = await import('./browser.js');
+  const { resolveTargets } = await import('./index.js');
+  const { loadConfig, normalize } = await import('./config.js');
+  const cwd = process.cwd();
+  const targets = argv.filter((a) => !a.startsWith('-'));
+  const { config } = await loadConfig(cwd);
+  const resolved = await resolveTargets(targets, normalize(config), cwd, (m) => console.error(m));
+  const browser = await launchBrowser();
+  let running = false, again = false, timer;
+  const run = async () => {
+    if (running) { again = true; return; }
+    running = true;
+    try {
+      const r = await check({ cwd, targets: resolved.pages, browser, config: { crawl: config.crawl } });
+      console.log('\x1b[2J\x1b[H' + new Date().toLocaleTimeString() + '\n' + formatPretty(r, { cwd }));
+    } catch (e) { console.error(e.message); }
+    running = false;
+    if (again) { again = false; run(); }
+  };
+  await run();
+  const dirs = ['src', 'app', 'pages', 'components', 'public', 'styles', 'lib'].map((d) => join(cwd, d)).filter((d) => existsSync(d));
+  if (!dirs.length) dirs.push(cwd);
+  for (const d of dirs) {
+    fsWatch(d, { recursive: true }, (ev, file) => {
+      if (file && /node_modules|\.renderlint|\.git/.test(file)) return;
+      clearTimeout(timer);
+      timer = setTimeout(run, 1200);
+    });
+  }
+  console.error('Watching ' + dirs.map((d) => d.replace(cwd + '/', '')).join(', ') + ' — Ctrl+C to stop.');
+  await new Promise((resolve) => process.on('SIGINT', resolve));
+  await browser.close();
+  for (const fn of resolved.cleanup) await Promise.resolve(fn()).catch(() => {});
   return 0;
 }

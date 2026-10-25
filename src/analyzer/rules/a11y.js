@@ -11,13 +11,20 @@ function isTextInline(el) {
   return all > own + 10;
 }
 
+function distToRect(x, y, r) {
+  const dx = Math.max(r.x - x, 0, x - r.right), dy = Math.max(r.y - y, 0, y - r.bottom);
+  return Math.hypot(dx, dy);
+}
+
 RL.rule({
   id: 'tap-target',
   run(ctx) {
     const min = RL.options.minTapTarget || 24;
-    for (const el of ctx.elements) {
-      if (!RL.isInteractive(el) || !RL.isVisible(el) || RL.isDisabled(el)) continue;
-      if (RL.isIgnored(el, 'tap-target')) continue;
+    const targets = ctx.elements.filter((el) => RL.isInteractive(el) && RL.isVisible(el)).map((el) => ({ el, r: RL.rectOf(el) })).filter((t) => t.r.w >= 1 && t.r.h >= 1);
+    for (const t of targets) {
+      const { el, r } = t;
+      if (RL.isDisabled(el) || RL.isIgnored(el, 'tap-target')) continue;
+      if (r.w >= min && r.h >= min) continue;
       const tag = el.tagName;
       if ((tag === 'INPUT' && /^(checkbox|radio)$/.test(el.type)) && (el.labels && el.labels.length)) continue;
       if (isTextInline(el)) continue;
@@ -27,11 +34,16 @@ RL.rule({
         const hr = host.getBoundingClientRect();
         if (hr.width >= min && hr.height >= min) continue;
       }
-      const r = el.getBoundingClientRect();
-      if (r.width < 1 || r.height < 1) continue;
-      if (r.width < min || r.height < min) {
-        ctx.report({ rule: 'tap-target', el, message: 'Touch target is ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px; minimum is ' + min + '×' + min + 'px (44×44 recommended).', details: { w: Math.round(r.width), h: Math.round(r.height) } });
-      }
+      // WCAG 2.5.8 spacing exception: a 24px circle around the target touches no other target.
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      const crowded = targets.some((u) => {
+        if (u === t || RL.containsComposed(u.el, el) || RL.containsComposed(el, u.el)) return false;
+        const undersized = u.r.w < min || u.r.h < min;
+        if (undersized) return Math.hypot(cx - (u.r.x + u.r.w / 2), cy - (u.r.y + u.r.h / 2)) < min;
+        return distToRect(cx, cy, u.r) < min / 2;
+      });
+      if (!crowded) continue;
+      ctx.report({ rule: 'tap-target', el, message: 'Touch target is ' + Math.round(r.w) + '×' + Math.round(r.h) + 'px and crowded by neighbouring targets; make it at least ' + min + '×' + min + 'px (44×44 recommended) or space it out.', details: { w: Math.round(r.w), h: Math.round(r.h) } });
     }
   },
 });

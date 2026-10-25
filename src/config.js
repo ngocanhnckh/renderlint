@@ -27,6 +27,7 @@ export const DEFAULTS = {
   minTapTarget: 24,
   minFontSize: 12,
   maxLineLength: 120,
+  concurrency: 3,          // viewports checked in parallel
   timeout: 30000,
   serverTimeout: 120000,
   maxScreenshotHeight: 12000,
