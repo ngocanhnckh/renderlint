@@ -1,12 +1,13 @@
 // Screenshot-based contrast measurement. The page is captured twice: once as
-// rendered and once with all text made transparent. Pixels under each text
+// rendered and once with all text glyphs made transparent (text-fill-color, so
+// currentColor icons and shapes stay painted). Pixels under each text
 // run in the second capture are the *real* background (gradients, images,
 // overlays, translucent layers included).
 import { PNG } from 'pngjs';
 import { blend, hex, suggestColor } from './color.js';
 
 const HIDE_TEXT_CSS = `
-*, *::before, *::after { color: transparent !important; -webkit-text-fill-color: transparent !important;
+*, *::before, *::after { -webkit-text-fill-color: transparent !important;
   text-shadow: none !important; caret-color: transparent !important; text-decoration-color: transparent !important;
   transition: none !important; }
 ::placeholder { color: transparent !important; -webkit-text-fill-color: transparent !important; }

@@ -61,16 +61,7 @@ RL.analyze = function (options) {
   scrollTop();
   if (peStyle) peStyle.remove();
 
-  let contrast;
-  if (options.contrastCandidates) {
-    RL.resetCaches();
-    const cands = RL.contrastCandidates(ctx.texts);
-    window.__renderlint_cx = cands.map((c) => c.el);
-    contrast = cands.map((c) => ({
-      idx: c.idx, rects: c.rects, color: c.color, opacity: c.opacity, fontSize: c.fontSize, fontWeight: c.fontWeight,
-      large: c.large, complex: c.complex, placeholder: c.placeholder, base: RL.issueBase(c.el),
-    }));
-  }
+  const contrast = options.contrastCandidates ? RL.collectContrast() : undefined;
   const de = document.documentElement;
   const meta = {
     title: document.title,
@@ -86,6 +77,27 @@ RL.analyze = function (options) {
   };
   if (options.restoreScroll && !options.noScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
   return { issues: ctx.issues, errors: ctx.errors, contrast, meta };
+};
+
+// Contrast candidates, collected fresh (call after animations settled again,
+// since the occlusion rules scroll the page and may trigger reveal animations).
+RL.collectContrast = function () {
+  RL.resetCaches();
+  const cands = RL.contrastCandidates(RL.collectText());
+  window.__renderlint_cx = cands.map((c) => c.el);
+  return cands.map((c) => ({
+    idx: c.idx, rects: c.rects, color: c.color, opacity: c.opacity, fontSize: c.fontSize, fontWeight: c.fontWeight,
+    large: c.large, complex: c.complex, placeholder: c.placeholder, base: RL.issueBase(c.el),
+  }));
+};
+
+RL.finishAnimations = function () {
+  for (const a of document.getAnimations ? document.getAnimations() : []) {
+    try {
+      const end = a.effect && a.effect.getComputedTiming().endTime;
+      if (end !== undefined && isFinite(end)) a.finish(); else a.pause();
+    } catch (e) { /* ignore */ }
+  }
 };
 
 RL.hasDarkModeCss = function () {

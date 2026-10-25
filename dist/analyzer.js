@@ -705,8 +705,10 @@ RL.rule({
 // ---------------------------------------------------------------------------
 const MEDIA = new Set(['img', 'video', 'canvas', 'svg', 'iframe', 'picture']);
 const CONTROL = new Set(['button', 'input', 'select', 'textarea']);
+const TABLE_PARTS = new Set(['col', 'colgroup', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'caption']);
 RL.isSolid = function (el) {
   const tag = el.tagName.toLowerCase();
+  if (TABLE_PARTS.has(tag) || /^table-/.test(RL.cs(el).display)) return false; // table internals tile, never overlap
   if (MEDIA.has(tag) && (tag !== 'svg' || !(el.parentElement && el.parentElement.closest('svg')))) return true;
   if (CONTROL.has(tag)) return true;
   if (RL.isInline(el)) return false;
@@ -1487,6 +1489,14 @@ RL.contrastCandidates = function (texts) {
     }
     if (clipText) complex = true;
     // masks, clip-paths, blend modes and filters change the painted color: measure real pixels
+    let faded = false;
+    for (let n = t.el, d = 0; n && n !== document.body && d < 25 && !faded; n = RL.parentOf(n), d++) {
+      const ns = RL.cs(n);
+      const mask = ns.maskImage && ns.maskImage !== 'none' ? ns.maskImage : ns.webkitMaskImage;
+      // a gradient fade mask (e.g. "more content →" edge of a scroller) fades text on purpose
+      if (mask && mask !== 'none' && /gradient/.test(mask) && /transparent|rgba\([^)]*,\s*0\)|\/\s*0\)/.test(mask)) faded = true;
+    }
+    if (faded) continue;
     for (let n = t.el, d = 0; n && n !== document.body && d < 12 && !complex; n = RL.parentOf(n), d++) {
       const ns = RL.cs(n);
       if ((ns.maskImage && ns.maskImage !== 'none') || (ns.webkitMaskImage && ns.webkitMaskImage !== 'none') ||
@@ -1656,16 +1666,7 @@ RL.analyze = function (options) {
   scrollTop();
   if (peStyle) peStyle.remove();
 
-  let contrast;
-  if (options.contrastCandidates) {
-    RL.resetCaches();
-    const cands = RL.contrastCandidates(ctx.texts);
-    window.__renderlint_cx = cands.map((c) => c.el);
-    contrast = cands.map((c) => ({
-      idx: c.idx, rects: c.rects, color: c.color, opacity: c.opacity, fontSize: c.fontSize, fontWeight: c.fontWeight,
-      large: c.large, complex: c.complex, placeholder: c.placeholder, base: RL.issueBase(c.el),
-    }));
-  }
+  const contrast = options.contrastCandidates ? RL.collectContrast() : undefined;
   const de = document.documentElement;
   const meta = {
     title: document.title,
@@ -1681,6 +1682,27 @@ RL.analyze = function (options) {
   };
   if (options.restoreScroll && !options.noScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
   return { issues: ctx.issues, errors: ctx.errors, contrast, meta };
+};
+
+// Contrast candidates, collected fresh (call after animations settled again,
+// since the occlusion rules scroll the page and may trigger reveal animations).
+RL.collectContrast = function () {
+  RL.resetCaches();
+  const cands = RL.contrastCandidates(RL.collectText());
+  window.__renderlint_cx = cands.map((c) => c.el);
+  return cands.map((c) => ({
+    idx: c.idx, rects: c.rects, color: c.color, opacity: c.opacity, fontSize: c.fontSize, fontWeight: c.fontWeight,
+    large: c.large, complex: c.complex, placeholder: c.placeholder, base: RL.issueBase(c.el),
+  }));
+};
+
+RL.finishAnimations = function () {
+  for (const a of document.getAnimations ? document.getAnimations() : []) {
+    try {
+      const end = a.effect && a.effect.getComputedTiming().endTime;
+      if (end !== undefined && isFinite(end)) a.finish(); else a.pause();
+    } catch (e) { /* ignore */ }
+  }
 };
 
 RL.hasDarkModeCss = function () {

@@ -191,6 +191,14 @@ RL.contrastCandidates = function (texts) {
     }
     if (clipText) complex = true;
     // masks, clip-paths, blend modes and filters change the painted color: measure real pixels
+    let faded = false;
+    for (let n = t.el, d = 0; n && n !== document.body && d < 25 && !faded; n = RL.parentOf(n), d++) {
+      const ns = RL.cs(n);
+      const mask = ns.maskImage && ns.maskImage !== 'none' ? ns.maskImage : ns.webkitMaskImage;
+      // a gradient fade mask (e.g. "more content →" edge of a scroller) fades text on purpose
+      if (mask && mask !== 'none' && /gradient/.test(mask) && /transparent|rgba\([^)]*,\s*0\)|\/\s*0\)/.test(mask)) faded = true;
+    }
+    if (faded) continue;
     for (let n = t.el, d = 0; n && n !== document.body && d < 12 && !complex; n = RL.parentOf(n), d++) {
       const ns = RL.cs(n);
       if ((ns.maskImage && ns.maskImage !== 'none') || (ns.webkitMaskImage && ns.webkitMaskImage !== 'none') ||

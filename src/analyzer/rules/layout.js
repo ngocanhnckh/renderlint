@@ -138,8 +138,10 @@ RL.rule({
 // ---------------------------------------------------------------------------
 const MEDIA = new Set(['img', 'video', 'canvas', 'svg', 'iframe', 'picture']);
 const CONTROL = new Set(['button', 'input', 'select', 'textarea']);
+const TABLE_PARTS = new Set(['col', 'colgroup', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'caption']);
 RL.isSolid = function (el) {
   const tag = el.tagName.toLowerCase();
+  if (TABLE_PARTS.has(tag) || /^table-/.test(RL.cs(el).display)) return false; // table internals tile, never overlap
   if (MEDIA.has(tag) && (tag !== 'svg' || !(el.parentElement && el.parentElement.closest('svg')))) return true;
   if (CONTROL.has(tag)) return true;
   if (RL.isInline(el)) return false;

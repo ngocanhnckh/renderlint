@@ -80,7 +80,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     (ignoreSelectors[r] = ignoreSelectors[r] || []).push(ig.selector);
   }
   const analyzeOpts = {
-    rules: config.rules, ignoreSelectors, skipDomContrast: true, contrastCandidates: config.rules.contrast !== 'off',
+    rules: config.rules, ignoreSelectors, skipDomContrast: true, contrastCandidates: config.rules.contrast !== 'off', // collected separately after re-settling
     minTapTarget: config.minTapTarget, minFontSize: config.minFontSize, maxLineLength: config.maxLineLength,
   };
 
@@ -207,7 +207,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     lap('settle');
     if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
     await page.evaluate(source);
-    const res = await page.evaluate((o) => window.__renderlint.analyze(o), analyzeOpts);
+    const res = await page.evaluate((o) => window.__renderlint.analyze(o), { ...analyzeOpts, contrastCandidates: false });
     meta = res.meta;
     for (const e of res.errors) log('  analyzer error: ' + e);
     lap('analyze');
@@ -218,8 +218,13 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (dead.length) await confirmDeadLinks(page, dead, issues);
     lap('deadlinks');
 
-    if (res.contrast && res.contrast.length) {
-      const c = await measureContrast(page, res.contrast, { maxHeight: config.maxScreenshotHeight, level: config.contrastLevel });
+    if (analyzeOpts.contrastCandidates) {
+      // the occlusion rules scroll the page, which can start reveal animations: settle again first
+      await page.evaluate(() => { window.scrollTo({ top: 0, behavior: 'instant' }); window.__renderlint.finishAnimations(); });
+      await page.waitForTimeout(50);
+      await page.evaluate(() => { window.__renderlint.finishAnimations(); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
+      const candidates = await page.evaluate(() => window.__renderlint.collectContrast());
+      const c = await measureContrast(page, candidates, { maxHeight: config.maxScreenshotHeight, level: config.contrastLevel });
       issues.push(...c);
     }
     lap('contrast');
