@@ -26,9 +26,6 @@ RL.analyze = function (options) {
   RL.flagged = new Set();
   const t0 = performance.now();
   const startX = scrollX, startY = scrollY;
-  const html = document.documentElement;
-  const prevBehavior = html.style.scrollBehavior;
-  if (!options.noScroll) html.style.scrollBehavior = 'auto';
   const scrollTop = () => { if (!options.noScroll) window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); };
   scrollTop();
 
@@ -88,7 +85,6 @@ RL.analyze = function (options) {
     suppressed: document.querySelectorAll('[data-renderlint-ignore]').length,
   };
   if (options.restoreScroll && !options.noScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
-  if (!options.noScroll) html.style.scrollBehavior = prevBehavior;
   return { issues: ctx.issues, errors: ctx.errors, contrast, meta };
 };
 

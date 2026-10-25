@@ -410,13 +410,17 @@ RL.describe = function (el) {
 // Collection of text runs and candidate elements (shared by rules)
 // ---------------------------------------------------------------------------
 
-const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'TITLE', 'IFRAME', 'OBJECT', 'OPTION', 'DATALIST']);
+const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'TITLE', 'IFRAME', 'OBJECT', 'OPTION', 'DATALIST',
+  // framework dev tools / overlays are not part of the app
+  'NEXTJS-PORTAL', 'VITE-ERROR-OVERLAY', 'ASTRO-DEV-TOOLBAR', 'ASTRO-DEV-OVERLAY', 'NUXT-DEVTOOLS', 'VUE-DEVTOOLS', 'SVELTE-INSPECTOR', 'TANSTACK-ROUTER-DEVTOOLS', 'GRAMMARLY-DESKTOP-INTEGRATION']);
+const SKIP_IDS = /^(__renderlint|__next-build-watcher|__nuxt-devtools|nuxt-devtools|vue-devtools|__vconsole|svelte-inspector|react-query-devtools|tsqd-parent-container|webpack-dev-server-client-overlay)/;
+RL.isDevTool = (n) => SKIP_TAGS.has(n.tagName) || SKIP_IDS.test(n.id || '') || n.hasAttribute('data-nextjs-toast') || n.hasAttribute('data-nextjs-dialog-overlay') || n.hasAttribute('data-tsqd-container');
 
 RL.allElements = function () {
   const out = [];
   const walk = (root) => {
     const it = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
-      acceptNode: (n) => SKIP_TAGS.has(n.tagName) || n.id === '__renderlint_overlay' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+      acceptNode: (n) => RL.isDevTool(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
     });
     for (let n = it.currentNode; n; n = it.nextNode()) {
       if (n.nodeType === 1) { out.push(n); if (n.shadowRoot) walk(n.shadowRoot); }
@@ -432,7 +436,7 @@ RL.collectText = function () {
   const visit = (root) => {
     const it = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: (n) => {
-        if (n.nodeType === 1) return SKIP_TAGS.has(n.tagName) || n.id === '__renderlint_overlay' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+        if (n.nodeType === 1) return RL.isDevTool(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
         return /\S/.test(n.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       },
     });
@@ -449,7 +453,7 @@ RL.collectText = function () {
       items.push({ node: n, el, rects, vis, box: unionRects(rects), text: n.textContent.replace(/\s+/g, ' ').trim() });
     }
     // shadow roots
-    root.querySelectorAll && root.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) visit(e.shadowRoot); });
+    root.querySelectorAll && root.querySelectorAll('*').forEach((e) => { if (e.shadowRoot && !RL.isDevTool(e) && !e.closest('nextjs-portal,vite-error-overlay,astro-dev-toolbar')) visit(e.shadowRoot); });
   };
   visit(document.body);
   return items;

@@ -9,7 +9,7 @@ import { RULES } from './rules-meta.js';
 const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const T = [performance.now()]; const mark = () => T.push(Math.round(performance.now() - T[0]));
-  document.documentElement.style.scrollBehavior = 'auto';
+  // Never mutate <html>/<body> attributes here: frameworks may still be hydrating.
   if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, sleep(3000)]);
   mark();
   document.querySelectorAll('img[loading="lazy"]').forEach((i) => { i.loading = 'eager'; });

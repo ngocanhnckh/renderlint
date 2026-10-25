@@ -187,8 +187,13 @@ RL.rule({
       const vb = el.viewBox && el.viewBox.baseVal;
       if (!vb || !vb.width || !vb.height || Math.max(vb.width, vb.height) > 48) continue; // only icon-sized artwork
       if (!RL.isVisible(el) || RL.isIgnored(el, 'oversized-icon')) continue;
+      if (el.hasAttribute('width') || el.hasAttribute('height')) continue;
       const r = el.getBoundingClientRect();
-      if (r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
+      // An unsized icon stretches to its container; a deliberately large icon (e.g. size-28) doesn't fill it.
+      const p = el.parentElement;
+      const pw = p ? RL.paddingBox(p).w - (parseFloat(RL.cs(p).paddingLeft) || 0) - (parseFloat(RL.cs(p).paddingRight) || 0) : 0;
+      const fills = pw > 0 && r.width >= pw * 0.9;
+      if (fills && r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
         ctx.report({ rule: 'oversized-icon', el, message: 'A ' + vb.width + '×' + vb.height + ' icon is rendered at ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px — it has no size, so it stretches to fill its container.', details: { viewBox: [vb.width, vb.height], rendered: [Math.round(r.width), Math.round(r.height)] } });
       }
     }
@@ -200,7 +205,8 @@ RL.rule({
   run(ctx) {
     if (!document.fonts) return;
     const failed = new Set();
-    document.fonts.forEach((f) => { if (f.status === 'error') failed.add(f.family.replace(/["']/g, '')); });
+    // "X Fallback" faces (next/font, fontaine) point at local() system fonts that may not exist here.
+    document.fonts.forEach((f) => { const fam = f.family.replace(/["']/g, ''); if (f.status === 'error' && !/fallback/i.test(fam)) failed.add(fam); });
     for (const family of failed) {
       ctx.report({ rule: 'broken-resource', el: document.body, message: 'Web font "' + family + '" failed to load; text falls back to a different font.', details: { font: family } });
     }

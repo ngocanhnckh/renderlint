@@ -174,6 +174,7 @@ RL.rule({
       for (let k = 0; k < idx; k++) {
         const e = stack[k];
         if (RL.containsComposed(e, tg.el) || RL.containsComposed(tg.el, e)) continue;
+        if (RL.isDevTool(e) || (e.closest && e.closest('nextjs-portal,vite-error-overlay,astro-dev-toolbar'))) continue;
         if (!RL.isOpaqueLayer(e)) continue;
         if (RL.isIgnored(e, 'obscured-content')) break;
         // Layered illustrations / mockups (stacked absolutely positioned or transformed cards) are deliberate.

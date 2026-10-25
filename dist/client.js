@@ -417,13 +417,17 @@ RL.describe = function (el) {
 // Collection of text runs and candidate elements (shared by rules)
 // ---------------------------------------------------------------------------
 
-const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'TITLE', 'IFRAME', 'OBJECT', 'OPTION', 'DATALIST']);
+const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'TITLE', 'IFRAME', 'OBJECT', 'OPTION', 'DATALIST',
+  // framework dev tools / overlays are not part of the app
+  'NEXTJS-PORTAL', 'VITE-ERROR-OVERLAY', 'ASTRO-DEV-TOOLBAR', 'ASTRO-DEV-OVERLAY', 'NUXT-DEVTOOLS', 'VUE-DEVTOOLS', 'SVELTE-INSPECTOR', 'TANSTACK-ROUTER-DEVTOOLS', 'GRAMMARLY-DESKTOP-INTEGRATION']);
+const SKIP_IDS = /^(__renderlint|__next-build-watcher|__nuxt-devtools|nuxt-devtools|vue-devtools|__vconsole|svelte-inspector|react-query-devtools|tsqd-parent-container|webpack-dev-server-client-overlay)/;
+RL.isDevTool = (n) => SKIP_TAGS.has(n.tagName) || SKIP_IDS.test(n.id || '') || n.hasAttribute('data-nextjs-toast') || n.hasAttribute('data-nextjs-dialog-overlay') || n.hasAttribute('data-tsqd-container');
 
 RL.allElements = function () {
   const out = [];
   const walk = (root) => {
     const it = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
-      acceptNode: (n) => SKIP_TAGS.has(n.tagName) || n.id === '__renderlint_overlay' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+      acceptNode: (n) => RL.isDevTool(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
     });
     for (let n = it.currentNode; n; n = it.nextNode()) {
       if (n.nodeType === 1) { out.push(n); if (n.shadowRoot) walk(n.shadowRoot); }
@@ -439,7 +443,7 @@ RL.collectText = function () {
   const visit = (root) => {
     const it = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: (n) => {
-        if (n.nodeType === 1) return SKIP_TAGS.has(n.tagName) || n.id === '__renderlint_overlay' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+        if (n.nodeType === 1) return RL.isDevTool(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
         return /\S/.test(n.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       },
     });
@@ -456,7 +460,7 @@ RL.collectText = function () {
       items.push({ node: n, el, rects, vis, box: unionRects(rects), text: n.textContent.replace(/\s+/g, ' ').trim() });
     }
     // shadow roots
-    root.querySelectorAll && root.querySelectorAll('*').forEach((e) => { if (e.shadowRoot) visit(e.shadowRoot); });
+    root.querySelectorAll && root.querySelectorAll('*').forEach((e) => { if (e.shadowRoot && !RL.isDevTool(e) && !e.closest('nextjs-portal,vite-error-overlay,astro-dev-toolbar')) visit(e.shadowRoot); });
   };
   visit(document.body);
   return items;
@@ -1020,6 +1024,7 @@ RL.rule({
       for (let k = 0; k < idx; k++) {
         const e = stack[k];
         if (RL.containsComposed(e, tg.el) || RL.containsComposed(tg.el, e)) continue;
+        if (RL.isDevTool(e) || (e.closest && e.closest('nextjs-portal,vite-error-overlay,astro-dev-toolbar'))) continue;
         if (!RL.isOpaqueLayer(e)) continue;
         if (RL.isIgnored(e, 'obscured-content')) break;
         // Layered illustrations / mockups (stacked absolutely positioned or transformed cards) are deliberate.
@@ -1235,8 +1240,13 @@ RL.rule({
       const vb = el.viewBox && el.viewBox.baseVal;
       if (!vb || !vb.width || !vb.height || Math.max(vb.width, vb.height) > 48) continue; // only icon-sized artwork
       if (!RL.isVisible(el) || RL.isIgnored(el, 'oversized-icon')) continue;
+      if (el.hasAttribute('width') || el.hasAttribute('height')) continue;
       const r = el.getBoundingClientRect();
-      if (r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
+      // An unsized icon stretches to its container; a deliberately large icon (e.g. size-28) doesn't fill it.
+      const p = el.parentElement;
+      const pw = p ? RL.paddingBox(p).w - (parseFloat(RL.cs(p).paddingLeft) || 0) - (parseFloat(RL.cs(p).paddingRight) || 0) : 0;
+      const fills = pw > 0 && r.width >= pw * 0.9;
+      if (fills && r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
         ctx.report({ rule: 'oversized-icon', el, message: 'A ' + vb.width + '×' + vb.height + ' icon is rendered at ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px — it has no size, so it stretches to fill its container.', details: { viewBox: [vb.width, vb.height], rendered: [Math.round(r.width), Math.round(r.height)] } });
       }
     }
@@ -1248,7 +1258,8 @@ RL.rule({
   run(ctx) {
     if (!document.fonts) return;
     const failed = new Set();
-    document.fonts.forEach((f) => { if (f.status === 'error') failed.add(f.family.replace(/["']/g, '')); });
+    // "X Fallback" faces (next/font, fontaine) point at local() system fonts that may not exist here.
+    document.fonts.forEach((f) => { const fam = f.family.replace(/["']/g, ''); if (f.status === 'error' && !/fallback/i.test(fam)) failed.add(fam); });
     for (const family of failed) {
       ctx.report({ rule: 'broken-resource', el: document.body, message: 'Web font "' + family + '" failed to load; text falls back to a different font.', details: { font: family } });
     }
@@ -1583,9 +1594,6 @@ RL.analyze = function (options) {
   RL.flagged = new Set();
   const t0 = performance.now();
   const startX = scrollX, startY = scrollY;
-  const html = document.documentElement;
-  const prevBehavior = html.style.scrollBehavior;
-  if (!options.noScroll) html.style.scrollBehavior = 'auto';
   const scrollTop = () => { if (!options.noScroll) window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); };
   scrollTop();
 
@@ -1645,7 +1653,6 @@ RL.analyze = function (options) {
     suppressed: document.querySelectorAll('[data-renderlint-ignore]').length,
   };
   if (options.restoreScroll && !options.noScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
-  if (!options.noScroll) html.style.scrollBehavior = prevBehavior;
   return { issues: ctx.issues, errors: ctx.errors, contrast, meta };
 };
 
