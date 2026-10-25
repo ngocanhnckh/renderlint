@@ -1,0 +1,53 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Clean landing</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;color:#0f172a;background:#fff;line-height:1.5}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+header{position:sticky;top:0;background:#fff;border-bottom:1px solid #e2e8f0;z-index:10}
+.nav{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between;padding:12px 16px;max-width:1100px;margin:0 auto}
+.nav a{color:#0f172a;text-decoration:none;padding:8px 4px}
+.nav a:focus-visible,.btn:focus-visible{outline:2px solid #2563eb;outline-offset:2px}
+.hero{position:relative;padding:64px 16px;color:#fff;background:#0f172a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Ccircle cx='20' cy='20' r='2' fill='%23334155'/%3E%3C/svg%3E");overflow:hidden}
+.hero .blob{position:absolute;right:-80px;top:-80px;width:240px;height:240px;border-radius:50%;background:#1e40af;opacity:.5}
+.hero h1{position:relative;margin:0 0 12px;font-size:clamp(28px,6vw,48px);line-height:1.1;background:linear-gradient(90deg,#fff,#bfdbfe);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{position:relative;max-width:60ch;color:#cbd5e1}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;font-weight:600}
+.btn svg{width:18px;height:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px;padding:32px 16px;max-width:1100px;margin:0 auto}
+.card{border:1px solid #e2e8f0;border-radius:12px;padding:20px;position:relative;min-width:0}
+.card h3{margin:0 0 8px;overflow-wrap:anywhere}
+.badge{position:absolute;top:-10px;right:12px;background:#15803d;color:#fff;font-size:12px;padding:2px 8px;border-radius:999px}
+.truncate{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.avatars{display:flex}.avatars span{width:32px;height:32px;border-radius:50%;border:2px solid #fff;background:#94a3b8;margin-left:-8px}.avatars span:first-child{margin-left:0}
+.scroller{display:flex;gap:12px;overflow-x:auto;padding:8px 16px}.scroller div{flex:0 0 200px;height:80px;background:#f1f5f9;border-radius:8px;padding:8px}
+.photo{position:relative;height:200px;margin:16px;border-radius:12px;overflow:hidden;background:#334155}
+.photo img{width:100%;height:100%;object-fit:cover;display:block}
+.photo .caption{position:absolute;inset:auto 0 0 0;padding:24px 12px 12px;background:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.85));color:#fff}
+.stretch a::after{content:"";position:absolute;inset:0}
+.carousel{overflow:hidden;margin:16px}.track{display:flex;width:300%}.slide{width:33.333%;padding:16px;background:#eef2ff}
+footer{padding:24px 16px;color:#475569;font-size:14px;border-top:1px solid #e2e8f0}
+.tooltip-wrap{position:relative;display:inline-block}.tooltip{position:absolute;bottom:calc(100% + 6px);left:0;background:#0f172a;color:#fff;font-size:12px;padding:4px 8px;border-radius:4px;white-space:nowrap}
+dialog{display:none}
+input{font:inherit;padding:10px 12px;border:1px solid #94a3b8;border-radius:8px;width:100%}
+input::placeholder{color:#64748b}
+label{display:block;margin-bottom:4px;font-weight:600}
+</style></head><body>
+<header><nav class="nav"><a href="#main" class="brand"><strong>Acme</strong></a><div><a href="/features">Features</a> <a href="/pricing">Pricing</a></div>
+<button class="btn" aria-label="Open menu" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></nav></header>
+<main id="main">
+<section class="hero"><div class="blob" aria-hidden="true"></div><h1>Ship interfaces that just work</h1>
+<p>Everything your team needs to design, build and launch, without the guesswork. Works with every framework.</p>
+<a class="btn" href="/signup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Get started</a>
+<span class="sr-only">Opens the signup page</span></section>
+<div class="grid">
+<div class="card stretch"><span class="badge">New</span><h3><a href="/a" style="color:inherit;text-decoration:none">Supercalifragilisticexpialidocious analytics</a></h3><p class="truncate">This line is truncated on purpose with an ellipsis because it is very long indeed.</p><div class="avatars"><span></span><span></span><span></span></div></div>
+<div class="card"><h3>Fast</h3><p>Built on a global edge network with smart caching and instant rollbacks.</p>
+<div class="tooltip-wrap"><button class="btn" type="button">Hover me</button><span class="tooltip" role="tooltip">Helpful tip text</span></div></div>
+<div class="card"><h3>Secure</h3><form><label for="email">Email</label><input id="email" type="email" placeholder="you@company.com"></form></div>
+</div>
+<div class="scroller" aria-label="Logos"><div>Logo one</div><div>Logo two</div><div>Logo three</div><div>Logo four</div><div>Logo five</div><div>Logo six</div></div>
+<div class="photo"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='400'%3E%3Crect width='800' height='400' fill='%2394a3b8'/%3E%3Ccircle cx='600' cy='120' r='80' fill='%23fde68a'/%3E%3C/svg%3E" alt="Office"><div class="caption">Our new office in Lisbon</div></div>
+<div class="carousel"><div class="track"><div class="slide">Slide one is visible</div><div class="slide">Slide two is hidden off to the side</div><div class="slide">Slide three</div></div></div>
+<dialog><p>Hidden modal</p></dialog>
+</main>
+<footer>© 2025 Acme Inc. All rights reserved.</footer>
+</body></html>

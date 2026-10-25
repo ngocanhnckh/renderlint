@@ -1,0 +1,5 @@
+node_modules/
+.renderlint/
+*.log
+.DS_Store
+/test/.tmp/

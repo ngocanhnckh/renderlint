@@ -1,0 +1,57 @@
+{
+  "name": "renderlint",
+  "version": "0.1.0",
+  "main": "./src/index.js",
+  "scripts": {
+    "test": "node --test test/",
+    "build:client": "node scripts/build-client.js"
+  },
+  "keywords": [
+    "lint",
+    "ui",
+    "ux",
+    "css",
+    "accessibility",
+    "contrast",
+    "responsive",
+    "visual-testing",
+    "ai",
+    "coding-agent",
+    "claude-code",
+    "playwright"
+  ],
+  "author": "ngocanhnckh",
+  "license": "MIT",
+  "description": "Lint the rendered UI, not just the code: catches overflowing text, low contrast, overlapping elements, broken responsive layouts, emoji icons and more in any web framework. Built for AI coding agents.",
+  "dependencies": {
+    "playwright": "^1.45.0",
+    "pngjs": "^7.0.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./vite": "./src/integrations/vite.js",
+    "./client": "./dist/client.js",
+    "./analyzer": "./dist/analyzer.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "renderlint": "./bin/renderlint.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "AGENTS.md"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ngocanhnckh/renderlint.git"
+  }
+}

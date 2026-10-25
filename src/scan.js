@@ -1,0 +1,76 @@
+// Static source scan: catches emoji and placeholder copy in source files,
+// including on routes the renderer never visits. Reports file:line.
+import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
+import { join, relative, extname } from 'node:path';
+
+const EXTS = new Set(['.html', '.htm', '.jsx', '.tsx', '.js', '.ts', '.mjs', '.vue', '.svelte', '.astro', '.mdx', '.hbs', '.ejs', '.njk', '.liquid', '.php', '.erb', '.css', '.scss']);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt', '.output', '.svelte-kit', '.astro', 'coverage', '.renderlint', '.turbo', '.vercel', '.cache', 'vendor', '__tests__', '__mocks__', 'test', 'tests', 'e2e', 'cypress', 'playwright', '.storybook', 'storybook-static']);
+const SKIP_FILE = /\.(test|spec|stories|story|d)\.[a-z]+$|\.min\.(js|css)$/;
+const EMOJI_RE = /(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}️|[\u{1F1E6}-\u{1F1FF}]{2})/gu;
+const DEFAULT_DIRS = ['src', 'app', 'pages', 'components', 'layouts', 'routes', 'views', 'templates', 'lib', 'ui'];
+
+function* walk(dir, depth = 0) {
+  if (depth > 12) return;
+  let entries;
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  for (const e of entries) {
+    if (e.name.startsWith('.') && e.name !== '.') continue;
+    const p = join(dir, e.name);
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) yield* walk(p, depth + 1); }
+    else if (EXTS.has(extname(e.name)) && !SKIP_FILE.test(e.name)) yield p;
+  }
+}
+
+function isCommentLine(line) {
+  const t = line.trim();
+  return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || t.startsWith('<!--') || t.startsWith('#') && !t.startsWith('#{');
+}
+
+export function scanSources({ cwd = process.cwd(), dirs, rules = {} } = {}) {
+  const roots = (dirs && dirs.length ? dirs : DEFAULT_DIRS.filter((d) => existsSync(join(cwd, d)))).map((d) => join(cwd, d));
+  // plain-HTML projects: scan top-level html files too
+  for (const f of readdirSync(cwd)) if (/\.html?$/.test(f)) roots.push(join(cwd, f));
+  const issues = [];
+  const seen = new Set();
+  for (const root of roots) {
+    const files = statSync(root).isDirectory() ? walk(root) : [root];
+    for (const file of files) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      let src;
+      try { src = readFileSync(file, 'utf8'); } catch { continue; }
+      if (src.length > 2_000_000 || /renderlint-ignore-file/.test(src)) continue;
+      const lines = src.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.length > 3000) continue;
+        const prev = i > 0 ? lines[i - 1] : '';
+        const ignored = (rule) => {
+          for (const l of [line, prev]) {
+            const m = /renderlint-ignore(?!-file)(?:[ :]+([\w ,-]*[\w-]))?/.exec(l);
+            if (!m) continue;
+            if (!m[1]) return true;
+            const list = m[1].split(/[\s,]+/);
+            if (list.includes(rule) || list.includes('all')) return true;
+          }
+          return false;
+        };
+        if (isCommentLine(line) || /console\.(log|warn|error|info|debug)\(/.test(line)) continue;
+        if (rules.emoji !== 'off') {
+          const m = line.match(EMOJI_RE);
+          if (m && !ignored('emoji') && !/data-renderlint-ignore=["'][^"']*emoji/.test(line)) {
+            issues.push({
+              rule: 'emoji', file: relative(cwd, file), line: i + 1, column: line.search(EMOJI_RE) + 1,
+              message: 'Emoji in UI source: ' + Array.from(new Set(m)).slice(0, 6).join(' ') + '. Use an SVG icon from an icon set instead.',
+              text: line.trim().slice(0, 100),
+            });
+          }
+        }
+        if (rules['placeholder-text'] !== 'off' && /\blorem ipsum\b/i.test(line) && !ignored('placeholder-text')) {
+          issues.push({ rule: 'placeholder-text', severity: 'warn', file: relative(cwd, file), line: i + 1, column: line.search(/lorem ipsum/i) + 1, message: 'Placeholder "lorem ipsum" copy in source.', text: line.trim().slice(0, 100) });
+        }
+      }
+    }
+  }
+  return issues;
+}
