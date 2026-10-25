@@ -5,7 +5,7 @@ To find out whether renderlint helps agents ship a correct UI first time, we ran
 - **baseline**: just the prompt.
 - **with renderlint**: the same prompt plus the setup sentence from the README ("run `npx renderlint init`, then follow the 'UI quality gate: renderlint' section…").
 
-Every resulting app was then scored with the same final renderlint build (3 viewports, light and dark mode, stress pass). Findings were spot-checked by eye on the annotated screenshots to confirm they were real defects.
+Every resulting app was then re-scored with the final renderlint 0.1.0 build (3 viewports, light and dark mode, stress pass). Findings were spot-checked by eye on the annotated screenshots to confirm they were real defects.
 
 ## Round 1: five everyday frontends (Claude Opus)
 
@@ -25,7 +25,15 @@ Every resulting app was then scored with the same final renderlint build (3 view
 | SVG org chart + Gantt roadmap + team directory | 9 (contrast) | **0** |
 | Marketing analytics (8-slice labelled donut, long campaign names, wide table) | 22 (contrast) | **0** |
 
-<!-- haiku-results -->
+## Round 3: a smaller, faster model (Claude Haiku)
+
+| App | Baseline errors | With renderlint |
+|---|---|---|
+| SaaS landing page (single-file HTML) | 11 (contrast) | **0** |
+| SVG org chart + Gantt roadmap | 11 (contrast) | **0** |
+| Marketing analytics (recharts) | 16: 14 contrast, plus 2 **donut-chart labels cut off by the SVG edge** at 375px ("Organic Searc…", "…aid Social") | **0** |
+
+**Total across all 22 sessions: 229 errors in the 11 baseline apps, 0 in the 11 apps built with renderlint.** Every renderlint-enabled session ended with the agent running the check and reaching 0 errors on its own. No human intervention was needed.
 
 ## What we learned
 

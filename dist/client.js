@@ -683,10 +683,12 @@ RL.rule({
           const tolX = 2, tolY = Math.max(2, fs * 0.28);
           const cutX = !scrollX && (isSvgRoot || RL.clips(n, 'x')) && (o.left > tolX || o.right > tolX);
           const cutY = !scrollY && (isSvgRoot || RL.clips(n, 'y')) && (o.top > tolY || o.bottom > tolY);
-          if ((cutX || cutY) && !seen.has(n)) {
+          // one report per clipped HTML box, but every clipped label of an SVG chart
+          const key = isSvgRoot ? t.el : n;
+          if ((cutX || cutY) && !seen.has(key)) {
             if (cutX && !cutY && isIntentionalTruncation(t.el, n, 'x')) break;
             if (cutY && isIntentionalTruncation(t.el, n, 'y')) break;
-            seen.add(n);
+            seen.add(key);
             ctx.report({
               rule: 'text-clipped', el: t.el, related: n === t.el ? undefined : n,
               message: 'Text is cut off by ' + (isSvgRoot ? 'the edge of its <svg>' : 'an overflow:' + (cutX ? s.overflowX : s.overflowY) + ' container') +

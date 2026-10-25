@@ -57,6 +57,10 @@ Agents are great at writing frontend code, but they can't see what they built. T
 
 See [docs/rules.md](docs/rules.md) for all 28 rules, their defaults and fix guidance.
 
+## Does it work?
+
+We ran 22 headless Claude Code sessions (Opus and Haiku), each building a typical frontend: landing pages, dashboards, a kanban board, a weather app, an SVG org chart and analytics charts, in HTML, React, Next.js, Vue and Svelte. Half of them got the one-line setup prompt above. The **11 baseline apps had 229 errors between them** (mostly WCAG contrast failures, plus emoji icons and clipped chart labels). **All 11 apps built with renderlint finished at 0 errors**, because the agents fixed the issues themselves. Details and lessons are in [docs/results.md](docs/results.md).
+
 ## Quick start
 
 ```bash

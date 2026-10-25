@@ -34,22 +34,17 @@ async function reachable(url) {
   try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); return r.status < 500; } catch { return false; }
 }
 
-// Is the server on this port really this project's dev server (and not some other app)?
-async function looksLikeDevServer(url, fw) {
+// Is the server on this port really *this project's* dev server (and not some
+// other app, or another project's Vite)? Vite only serves /@fs/ paths inside its
+// own workspace, so asking for our package.json through it is a reliable check.
+async function looksLikeDevServer(url, fw, cwd) {
+  if (!['vite', 'sveltekit', 'astro', 'remix', 'react-router', 'qwik', 'nuxt', 'solid-start'].includes(fw.id)) return false;
   try {
-    if (['vite', 'sveltekit', 'astro', 'remix', 'react-router', 'qwik', 'nuxt', 'solid-start'].includes(fw.id)) {
-      const r = await fetch(url + (fw.id === 'nuxt' ? '/_nuxt/@vite/client' : '/@vite/client'), { signal: AbortSignal.timeout(1500) });
-      return r.status === 200;
-    }
-    if (fw.id === 'next') {
-      const r = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      return /next\.js/i.test(r.headers.get('x-powered-by') || '') || /\/_next\//.test(await r.text());
-    }
-  } catch { /* not reachable */ }
-  return false;
+    const r = await fetch(url + '/@fs' + cwd.split('\\').join('/') + '/package.json', { signal: AbortSignal.timeout(2000) });
+    return r.status === 200;
+  } catch { return false; }
 }
 
-// Decide what to check: returns { base, pages, cleanup[] }
 export async function resolveTargets(targets, config, cwd, log) {
   const cleanup = [];
   try {
@@ -110,7 +105,7 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
     const proj = detectProject(cwd);
     const ports = proj.framework ? [proj.framework.port, ...COMMON_PORTS.filter((p) => p !== proj.framework.port)] : [];
     for (const port of proj.pkg ? ports.slice(0, 1) : []) {
-      if (await looksLikeDevServer(`http://localhost:${port}`, proj.framework)) { base = `http://localhost:${port}`; log(`Using the dev server already running at ${base}`); break; }
+      if (await looksLikeDevServer(`http://localhost:${port}`, proj.framework, cwd)) { base = `http://localhost:${port}`; log(`Using the dev server already running at ${base}`); break; }
     }
     if (!base && proj.devCommand) {
       log(`Starting ${proj.framework ? proj.framework.name + ' ' : ''}dev server: ${proj.devCommand}`);
