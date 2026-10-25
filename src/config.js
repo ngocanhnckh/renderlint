@@ -20,7 +20,7 @@ export const DEFAULTS = {
   outputDir: '.renderlint',
   autoScroll: true,
   reducedMotion: true,
-  stress: false,           // e.g. 1.5 = re-check with 50% longer text (reports fragile-layout)
+  stress: 1.5,             // re-check with 50% longer text (reports fragile-layout warnings); false to disable
   scan: true,              // static source scan (emoji, placeholder copy) in addition to rendering
   scanDirs: undefined,
   contrastLevel: 'AA',

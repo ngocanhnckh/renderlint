@@ -23,7 +23,9 @@ This project uses **renderlint** to catch visual UI defects that type checks and
 - Every interactive element needs a visible \`:focus-visible\` style, an accessible name (\`aria-label\` on icon-only buttons), and a hit area of at least 24×24px (44×44px on touch).
 - No placeholder leaks: format numbers and dates and handle \`null\` values so the UI never shows \`undefined\`, \`NaN\`, \`[object Object]\`, \`Invalid Date\` or lorem ipsum.
 
-Commands: \`${cmd}\` (auto-detects the dev server or build output), \`${cmd} http://localhost:3000\`, \`${cmd} dist\`, \`${cmd} --stress\` (also tests with 50% longer text), \`${cmd} --json\`.
+Warnings (\`fragile-layout\` = breaks when text is 50% longer, small tap targets, tiny text…) don't fail the run, but fix them when it's cheap.
+
+Commands: \`${cmd}\` (auto-detects the dev server or build output), \`${cmd} http://localhost:3000\`, \`${cmd} dist\`, \`${cmd} --pages /,/pricing\`, \`${cmd} --json\`.
 ${END}
 `;
 }

@@ -46,7 +46,8 @@ const STRESS_SCRIPT = (factor) => {
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
     const p = n.parentElement;
     if (!p || /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|OPTION|CODE|PRE)$/.test(p.tagName) || p.closest('svg')) continue;
-    if (!/\S{2}/.test(n.textContent)) continue;
+    const txt = n.textContent.trim();
+    if (txt.length <= 3 || !/\p{L}{2}/u.test(txt)) continue; // initials, numbers, icons don't grow with real data
     nodes.push(n);
   }
   for (const n of nodes) {

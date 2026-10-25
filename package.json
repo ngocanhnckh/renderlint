@@ -44,8 +44,7 @@
     "dist",
     "docs",
     "README.md",
-    "LICENSE",
-    "AGENTS.md"
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18.17"
@@ -53,5 +52,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ngocanhnckh/renderlint.git"
+  },
+  "homepage": "https://github.com/ngocanhnckh/renderlint#readme",
+  "bugs": {
+    "url": "https://github.com/ngocanhnckh/renderlint/issues"
   }
 }

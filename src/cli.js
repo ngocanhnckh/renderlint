@@ -26,7 +26,7 @@ Options
   --viewports 375,768,1280   widths (or WxH) to test
   --dark | --light       force color schemes (default: auto-detect dark-mode CSS)
   --rules a=off,b=warn   override rule severities
-  --stress [factor]      also re-check with longer text (default factor 1.5)
+  --stress [factor]      longer-text stress factor (default 1.5); --no-stress to disable
   --fail-on error|warn|never
   --format pretty|json|md|github
   --no-screenshots       skip annotated screenshots
@@ -61,7 +61,7 @@ export async function main(argv) {
       serve: { type: 'string' }, url: { type: 'string' }, pages: { type: 'string' }, crawl: { type: 'boolean' }, 'no-crawl': { type: 'boolean' },
       'max-pages': { type: 'string' }, viewports: { type: 'string' }, dark: { type: 'boolean' }, light: { type: 'boolean' },
       rules: { type: 'string' }, stress: { type: 'string' }, 'fail-on': { type: 'string' }, format: { type: 'string' }, json: { type: 'boolean' },
-      'no-screenshots': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
+      'no-screenshots': { type: 'boolean' }, 'no-stress': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' },
     },
   });
@@ -78,7 +78,7 @@ export async function main(argv) {
     pages: values.pages ? values.pages.split(',') : undefined,
     crawl: values['no-crawl'] ? false : undefined,
     maxPages: values['max-pages'] ? +values['max-pages'] : undefined,
-    viewports: values.viewports, stress: values.stress ? parseFloat(values.stress) : undefined,
+    viewports: values.viewports, stress: values['no-stress'] ? false : values.stress ? parseFloat(values.stress) : undefined,
     colorSchemes: values.dark && values.light ? ['light', 'dark'] : values.dark ? ['light', 'dark'] : values.light ? ['light'] : undefined,
     failOn: values['fail-on'], screenshots: values['no-screenshots'] ? false : undefined,
   };
