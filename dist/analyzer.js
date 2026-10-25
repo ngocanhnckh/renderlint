@@ -82,6 +82,25 @@ function isOutOfFlow(el) {
 }
 RL.isOutOfFlow = isOutOfFlow;
 
+// Which edges of a box are visible: a background/shadow shows all edges, a
+// border-top alone only separates vertically. Returns { x, y } or null.
+function boundarySides(el) {
+  if (el === document.body || el === document.documentElement) return null;
+  const s = cs(el);
+  const bg = RL.parseColor(s.backgroundColor);
+  if ((s.backgroundImage && s.backgroundImage !== 'none') || (bg && bg.a > 0.05) ||
+    (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow))) return { x: true, y: true };
+  const side = (n) => {
+    const w = parseFloat(s['border' + n + 'Width']);
+    if (!(w > 0) || s['border' + n + 'Style'] === 'none' || s['border' + n + 'Style'] === 'hidden') return false;
+    const c = RL.parseColor(s['border' + n + 'Color']);
+    return !!(c && c.a > 0.05);
+  };
+  const x = side('Left') || side('Right'), y = side('Top') || side('Bottom');
+  return x || y ? { x, y } : null;
+}
+RL.boundarySides = boundarySides;
+
 // Visible boundary = the box is visually distinguishable from its surroundings.
 function hasVisibleBoundary(el) {
   if (el === document.body || el === document.documentElement) return false;
@@ -291,7 +310,7 @@ function stepSelector(el) {
   }
   let sel = tag;
   const classes = (typeof el.className === 'string' ? el.className : (el.getAttribute('class') || ''))
-    .split(/\s+/).filter((c) => c && !/[:[\]/!@()%.#]/.test(c) && c.length < 40 && !/^(css|sc|jsx|svelte|emotion|chakra)-[a-z0-9]+$/i.test(c));
+    .split(/\s+/).filter((c) => c && !/[:[\]/!@()%.#]/.test(c) && c.length < 40 && !/^(css|sc|jsx|svelte|emotion|chakra|s|v|astro|_?[a-z0-9]{5,}_)-[a-zA-Z0-9]{5,}$|^[a-z]{1,3}[A-Z0-9][a-zA-Z0-9]{4,}$/i.test(c) && !/^(s-|svelte-)[A-Za-z0-9_-]{6,}$/.test(c));
   if (classes.length) sel += '.' + classes.slice(0, 2).map(cssEscape).join('.');
   const p = el.parentElement;
   if (p) {
@@ -320,7 +339,7 @@ RL.snippet = function (el, max) {
 };
 
 const BAD_FRAME = /node_modules|react-dom|react\.|jsx-dev-runtime|chunk-|\/\.next\/|\/_next\/|\/chunks\/|about:\/\/|react_stack|fakeJSXCallSite|<anonymous>/;
-const INTERNAL_COMPONENT = /^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence|SegmentViewNode|SegmentStateProvider|InnerLayoutRouter|OuterLayoutRouter|LayoutRouter|RenderFromTemplateContext|ScrollAndFocusHandler|InnerScrollAndFocusHandler|RedirectBoundary|RedirectErrorBoundary|NotFoundBoundary|HTTPAccessFallbackBoundary|HTTPAccessFallbackErrorBoundary|DevRootHTTPAccessFallbackBoundary|LoadingBoundary|AppRouter|ServerRoot|HotReload|ClientPageRoot|ClientSegmentRoot|MetadataBoundary|ViewportBoundary|OutletBoundary|ReactDevOverlay|AppDevOverlay|_c\d*|[a-z].*)$/;
+const INTERNAL_COMPONENT = /^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence|SegmentViewNode|SegmentStateProvider|InnerLayoutRouter|OuterLayoutRouter|LayoutRouter|RenderFromTemplateContext|ScrollAndFocusHandler|InnerScrollAndFocusHandler|RedirectBoundary|RedirectErrorBoundary|NotFoundBoundary|HTTPAccessFallbackBoundary|HTTPAccessFallbackErrorBoundary|DevRootHTTPAccessFallbackBoundary|LoadingBoundary|AppRouter|ServerRoot|HotReload|ClientPageRoot|ClientSegmentRoot|MetadataBoundary|ViewportBoundary|OutletBoundary|ReactDevOverlay|AppDevOverlay|_c\d*|[a-z].*|[A-Za-z$_]{1,2}\d?)$/;
 
 // Best-effort mapping from a DOM node back to the component / source file.
 RL.sourceOf = function (el) {
@@ -604,10 +623,17 @@ RL.rule({
       if (block.namespaceURI === SVG_NS) continue; // svg text is handled by text-clipped
       const fs = fontSize(t.el);
       const tolX = 1.5, tolY = Math.max(2, fs * 0.3);
-      for (let n = block, d = 0; n && n !== document.body && n !== document.documentElement && d < 40; n = RL.parentOf(n), d++) {
+      let needX = true, needY = true;
+      for (let n = block, d = 0; n && n !== document.body && n !== document.documentElement && d < 40 && (needX || needY); n = RL.parentOf(n), d++) {
         if (RL.clips(n, 'x') || RL.clips(n, 'y')) break; // clipping is text-clipped's job
-        if (RL.hasVisibleBoundary(n)) {
+        const sides = RL.boundarySides(n);
+        if (sides) {
           const o = overflowBeyond(t.rects, paddingBox(n));
+          const cx = needX && sides.x, cy = needY && sides.y;
+          if (!cx) { o.left = 0; o.right = 0; }
+          if (!cy) { o.top = 0; o.bottom = 0; }
+          if (sides.x) needX = false;
+          if (sides.y) needY = false;
           if ((o.left > tolX || o.right > tolX || o.top > tolY || o.bottom > tolY) && !seen.has(n)) {
             seen.add(n);
             const own = n === block;
@@ -616,8 +642,8 @@ RL.rule({
               message: 'Text spills outside its ' + (own ? 'box' : 'container') + ' (' + fmtOver(o, tolX, tolY) + ').',
               details: { overflow: o, whiteSpace: RL.cs(t.el).whiteSpace, overflowWrap: RL.cs(block).overflowWrap },
             });
+            break;
           }
-          break;
         }
         if (RL.isOutOfFlow(n)) break;
       }
@@ -707,14 +733,18 @@ RL.rule({
           }
           break;
         }
-        if (RL.hasVisibleBoundary(n)) {
+        const sides = RL.boundarySides(n);
+        if (sides) {
           if (seen.has(n)) break;
           const o = overflowBeyond([er], paddingBox(n));
+          if (!sides.x) { o.left = 0; o.right = 0; }
+          if (!sides.y) { o.top = 0; o.bottom = 0; }
           if (o.left > 2 || o.right > 2 || o.top > 2 || o.bottom > 2) {
             seen.add(n);
             ctx.report({ rule: 'content-overflow', el, related: n, message: 'Element sticks out of its container (' + fmtOver(o, 2, 2) + ').', details: { overflow: o } });
+            break;
           }
-          break;
+          if (sides.x && sides.y) break;
         }
         if (RL.isOutOfFlow(n) || RL.cs(n).transform !== 'none') break;
       }

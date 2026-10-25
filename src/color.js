@@ -20,19 +20,20 @@ function mix(c, towards, t) { return { r: c.r + (towards - c.r) * t, g: c.g + (t
 // Smallest change that reaches the target ratio: adjust the text color first,
 // otherwise the background. Returns a human-readable suggestion.
 export function suggestColor(fg, bg, target) {
+  // Smallest change wins: move the text or the background toward black/white.
   let best = null;
-  for (const towards of [0, 255]) {
-    for (let t = 0.02; t <= 1.0001; t += 0.02) {
-      const c = mix(fg, towards, t);
-      if (contrast(c, bg) >= target) { if (!best || t < best.t) best = { t, text: hex(c) }; break; }
+  const tryMove = (base, other, kind) => {
+    for (const towards of [0, 255]) {
+      for (let t = 0.02; t <= 1.0001; t += 0.02) {
+        const c = mix(base, towards, t);
+        if ((kind === 'text' ? contrast(c, other) : contrast(fg, c)) >= target) {
+          if (!best || t < best.t - 1e-9 || (Math.abs(t - best.t) < 1e-9 && kind === 'text')) best = { t, text: `${kind} ${hex(c)}` };
+          break;
+        }
+      }
     }
-  }
-  if (best) return `text ${best.text}`;
-  for (const towards of [0, 255]) {
-    for (let t = 0.02; t <= 1.0001; t += 0.02) {
-      const c = mix(bg, towards, t);
-      if (contrast(fg, c) >= target) { if (!best || t < best.t) best = { t, text: hex(c) }; break; }
-    }
-  }
-  return best ? `background ${best.text}` : undefined;
+  };
+  tryMove(fg, bg, 'text');
+  tryMove(bg, fg, 'background');
+  return best ? best.text : undefined;
 }

@@ -136,8 +136,9 @@ export async function check(options = {}) {
     const issues = mergeIssues([...raw, ...scanned], config);
     const schemes = Array.from(new Set(raw.map((i) => i.scheme).filter(Boolean)));
     const stats = {
-      errors: issues.filter((i) => i.severity === 'error').length,
-      warnings: issues.filter((i) => i.severity === 'warn').length,
+      errors: issues.filter((i) => i.severity === 'error').reduce((n, i) => n + (i.count || 1), 0),
+      warnings: issues.filter((i) => i.severity === 'warn').reduce((n, i) => n + (i.count || 1), 0),
+      findings: issues.length,
       pages: pages.length, ms: Date.now() - started, scanned: scanned.length,
       schemes: schemes.length ? schemes : ['light'],
       suppressed: 0,

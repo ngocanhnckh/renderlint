@@ -230,7 +230,10 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     lap('focus');
 
     if (config.screenshots) {
-      const shown = issues.filter((i) => i.rect && effectiveSeverity(i, config) !== 'off');
+      // Mark errors (or warnings when there are no errors) so the screenshot stays readable.
+      const visible = issues.filter((i) => i.rect && effectiveSeverity(i, config) !== 'off');
+      const errs = visible.filter((i) => effectiveSeverity(i, config) === 'error');
+      const shown = errs.length ? errs : visible;
       screenshot = join(outDir, 'screens', `${slugFor(url)}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
       shown.forEach((i, n) => { i.marker = n + 1; });
       await annotate(page, shown, config);

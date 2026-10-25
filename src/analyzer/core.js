@@ -76,6 +76,25 @@ function isOutOfFlow(el) {
 }
 RL.isOutOfFlow = isOutOfFlow;
 
+// Which edges of a box are visible: a background/shadow shows all edges, a
+// border-top alone only separates vertically. Returns { x, y } or null.
+function boundarySides(el) {
+  if (el === document.body || el === document.documentElement) return null;
+  const s = cs(el);
+  const bg = RL.parseColor(s.backgroundColor);
+  if ((s.backgroundImage && s.backgroundImage !== 'none') || (bg && bg.a > 0.05) ||
+    (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow))) return { x: true, y: true };
+  const side = (n) => {
+    const w = parseFloat(s['border' + n + 'Width']);
+    if (!(w > 0) || s['border' + n + 'Style'] === 'none' || s['border' + n + 'Style'] === 'hidden') return false;
+    const c = RL.parseColor(s['border' + n + 'Color']);
+    return !!(c && c.a > 0.05);
+  };
+  const x = side('Left') || side('Right'), y = side('Top') || side('Bottom');
+  return x || y ? { x, y } : null;
+}
+RL.boundarySides = boundarySides;
+
 // Visible boundary = the box is visually distinguishable from its surroundings.
 function hasVisibleBoundary(el) {
   if (el === document.body || el === document.documentElement) return false;
@@ -285,7 +304,7 @@ function stepSelector(el) {
   }
   let sel = tag;
   const classes = (typeof el.className === 'string' ? el.className : (el.getAttribute('class') || ''))
-    .split(/\s+/).filter((c) => c && !/[:[\]/!@()%.#]/.test(c) && c.length < 40 && !/^(css|sc|jsx|svelte|emotion|chakra)-[a-z0-9]+$/i.test(c));
+    .split(/\s+/).filter((c) => c && !/[:[\]/!@()%.#]/.test(c) && c.length < 40 && !/^(css|sc|jsx|svelte|emotion|chakra|s|v|astro|_?[a-z0-9]{5,}_)-[a-zA-Z0-9]{5,}$|^[a-z]{1,3}[A-Z0-9][a-zA-Z0-9]{4,}$/i.test(c) && !/^(s-|svelte-)[A-Za-z0-9_-]{6,}$/.test(c));
   if (classes.length) sel += '.' + classes.slice(0, 2).map(cssEscape).join('.');
   const p = el.parentElement;
   if (p) {
@@ -314,7 +333,7 @@ RL.snippet = function (el, max) {
 };
 
 const BAD_FRAME = /node_modules|react-dom|react\.|jsx-dev-runtime|chunk-|\/\.next\/|\/_next\/|\/chunks\/|about:\/\/|react_stack|fakeJSXCallSite|<anonymous>/;
-const INTERNAL_COMPONENT = /^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence|SegmentViewNode|SegmentStateProvider|InnerLayoutRouter|OuterLayoutRouter|LayoutRouter|RenderFromTemplateContext|ScrollAndFocusHandler|InnerScrollAndFocusHandler|RedirectBoundary|RedirectErrorBoundary|NotFoundBoundary|HTTPAccessFallbackBoundary|HTTPAccessFallbackErrorBoundary|DevRootHTTPAccessFallbackBoundary|LoadingBoundary|AppRouter|ServerRoot|HotReload|ClientPageRoot|ClientSegmentRoot|MetadataBoundary|ViewportBoundary|OutletBoundary|ReactDevOverlay|AppDevOverlay|_c\d*|[a-z].*)$/;
+const INTERNAL_COMPONENT = /^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence|SegmentViewNode|SegmentStateProvider|InnerLayoutRouter|OuterLayoutRouter|LayoutRouter|RenderFromTemplateContext|ScrollAndFocusHandler|InnerScrollAndFocusHandler|RedirectBoundary|RedirectErrorBoundary|NotFoundBoundary|HTTPAccessFallbackBoundary|HTTPAccessFallbackErrorBoundary|DevRootHTTPAccessFallbackBoundary|LoadingBoundary|AppRouter|ServerRoot|HotReload|ClientPageRoot|ClientSegmentRoot|MetadataBoundary|ViewportBoundary|OutletBoundary|ReactDevOverlay|AppDevOverlay|_c\d*|[a-z].*|[A-Za-z$_]{1,2}\d?)$/;
 
 // Best-effort mapping from a DOM node back to the component / source file.
 RL.sourceOf = function (el) {

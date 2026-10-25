@@ -60,10 +60,17 @@ RL.rule({
       if (block.namespaceURI === SVG_NS) continue; // svg text is handled by text-clipped
       const fs = fontSize(t.el);
       const tolX = 1.5, tolY = Math.max(2, fs * 0.3);
-      for (let n = block, d = 0; n && n !== document.body && n !== document.documentElement && d < 40; n = RL.parentOf(n), d++) {
+      let needX = true, needY = true;
+      for (let n = block, d = 0; n && n !== document.body && n !== document.documentElement && d < 40 && (needX || needY); n = RL.parentOf(n), d++) {
         if (RL.clips(n, 'x') || RL.clips(n, 'y')) break; // clipping is text-clipped's job
-        if (RL.hasVisibleBoundary(n)) {
+        const sides = RL.boundarySides(n);
+        if (sides) {
           const o = overflowBeyond(t.rects, paddingBox(n));
+          const cx = needX && sides.x, cy = needY && sides.y;
+          if (!cx) { o.left = 0; o.right = 0; }
+          if (!cy) { o.top = 0; o.bottom = 0; }
+          if (sides.x) needX = false;
+          if (sides.y) needY = false;
           if ((o.left > tolX || o.right > tolX || o.top > tolY || o.bottom > tolY) && !seen.has(n)) {
             seen.add(n);
             const own = n === block;
@@ -72,8 +79,8 @@ RL.rule({
               message: 'Text spills outside its ' + (own ? 'box' : 'container') + ' (' + fmtOver(o, tolX, tolY) + ').',
               details: { overflow: o, whiteSpace: RL.cs(t.el).whiteSpace, overflowWrap: RL.cs(block).overflowWrap },
             });
+            break;
           }
-          break;
         }
         if (RL.isOutOfFlow(n)) break;
       }
@@ -163,14 +170,18 @@ RL.rule({
           }
           break;
         }
-        if (RL.hasVisibleBoundary(n)) {
+        const sides = RL.boundarySides(n);
+        if (sides) {
           if (seen.has(n)) break;
           const o = overflowBeyond([er], paddingBox(n));
+          if (!sides.x) { o.left = 0; o.right = 0; }
+          if (!sides.y) { o.top = 0; o.bottom = 0; }
           if (o.left > 2 || o.right > 2 || o.top > 2 || o.bottom > 2) {
             seen.add(n);
             ctx.report({ rule: 'content-overflow', el, related: n, message: 'Element sticks out of its container (' + fmtOver(o, 2, 2) + ').', details: { overflow: o } });
+            break;
           }
-          break;
+          if (sides.x && sides.y) break;
         }
         if (RL.isOutOfFlow(n) || RL.cs(n).transform !== 'none') break;
       }

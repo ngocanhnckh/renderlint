@@ -20,8 +20,22 @@ export function mergeIssues(raw, config) {
     if (i.page && !g.pages.includes(i.page)) g.pages.push(i.page);
     if (i.marker && i.screenshot) g.markers.push({ screenshot: i.screenshot, n: i.marker, viewport: i.viewport });
   }
+  // Collapse repeats of the same defect in list items/cards (selectors that
+  // differ only by :nth-of-type) into one finding with a count.
+  const similar = new Map();
+  for (const g of groups.values()) {
+    const shape = (sel) => (sel || '').replace(/:nth-of-type\(\d+\)/g, '');
+    const msgShape = g.message.replace(/"[^"]*"/g, '""').replace(/\d+(\.\d+)?/g, '#');
+    const key = g.selector ? [g.rule, shape(g.selector), shape(g.related && g.related.selector), msgShape, g.scheme || ''].join('|') : 'u|' + similar.size;
+    const first = similar.get(key);
+    if (!first) { g.count = 1; similar.set(key, g); continue; }
+    first.count++;
+    for (const v of g.viewports) if (!first.viewports.includes(v)) first.viewports.push(v);
+    for (const p of g.pages) if (!first.pages.includes(p)) first.pages.push(p);
+    (first.similar = first.similar || []).push(g.selector);
+  }
   const order = { error: 0, warn: 1 };
-  return Array.from(groups.values()).sort((a, b) => order[a.severity] - order[b.severity] || a.rule.localeCompare(b.rule));
+  return Array.from(similar.values()).sort((a, b) => order[a.severity] - order[b.severity] || a.rule.localeCompare(b.rule));
 }
 
 function globLike(p, s) { return new RegExp('^' + p.split('*').map((x) => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$').test(s); }
@@ -55,7 +69,7 @@ export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = 
     for (const i of list.slice(0, maxPerRule)) {
       n++;
       const tag = i.severity === 'error' ? red('error') : yellow('warn ');
-      lines.push(`  ${tag} ${i.message}`);
+      lines.push(`  ${tag} ${i.message}` + (i.count > 1 ? bold(` (×${i.count} similar elements)`) : ''));
       if (i.file) {
         lines.push(dim('        at ') + cyan(`${i.file}:${i.line}:${i.column}`) + dim('  ' + (i.text || '')));
       } else if (i.selector) {
