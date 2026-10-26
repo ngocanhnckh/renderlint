@@ -1055,6 +1055,7 @@ RL.rule({
 });
 
 // ---- rules/content.js
+// renderlint-ignore-file (describes placeholder/emoji rules, so it mentions their trigger words)
 // Content rules: emoji, leaked placeholders, broken / distorted images,
 // dead links, invalid nesting, missing viewport meta.
 
@@ -1246,11 +1247,16 @@ RL.rule({
       if (!RL.isVisible(el) || RL.isIgnored(el, 'oversized-icon')) continue;
       if (el.hasAttribute('width') || el.hasAttribute('height')) continue;
       const r = el.getBoundingClientRect();
-      // An unsized icon stretches to its container; a deliberately large icon (e.g. size-28) doesn't fill it.
-      const p = el.parentElement;
-      const pw = p ? RL.paddingBox(p).w - (parseFloat(RL.cs(p).paddingLeft) || 0) - (parseFloat(RL.cs(p).paddingRight) || 0) : 0;
-      const fills = pw > 0 && r.width >= pw * 0.9;
-      if (fills && r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
+      // An unsized icon stretches to its container (or its flex share); a deliberately large icon (e.g. size-28) has a CSS size.
+      let unsized;
+      const map = el.computedStyleMap && el.computedStyleMap();
+      if (map) unsized = String(map.get('width')) === 'auto' && String(map.get('height')) === 'auto';
+      else {
+        const p = el.parentElement;
+        const pw = p ? RL.paddingBox(p).w - (parseFloat(RL.cs(p).paddingLeft) || 0) - (parseFloat(RL.cs(p).paddingRight) || 0) : 0;
+        unsized = pw > 0 && r.width >= pw * 0.9;
+      }
+      if (unsized && r.width >= 4 * vb.width && r.width > 96 && r.height > 64) {
         ctx.report({ rule: 'oversized-icon', el, message: 'A ' + vb.width + '×' + vb.height + ' icon is rendered at ' + Math.round(r.width) + '×' + Math.round(r.height) + 'px — it has no size, so it stretches to fill its container.', details: { viewBox: [vb.width, vb.height], rendered: [Math.round(r.width), Math.round(r.height)] } });
       }
     }

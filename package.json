@@ -42,7 +42,7 @@
     "bin",
     "src",
     "dist",
-    "docs",
+    "docs/*.md",
     "README.md",
     "LICENSE"
   ],

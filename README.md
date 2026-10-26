@@ -18,7 +18,8 @@
 ✖ 4 error(s), 2 warning(s) · screenshots in .renderlint/screens
 ```
 
-<p align="center"><img src="docs/images/example-annotated.png" width="300" alt="renderlint's annotated screenshot of a page at 375px: numbered boxes mark a hidden CTA button, text spilling out of a fixed-height pricing card, and a clipped chart label"><br><sub>Every run saves annotated screenshots like this one, at 375px here, so agents with vision (and humans) can see each finding.</sub></p>
+![Same weather-app prompt in two Claude Code sessions: 42 contrast errors without renderlint, 0 with it](docs/images/compare-weather.png)
+<sub>The same prompt in two Claude Code sessions. Left: the baseline, with renderlint's annotated screenshot of its 42 errors. Right: the session that ran renderlint and fixed its own findings. More in the [gallery](docs/gallery.md).</sub>
 
 ESLint and TypeScript read your code. renderlint opens the page in a real headless Chromium at phone, tablet and desktop widths (plus dark mode when your CSS supports it). It measures what was actually painted, then reports each defect with the element, the component and source file when it can find them, an annotated screenshot, and a concrete fix.
 
@@ -60,6 +61,25 @@ See [docs/rules.md](docs/rules.md) for all 29 rules, their defaults and fix guid
 ## Does it work?
 
 We ran 22 headless Claude Code sessions (Opus and Haiku), each building a typical frontend: landing pages, dashboards, a kanban board, a weather app, an SVG org chart and analytics charts, in HTML, React, Next.js, Vue and Svelte. Half of them got the one-line setup prompt above. The **11 baseline apps had 229 errors between them** (mostly WCAG contrast failures, plus emoji icons and clipped chart labels). **All 11 apps built with renderlint finished at 0 errors**, because the agents fixed the issues themselves. Details and lessons are in [docs/results.md](docs/results.md).
+
+## See it
+
+Every run saves annotated screenshots with each finding boxed and numbered, so agents with vision (and humans) can see what's wrong.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/demo-charts.png" alt="Bar-chart labels overlapping and donut labels cut off by the SVG edge"><br><sub>Colliding bar-chart labels (<code>text-overlap</code>) and donut labels cut off by the SVG edge (<code>text-clipped</code>).</sub></td>
+<td width="50%"><img src="docs/images/compare-donut.png" alt="Donut labels clipped at 375px without renderlint, wrapped with it"><br><sub>A real Haiku session: donut labels clipped on phones, then fixed.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/demo-kpis.png" alt="KPI tiles showing $undefined, NaN% and Invalid Date"><br><sub>Leaked <code>$undefined</code>, <code>NaN%</code> and <code>Invalid Date</code> (<code>placeholder-text</code>).</sub></td>
+<td><img src="docs/images/demo-team.png" alt="Broken avatar, squashed avatar and an unsized icon grown to 204px"><br><sub>Broken and squashed images, and an unsized 24×24 icon at 204px.</sub></td>
+</tr>
+</table>
+
+<p align="center"><img src="docs/images/dev-overlay.png" width="720" alt="renderlint's dev overlay on a React dashboard, listing findings with source file and line"><br><sub>The Vite plugin's live overlay: hover a finding to highlight it. Each finding links to its component file and line.</sub></p>
+
+All screenshots, including a deliberately broken [demo page](examples/demo/index.html) that triggers 15 rules: [docs/gallery.md](docs/gallery.md).
 
 ## Quick start
 

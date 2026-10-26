@@ -25,7 +25,7 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `minFontSize` | `12` | Minimum font size in px. |
 | `maxLineLength` | `120` | Max average characters per line for paragraphs. |
 | `screenshots` | `true` | Write annotated screenshots to `.renderlint/screens/`. |
-| `outputDir` | `".renderlint"` | Where reports and screenshots go. |
+| `outputDir` | `".renderlint"` | Where reports and screenshots go (CLI: `--out <dir>`). |
 | `concurrency` | `3` | Viewports checked in parallel. |
 | `autoScroll` | `true` | Scroll through the page first (lazy content, reveal animations). |
 | `reducedMotion` | `true` | Emulate `prefers-reduced-motion: reduce`. |

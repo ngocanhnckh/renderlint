@@ -1,3 +1,4 @@
+// renderlint-ignore-file (describes placeholder/emoji rules, so it mentions their trigger words)
 // Text written into AGENTS.md / CLAUDE.md by `renderlint init`.
 export const START = '<!-- renderlint:start -->';
 export const END = '<!-- renderlint:end -->';

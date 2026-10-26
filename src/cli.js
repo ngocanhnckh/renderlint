@@ -32,6 +32,7 @@ Options
   --format pretty|json|md|github
   --no-screenshots       skip annotated screenshots
   --no-scan              skip the static source scan
+  --out <dir>            where to write reports and screenshots (default .renderlint)
   --config <file>        config file path
   -q, --quiet            only print the report
   -h, --help
@@ -58,16 +59,19 @@ export async function main(argv) {
     return issues.some((i) => (i.severity || 'error') === 'error') ? 1 : 0;
   }
 
-  const { values, positionals } = parseArgs({
-    args: argv, allowPositionals: true, strict: false,
-    options: {
+  const options = {
       serve: { type: 'string' }, url: { type: 'string' }, base: { type: 'string' }, pages: { type: 'string' }, crawl: { type: 'boolean' }, 'no-crawl': { type: 'boolean' },
       'max-pages': { type: 'string' }, viewports: { type: 'string' }, dark: { type: 'boolean' }, light: { type: 'boolean' },
       rules: { type: 'string' }, stress: { type: 'string' }, 'fail-on': { type: 'string' }, format: { type: 'string' }, json: { type: 'boolean' },
       'no-screenshots': { type: 'boolean' }, 'no-stress': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
-      verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' },
-    },
-  });
+      verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' }, out: { type: 'string' },
+  };
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options });
+  const unknown = Object.keys(values).filter((k) => !(k in options));
+  if (unknown.length) {
+    process.stderr.write(`Unknown option${unknown.length > 1 ? 's' : ''}: ${unknown.map((k) => '--' + k).join(', ')}. Run \`renderlint --help\` for the list.\n`);
+    return 2;
+  }
 
   const rules = {};
   for (const pair of (values.rules || '').split(',').filter(Boolean)) {
@@ -81,7 +85,7 @@ export async function main(argv) {
     maxPages: values['max-pages'] ? +values['max-pages'] : undefined,
     viewports: values.viewports, stress: values['no-stress'] ? false : values.stress ? parseFloat(values.stress) : undefined,
     colorSchemes: values.dark && values.light ? ['light', 'dark'] : values.dark ? ['light', 'dark'] : values.light ? ['light'] : undefined,
-    failOn: values['fail-on'], screenshots: values['no-screenshots'] ? false : undefined,
+    failOn: values['fail-on'], screenshots: values['no-screenshots'] ? false : undefined, outputDir: values.out,
   };
   const format = values.json ? 'json' : values.format || 'pretty';
   const quiet = values.quiet || format !== 'pretty';

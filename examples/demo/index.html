@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulse: renderlint demo page</title>
+<!--
+  A deliberately broken page in the style of a typical agent-built SaaS site.
+  Every section contains defects that coding agents commonly ship.
+  Try it from a checkout of the renderlint repo:  node bin/renderlint.js examples/demo
+-->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif; color: #0f172a; background: #f8fafc; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+  /* Fixed header, but the page has no top offset: it covers the hero. */
+  header { position: fixed; top: 0; left: 0; right: 0; z-index: 10; background: #0f172a; color: #fff; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .logo { font-weight: 800; font-size: 20px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+  .logo-mark { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #22d3ee); }
+  nav { display: flex; gap: 24px; font-size: 15px; color: #cbd5e1; }
+  .btn { display: inline-block; padding: 10px 18px; border-radius: 10px; font-weight: 600; font-size: 15px; background: #6366f1; color: #fff; }
+  @media (max-width: 700px) { nav { display: none; } }
+
+  .hero { padding: 40px 0 56px; background: linear-gradient(180deg, #eef2ff, #f8fafc); }
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 600; color: #a5b4fc; background: #eef2ff; border: 1px solid #c7d2fe; padding: 4px 10px; border-radius: 999px; }
+  h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.05; letter-spacing: -0.03em; margin: 16px 0; }
+  .lead { font-size: 18px; color: #94a3b8; max-width: 560px; line-height: 1.55; }
+  .features { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; padding: 0; list-style: none; }
+  .features li { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; font-weight: 500; }
+
+  section { padding: 56px 0; }
+  h2 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 8px; }
+  .sub { color: #64748b; margin: 0 0 28px; }
+
+  /* KPI tiles wired to data that hasn't loaded. */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+  .kpi .label { font-size: 13px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .value { font-size: 30px; font-weight: 700; margin-top: 6px; }
+  .kpi .delta { font-size: 13px; color: #16a34a; margin-top: 4px; }
+
+  /* Charts */
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; }
+  .card h3 { margin: 0 0 4px; font-size: 16px; }
+  .card p { margin: 0 0 12px; color: #64748b; font-size: 14px; }
+  svg text { font-family: inherit; }
+
+  /* Pricing: fixed-height cards and fixed-width buttons. */
+  .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; align-items: start; }
+  .plan { position: relative; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; height: 330px; }
+  .plan.pop { border: 2px solid #6366f1; }
+  .badge { position: absolute; top: -12px; left: 24px; background: #fbbf24; color: #fff; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+  .price { font-size: 36px; font-weight: 800; margin: 8px 0 12px; }
+  .price small { font-size: 15px; color: #94a3b8; font-weight: 500; }
+  .plan ul { margin: 0 0 20px; padding-left: 18px; color: #334155; line-height: 1.9; font-size: 15px; }
+  .plan .btn { width: 150px; white-space: nowrap; overflow: hidden; text-align: center; }
+
+  /* Team */
+  .team { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .person { display: flex; gap: 14px; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; }
+  .person img { width: 56px; height: 56px; border-radius: 50%; }
+  .person b { display: block; }
+  .person span { color: #64748b; font-size: 14px; }
+
+  /* Integrations table: fixed width, no scroll wrapper. */
+  table { width: 680px; border-collapse: collapse; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+  th { color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+
+  footer { background: #0f172a; color: #475569; padding: 32px 0; font-size: 14px; }
+  footer .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .socials { display: flex; gap: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="logo" href="/"><span class="logo-mark"></span>Pulse</a>
+    <nav><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#team">Team</a><a href="#integrations">Integrations</a></nav>
+    <a class="btn" href="#pricing">Get started</a>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <span class="eyebrow">New: AI weekly digests</span>
+      <h1>Product analytics your whole team will actually read</h1>
+      <p class="lead">Pulse turns raw events into a two-minute weekly briefing, so product, sales and support all see the same numbers.</p>
+      <ul class="features" id="features">
+        <li>🚀 Ship faster</li>
+        <li>⚡ Real-time dashboards</li>
+        <li>🔒 SOC 2 compliant</li>
+      </ul>
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <h2>This week at a glance</h2>
+      <p class="sub">Numbers refresh every five minutes.</p>
+      <div class="kpis" id="kpis"></div>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap charts">
+      <div class="card">
+        <h3>Signups by acquisition channel</h3>
+        <p>Last 30 days</p>
+        <svg viewBox="0 0 320 200" width="100%" role="img" aria-label="Bar chart of signups by channel">
+          <g fill="#6366f1">
+            <rect x="20" y="40" width="36" height="120" rx="4"/><rect x="70" y="70" width="36" height="90" rx="4"/>
+            <rect x="120" y="95" width="36" height="65" rx="4"/><rect x="170" y="110" width="36" height="50" rx="4"/>
+            <rect x="220" y="125" width="36" height="35" rx="4"/><rect x="270" y="138" width="36" height="22" rx="4"/>
+          </g>
+          <g font-size="12" fill="#334155" text-anchor="middle">
+            <text x="38" y="180">Organic search</text><text x="88" y="180">Paid social</text>
+            <text x="138" y="180">Newsletter</text><text x="188" y="180">Referral program</text>
+            <text x="238" y="180">Partners</text><text x="288" y="180">Direct</text>
+          </g>
+        </svg>
+      </div>
+      <div class="card">
+        <h3>Revenue by plan</h3>
+        <p>Share of MRR</p>
+        <svg viewBox="0 0 320 200" width="100%" role="img" aria-label="Donut chart of revenue by plan">
+          <circle cx="160" cy="100" r="62" fill="none" stroke="#e2e8f0" stroke-width="26"/>
+          <circle cx="160" cy="100" r="62" fill="none" stroke="#6366f1" stroke-width="26" stroke-dasharray="214 390" transform="rotate(-90 160 100)"/>
+          <circle cx="160" cy="100" r="62" fill="none" stroke="#22d3ee" stroke-width="26" stroke-dasharray="110 390" stroke-dashoffset="-214" transform="rotate(-90 160 100)"/>
+          <g font-size="13" fill="#334155">
+            <text x="248" y="70">Enterprise 55%</text>
+            <text x="-6" y="150">Team plan 28%</text>
+            <text x="250" y="170">Starter 17%</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing" style="background:#fff">
+    <div class="wrap">
+      <h2>Simple pricing</h2>
+      <p class="sub">Start free, upgrade when your team grows.</p>
+      <div class="plans">
+        <div class="plan">
+          <h3>Starter</h3>
+          <div class="price">$0 <small>/ month</small></div>
+          <ul><li>Up to 3 seats</li><li>10k events / month</li><li>Weekly digest</li></ul>
+          <a class="btn" href="/signup">Start for free</a>
+        </div>
+        <div class="plan pop">
+          <span class="badge">MOST POPULAR</span>
+          <h3>Team</h3>
+          <div class="price">$49 <small>/ month</small></div>
+          <ul><li>Unlimited seats</li><li>2M events / month</li><li>Daily and weekly digests</li><li>Slack and Microsoft Teams alerts</li><li>Custom dashboards</li><li>Priority email support</li></ul>
+          <a class="btn" href="/signup">Start your 14-day free trial</a>
+        </div>
+        <div class="plan">
+          <h3>Enterprise</h3>
+          <div class="price">Custom</div>
+          <ul><li>SSO and SCIM</li><li>Unlimited events</li><li>Dedicated success manager</li></ul>
+          <a class="btn" href="/contact">Talk to sales</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="team">
+    <div class="wrap">
+      <h2>The team</h2>
+      <p class="sub">Small, senior, and very online.</p>
+      <div class="team">
+        <div class="person"><img src="avatars/maya.jpg" alt="Maya Chen"><div><b>Maya Chen</b><span>CEO</span></div></div>
+        <div class="person"><img src="jonas.png" alt="Jonas Berg"><div><b>Jonas Berg</b><span>CTO</span></div></div>
+        <div class="person">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+          <div><b>We're hiring</b><span>Founding designer</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="integrations" style="padding-top:0">
+    <div class="wrap">
+      <h2>Integrations</h2>
+      <p class="sub">Connect the tools you already use.</p>
+      <table>
+        <thead><tr><th>Tool</th><th>Category</th><th>Sync</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Segment</td><td>Customer data platform</td><td>Real-time</td><td>Generally available</td></tr>
+          <tr><td>HubSpot</td><td>CRM</td><td>Every 15 minutes</td><td>Generally available</td></tr>
+          <tr><td>Snowflake</td><td>Data warehouse</td><td>Hourly</td><td>Beta</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Pulse Analytics, Inc.</span>
+    <span class="socials"><a href="#">Twitter</a><a href="#">GitHub</a><a href="#">LinkedIn</a></span>
+  </div>
+</footer>
+
+<script>
+  // Data "loaded" from an API that returned a different shape than expected.
+  const stats = { revenue: { current: undefined }, users: 4182, conversion: 'n/a' };
+  const kpis = [
+    ['Revenue', '$' + stats.revenue.current, '+12% vs last week'],
+    ['Active users', stats.users.toLocaleString(), '+4% vs last week'],
+    ['Conversion', (parseFloat(stats.conversion) * 100).toFixed(1) + '%', '+0.3 pts'],
+    ['Last sync', new Date(stats.lastSync).toLocaleDateString(), 'Auto-refresh on'],
+  ];
+  document.getElementById('kpis').innerHTML = kpis.map(([l, v, d]) =>
+    `<div class="kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="delta">${d}</div></div>`).join('');
+</script>
+</body>
+</html>

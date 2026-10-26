@@ -1,3 +1,4 @@
+// renderlint-ignore-file (describes placeholder/emoji rules, so it mentions their trigger words)
 // Rule catalogue: default severity, what it catches, and how to fix it.
 // This is the single source of truth for docs, `renderlint explain` and report hints.
 

@@ -7,6 +7,8 @@ To find out whether renderlint helps agents ship a correct UI first time, we ran
 
 Every resulting app was then re-scored with the final renderlint 0.1.0 build (3 viewports, light and dark mode, stress pass). Findings were spot-checked by eye on the annotated screenshots to confirm they were real defects.
 
+Screenshots of several of these apps, side by side, are in the [gallery](gallery.md).
+
 ## Round 1: five everyday frontends (Claude Opus)
 
 | App | Stack | Baseline errors | With renderlint |
