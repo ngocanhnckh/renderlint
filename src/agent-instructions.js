@@ -3,7 +3,7 @@
 export const START = '<!-- renderlint:start -->';
 export const END = '<!-- renderlint:end -->';
 
-export function agentSection(cmd = 'npx renderlint') {
+export function agentSection(cmd = 'npx renderlint', { wordpress } = {}) {
   return `${START}
 ## UI quality gate: renderlint
 
@@ -29,8 +29,17 @@ This project uses **renderlint** to catch visual UI defects that type checks and
 
 Warnings (\`fragile-layout\` = breaks with longer text, long words, bigger numbers or longer API data; small tap targets; tiny text…) don't fail the run, but fix them when it's cheap.
 
-Commands: \`${cmd}\` (auto-detects the dev server or build output), \`${cmd} http://localhost:3000\`, \`${cmd} dist\`, \`${cmd} --pages /,/pricing\`, \`${cmd} --json\`.
+${wordpress ? wordpressNotes(cmd, wordpress) : ''}Commands: \`${cmd}\` (auto-detects the dev server or build output), \`${cmd} http://localhost:3000\`, \`${cmd} dist\`, \`${cmd} --pages /,/pricing\`, \`${cmd} --json\`.
 ${END}
+`;
+}
+
+function wordpressNotes(cmd, wp) {
+  return `**WordPress (this is a ${wp.kind})**
+- PHP renders the pages, so renderlint checks the local site (the \`url\` in renderlint.config.json${wp.devCommand ? `, started with \`${wp.devCommand}\` when it isn't running` : ''}). The site must be running with this ${wp.kind} active. \`${cmd} --pages /,/shop/,/contact/\` checks specific pages; wp-admin, login, feeds and REST URLs are never crawled.
+- Fix what lives in this repository: templates (PHP, block templates and patterns), \`theme.json\` and CSS. Elementor and block-editor content lives in the database: a finding there names the widget or block (\`Elementor heading 3f2a1b7 in page #12 — edit: …\`) and links to the editor. Fix it there, or with WP-CLI if you have it, and otherwise tell the user exactly what to change.
+- Elementor: set font sizes and widths per device (Mobile/Tablet), avoid fixed px widths, and replace default widget texts ("Add Your Heading Text Here", "Click here"). Content hidden by an entrance animation that never runs (\`invisible-content\`) usually means Elementor's JavaScript is being delayed by an optimisation plugin.
+
 `;
 }
 

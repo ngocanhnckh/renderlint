@@ -5,6 +5,7 @@ import { join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { detectProject } from './detect.js';
+import { findWordPress } from './index.js';
 import { agentSection, upsertSection } from './agent-instructions.js';
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,13 +46,18 @@ export async function init(argv = []) {
   const configFiles = ['renderlint.config.js', 'renderlint.config.mjs', 'renderlint.config.cjs', 'renderlint.config.json', '.renderlintrc.json'];
   if (!configFiles.some((f) => existsSync(join(cwd, f)))) {
     const cfg = { pages: ['/'], viewports: [375, 768, 1280] };
-    if (proj.devCommand) cfg.serve = proj.devCommand;
+    const wp = proj.wordpress;
+    if (wp) {
+      // PHP renders the pages: point at the local site (started with `serve` when it isn't running).
+      cfg.url = (await findWordPress(wp.urls)) || wp.urls[0];
+      if (wp.devCommand) cfg.serve = wp.devCommand;
+    } else if (proj.devCommand) cfg.serve = proj.devCommand;
     else if (proj.staticDirs.length && !proj.hasIndexHtml) cfg.dir = proj.staticDirs[0];
     else if (proj.hasIndexHtml) cfg.dir = '.';
     cfg.rules = {};
     cfg.ignore = [];
     writeJson(join(cwd, 'renderlint.config.json'), cfg);
-    say('wrote renderlint.config.json' + (cfg.serve ? ` (checks your dev server: ${cfg.serve})` : cfg.dir ? ` (serves ${cfg.dir})` : ''));
+    say('wrote renderlint.config.json' + (wp ? ` (checks the WordPress site at ${cfg.url}${cfg.serve ? `, started with \`${cfg.serve}\`` : ''}; change "url" if your local site lives elsewhere)` : cfg.serve ? ` (checks your dev server: ${cfg.serve})` : cfg.dir ? ` (serves ${cfg.dir})` : ''));
   }
 
   // 3. package.json scripts: lint:ui, and make `build` fail on UI defects
@@ -61,7 +67,7 @@ export async function init(argv = []) {
     pkg.scripts = pkg.scripts || {};
     if (!pkg.scripts['lint:ui']) { pkg.scripts['lint:ui'] = 'renderlint'; say('added "lint:ui": "renderlint" script'); }
     const build = pkg.scripts.build;
-    if (build && !/renderlint/.test(build) && !flag('--no-build')) {
+    if (build && !/renderlint/.test(build) && !flag('--no-build') && !proj.wordpress) {
       const post = buildCheckCommand(proj);
       if (post) { pkg.scripts.build = `${build} && ${post}`; say(`"build" now fails on UI defects: ${pkg.scripts.build}`); }
     }
@@ -69,7 +75,7 @@ export async function init(argv = []) {
   }
 
   // 4. agent instructions
-  const section = agentSection('npx renderlint');
+  const section = agentSection('npx renderlint', { wordpress: proj.wordpress });
   const agentsPath = join(cwd, 'AGENTS.md');
   writeFileSync(agentsPath, upsertSection(existsSync(agentsPath) ? readFileSync(agentsPath, 'utf8') : '# Agent instructions\n\n', section));
   say('AGENTS.md: added the renderlint workflow (read by Codex, Cursor, Copilot, Gemini, Amp, Zed, …)');

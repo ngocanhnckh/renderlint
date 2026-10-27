@@ -69,6 +69,7 @@ RL.rule({
           const cx = needX && sides.x, cy = needY && sides.y;
           if (!cx) { o.left = 0; o.right = 0; }
           if (!cy) { o.top = 0; o.bottom = 0; }
+          for (const k of ['top', 'right', 'bottom', 'left']) if (!sides[k]) o[k] = 0; // past an edge that isn't drawn
           if (sides.x) needX = false;
           if (sides.y) needY = false;
           if ((o.left > tolX || o.right > tolX || o.top > tolY || o.bottom > tolY) && !seen.has(n)) {
@@ -215,8 +216,7 @@ RL.rule({
         if (sides) {
           if (seen.has(n)) break;
           const o = overflowBeyond([er], paddingBox(n));
-          if (!sides.x) { o.left = 0; o.right = 0; }
-          if (!sides.y) { o.top = 0; o.bottom = 0; }
+          for (const k of ['top', 'right', 'bottom', 'left']) if (!sides[k]) o[k] = 0; // past an edge that isn't drawn
           if (o.left > 2 || o.right > 2 || o.top > 2 || o.bottom > 2) {
             seen.add(n);
             ctx.report({ rule: 'content-overflow', el, related: n, message: 'Element sticks out of its container (' + fmtOver(o, 2, 2) + ').', details: { overflow: o } });

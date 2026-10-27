@@ -15,3 +15,4 @@ Thanks for helping make AI-built UIs less broken.
 2. Implement the rule in `src/analyzer/rules/` and add its entry to `src/rules-meta.js`.
 3. Make sure **every clean fixture still passes**. False positives are the worst failure mode for a linter that agents must obey. When a pattern is usually intentional, skip it in the rule and add it to `test/fixtures/clean/patterns.html`.
 4. Run `npm run build:client` and `node scripts/gen-docs.js`, then `npm test`.
+5. Touching anything WordPress-specific (crawl rules, Elementor mapping, `invisible-content`)? Also run `npm run test:wordpress`. It needs Docker: it starts WordPress with Elementor (`e2e/wordpress/`, port 8099, or set `RL_WP_PORT`), builds a well-made and a broken Elementor page, and checks both.

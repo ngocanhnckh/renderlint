@@ -55,12 +55,13 @@ npx renderlint                              # check: exits 1 if any error is fou
 - [How it compares](#how-it-compares)
 - [Does it work?](#does-it-work)
 - [See it](#see-it)
+- [WordPress and Elementor](#wordpress-and-elementor)
 - [Make it impossible to ship defects](#make-it-impossible-to-ship-defects)
 - [Intentional? Say so.](#intentional-say-so)
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
 - [Limitations](#limitations)
-- Docs: [rules](docs/rules.md) · [configuration](docs/configuration.md) · [integrations](docs/integrations.md) · [gallery](docs/gallery.md) · [results](docs/results.md)
+- Docs: [rules](docs/rules.md) · [configuration](docs/configuration.md) · [integrations](docs/integrations.md) · [WordPress](docs/wordpress.md) · [gallery](docs/gallery.md) · [results](docs/results.md)
 
 ## What it catches
 
@@ -168,7 +169,24 @@ npx renderlint explain contrast                 # what a rule means and how to f
 
 The output is plain text that agents can read. `--json`, `--format md` and `--format github` (PR annotations) are also available. Every run writes `.renderlint/report.json`, `.renderlint/report.md` and annotated screenshots to `.renderlint/screens/` (`--out <dir>` to change).
 
-It doesn't care which framework you use. If it renders in a browser, renderlint can lint it: React, Next.js, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, Solid, Qwik, Remix, plain HTML, and anything else.
+It doesn't care which framework you use. If it renders in a browser, renderlint can lint it: React, Next.js, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, Solid, Qwik, Remix, WordPress, plain HTML, and anything else.
+
+## WordPress and Elementor
+
+Run `init` in a theme or plugin folder, or point renderlint at any WordPress URL. It finds the local site (wp-env, LocalWP, DDEV, Lando, Docker Compose), crawls the real pages and skips wp-admin, feeds and login. It also scans your PHP templates. Findings in Elementor content name the widget and link straight to the editor:
+
+```
+  error Text spills outside its container (456px past the right edge).
+        at div.elementor-element-99731bd > h1.elementor-heading-title  "Unternehmensberatung für Designsysteme"
+        in Elementor heading 99731bd in page #12 — edit: http://localhost:8888/wp-admin/post.php?post=12&action=elementor
+```
+
+It also catches what's specific to WordPress sites:
+- sections an entrance animation never revealed, usually because an optimisation plugin delays Elementor's JavaScript;
+- Elementor's default widget texts, and WordPress sample content;
+- Elementor's default global colors, which fail contrast.
+
+Setup, logged-in and WooCommerce pages, CI with wp-env and Elementor fixes: [docs/wordpress.md](docs/wordpress.md).
 
 ## Make it impossible to ship defects
 

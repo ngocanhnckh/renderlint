@@ -26,10 +26,14 @@ function isCommentLine(line) {
   return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || t.startsWith('<!--') || t.startsWith('#') && !t.startsWith('#{');
 }
 
-export function scanSources({ cwd = process.cwd(), dirs, rules = {} } = {}) {
-  const roots = (dirs && dirs.length ? dirs : DEFAULT_DIRS.filter((d) => existsSync(join(cwd, d)))).map((d) => join(cwd, d));
-  // plain-HTML projects: scan top-level html files too
-  for (const f of readdirSync(cwd)) if (/\.html?$/.test(f)) roots.push(join(cwd, f));
+// WordPress themes and plugins keep templates at the top level and in these folders.
+const WP_DIRS = ['template-parts', 'parts', 'patterns', 'templates', 'page-templates', 'inc', 'includes', 'blocks', 'partials', 'woocommerce', 'elementor', 'widgets'];
+
+export function scanSources({ cwd = process.cwd(), dirs, rules = {}, wordpress = false } = {}) {
+  const defaults = wordpress ? [...DEFAULT_DIRS, ...WP_DIRS] : DEFAULT_DIRS;
+  const roots = (dirs && dirs.length ? dirs : Array.from(new Set(defaults)).filter((d) => existsSync(join(cwd, d)))).map((d) => join(cwd, d));
+  // plain-HTML projects: scan top-level html files too (and a theme's or plugin's top-level PHP templates)
+  for (const f of readdirSync(cwd)) if (/\.html?$/.test(f) || (wordpress && /\.php$/.test(f))) roots.push(join(cwd, f));
   const issues = [];
   const seen = new Set();
   for (const root of roots) {

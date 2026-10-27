@@ -77,21 +77,23 @@ function isOutOfFlow(el) {
 RL.isOutOfFlow = isOutOfFlow;
 
 // Which edges of a box are visible: a background/shadow shows all edges, a
-// border-top alone only separates vertically. Returns { x, y } or null.
+// border-top alone only separates vertically, and only at the top.
+// Returns { x, y, top, right, bottom, left } or null.
 function boundarySides(el) {
   if (el === document.body || el === document.documentElement) return null;
   const s = cs(el);
   const bg = RL.parseColor(s.backgroundColor);
   if ((s.backgroundImage && s.backgroundImage !== 'none') || (bg && bg.a > 0.05) ||
-    (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow))) return { x: true, y: true };
+    (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow))) return { x: true, y: true, top: true, right: true, bottom: true, left: true };
   const side = (n) => {
     const w = parseFloat(s['border' + n + 'Width']);
     if (!(w > 0) || s['border' + n + 'Style'] === 'none' || s['border' + n + 'Style'] === 'hidden') return false;
     const c = RL.parseColor(s['border' + n + 'Color']);
     return !!(c && c.a > 0.05);
   };
-  const x = side('Left') || side('Right'), y = side('Top') || side('Bottom');
-  return x || y ? { x, y } : null;
+  const top = side('Top'), right = side('Right'), bottom = side('Bottom'), left = side('Left');
+  const x = left || right, y = top || bottom;
+  return x || y ? { x, y, top, right, bottom, left } : null;
 }
 RL.boundarySides = boundarySides;
 
@@ -335,11 +337,39 @@ RL.snippet = function (el, max) {
 const BAD_FRAME = /node_modules|react-dom|react\.|jsx-dev-runtime|chunk-|\/\.next\/|\/_next\/|\/chunks\/|about:\/\/|react_stack|fakeJSXCallSite|<anonymous>/;
 const INTERNAL_COMPONENT = /^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence|SegmentViewNode|SegmentStateProvider|InnerLayoutRouter|OuterLayoutRouter|LayoutRouter|RenderFromTemplateContext|ScrollAndFocusHandler|InnerScrollAndFocusHandler|RedirectBoundary|RedirectErrorBoundary|NotFoundBoundary|HTTPAccessFallbackBoundary|HTTPAccessFallbackErrorBoundary|DevRootHTTPAccessFallbackBoundary|LoadingBoundary|AppRouter|ServerRoot|HotReload|ClientPageRoot|ClientSegmentRoot|MetadataBoundary|ViewportBoundary|OutletBoundary|ReactDevOverlay|AppDevOverlay|_c\d*|[a-z].*|[A-Za-z$_]{1,2}\d?)$/;
 
+// WordPress and Elementor pages, recognized from the generator meta and asset paths.
+RL.platform = function () {
+  if (RL._platform) return RL._platform;
+  const gen = Array.from(document.querySelectorAll('meta[name="generator"]')).map((m) => m.content || '').join(' ');
+  const wordpress = /WordPress/i.test(gen) || !!document.querySelector('link[href*="/wp-content/"],script[src*="/wp-content/"],link[href*="/wp-includes/"],script[src*="/wp-includes/"]');
+  const elementor = /Elementor/i.test(gen) || !!document.querySelector('[data-elementor-type]');
+  return (RL._platform = { wordpress, elementor });
+};
+
+const ELEMENTOR_DOC = { 'wp-page': 'page', 'wp-post': 'post', header: 'header template', footer: 'footer template', popup: 'popup', 'single-post': 'single post template', 'single-page': 'single page template', single: 'single template', archive: 'archive template', 'loop-item': 'loop item template', section: 'saved section', container: 'saved container', page: 'saved page' };
+
 // Best-effort mapping from a DOM node back to the component / source file.
 RL.sourceOf = function (el) {
   const out = {};
-  for (let n = el, depth = 0; n && depth < 25; n = parentOf(n), depth++) {
+  for (let n = el, depth = 0; n && depth < 40; n = parentOf(n), depth++) {
     if (n.nodeType !== 1) continue;
+    // Elementor: the widget or container, and the document it belongs to (page, header/footer template, popup)
+    if (n.classList.contains('elementor-element') && n.dataset.id && !out.elementor) {
+      const wt = n.dataset.widget_type;
+      out.elementor = { id: n.dataset.id, type: wt ? wt.split('.')[0] : (n.dataset.element_type || n.dataset.eType || 'element') };
+    }
+    if (out.elementor && !out.elementor.doc && n.hasAttribute('data-elementor-id')) {
+      const doc = parseInt(n.getAttribute('data-elementor-id'), 10), type = n.getAttribute('data-elementor-type') || '';
+      out.elementor.doc = doc;
+      out.elementor.docType = ELEMENTOR_DOC[type] || type || 'document';
+      if (doc > 0) out.elementor.edit = location.origin + '/wp-admin/post.php?post=' + doc + '&action=elementor';
+    }
+    // WordPress blocks (block themes, the block editor): the nearest block and its template part
+    if (!out.block && !out.elementor && n.classList.length) {
+      const b = Array.from(n.classList).find((c) => /^wp-block-[a-z0-9-]+$/.test(c) && c !== 'wp-block-template-part');
+      if (b) out.block = b.slice(9);
+    }
+    if (out.block && !out.templatePart && n.classList.contains('wp-block-template-part')) out.templatePart = n.tagName === 'HEADER' ? 'header' : n.tagName === 'FOOTER' ? 'footer' : n.tagName.toLowerCase();
     // Astro dev
     if (!out.file && n.hasAttribute('data-astro-source-file')) {
       out.file = n.getAttribute('data-astro-source-file');
@@ -392,8 +422,9 @@ RL.sourceOf = function (el) {
       }
     }
     if (out.component && out.file) break;
+    if (out.elementor && out.elementor.doc) break;
   }
-  return out.component || out.file ? out : undefined;
+  return out.component || out.file || out.elementor || out.block ? out : undefined;
 };
 
 RL.describe = function (el) {
@@ -413,7 +444,7 @@ RL.describe = function (el) {
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'TITLE', 'IFRAME', 'OBJECT', 'OPTION', 'DATALIST',
   // framework dev tools / overlays are not part of the app
   'NEXTJS-PORTAL', 'VITE-ERROR-OVERLAY', 'ASTRO-DEV-TOOLBAR', 'ASTRO-DEV-OVERLAY', 'NUXT-DEVTOOLS', 'VUE-DEVTOOLS', 'SVELTE-INSPECTOR', 'TANSTACK-ROUTER-DEVTOOLS', 'GRAMMARLY-DESKTOP-INTEGRATION']);
-const SKIP_IDS = /^(__renderlint|__next-build-watcher|__nuxt-devtools|nuxt-devtools|vue-devtools|__vconsole|svelte-inspector|react-query-devtools|tsqd-parent-container|webpack-dev-server-client-overlay)/;
+const SKIP_IDS = /^(__renderlint|wpadminbar$|__next-build-watcher|__nuxt-devtools|nuxt-devtools|vue-devtools|__vconsole|svelte-inspector|react-query-devtools|tsqd-parent-container|webpack-dev-server-client-overlay)/;
 RL.isDevTool = (n) => SKIP_TAGS.has(n.tagName) || SKIP_IDS.test(n.id || '') || n.hasAttribute('data-nextjs-toast') || n.hasAttribute('data-nextjs-dialog-overlay') || n.hasAttribute('data-tsqd-container');
 
 RL.allElements = function () {

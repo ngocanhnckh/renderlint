@@ -4,7 +4,8 @@
   "main": "./src/index.js",
   "scripts": {
     "test": "node --test test/",
-    "build:client": "node scripts/build-client.js"
+    "build:client": "node scripts/build-client.js",
+    "test:wordpress": "node e2e/wordpress/run.mjs"
   },
   "keywords": [
     "lint",

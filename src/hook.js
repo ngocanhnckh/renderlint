@@ -5,8 +5,8 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, readdirSy
 import { join, extname } from 'node:path';
 import { createHash } from 'node:crypto';
 
-const UI_EXT = /\.(html?|jsx|tsx|vue|svelte|astro|css|scss|sass|less|mdx|js|ts)$/;
-const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt', '.output', '.svelte-kit', '.astro', '.renderlint', 'coverage', '.turbo', '.vercel', '.cache', '.claude']);
+const UI_EXT = /\.(html?|jsx|tsx|vue|svelte|astro|css|scss|sass|less|mdx|js|ts|php|twig|blade\.php|liquid|hbs|ejs|njk|erb)$|^theme\.json$/;
+const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt', '.output', '.svelte-kit', '.astro', '.renderlint', 'coverage', '.turbo', '.vercel', '.cache', '.claude', 'vendor']);
 const MAX_BLOCKS = 4;
 
 function fingerprint(cwd) {

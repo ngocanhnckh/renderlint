@@ -1,5 +1,6 @@
 // Static file server (with SPA fallback) and dev-server process management.
-import { createServer } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -45,16 +46,35 @@ export function serveStatic(dir, { port = 0, spa = true, base = '/' } = {}) {
   });
 }
 
+// GET a URL without following redirects. Local HTTPS sites (LocalWP, DDEV, Lando,
+// mkcert) use self-signed certificates, so certificates aren't verified: this
+// only checks whether a dev server is up.
+export function probe(url, { timeout = 3000, maxBody = 65536 } = {}) {
+  return new Promise((resolveProbe) => {
+    let u;
+    try { u = new URL(url); } catch { resolveProbe(null); return; }
+    const req = (u.protocol === 'https:' ? httpsRequest : httpRequest)(u, { method: 'GET', rejectUnauthorized: false, timeout, headers: { 'user-agent': 'renderlint' } }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (d) => { if (body.length < maxBody) body += d; else res.destroy(); });
+      const done = () => resolveProbe({ status: res.statusCode, headers: res.headers, body });
+      res.on('end', done); res.on('close', done);
+    });
+    req.on('timeout', () => req.destroy());
+    req.on('error', () => resolveProbe(null));
+    req.end();
+  });
+}
+
 export async function waitForUrl(url, { timeout = 120000, proc } = {}) {
   const start = Date.now();
   let exited = null;
   proc && proc.once('exit', (code, signal) => { exited = code ?? signal ?? 'killed'; });
   while (Date.now() - start < timeout) {
-    if (exited !== null || (proc && proc.signalCode)) throw new Error(`Server command exited (${exited ?? proc.signalCode}) before ${url} became reachable.`);
-    try {
-      const res = await fetch(url, { redirect: 'manual' });
-      if (res.status < 500) return;
-    } catch { /* not up yet */ }
+    // A setup command that exits successfully (`wp-env start`, `docker compose up -d`) leaves the server running.
+    if ((exited !== null && exited !== 0) || (proc && proc.signalCode)) throw new Error(`Server command exited (${exited ?? proc.signalCode}) before ${url} became reachable.`);
+    const res = await probe(url);
+    if (res && res.status < 500) return;
     await new Promise((r) => setTimeout(r, 400));
   }
   throw new Error(`Timed out after ${timeout / 1000}s waiting for ${url}`);

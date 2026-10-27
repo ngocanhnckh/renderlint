@@ -18,6 +18,7 @@ renderlint works on anything that renders in a browser. Pick the gate that suits
 | Gatsby | `gatsby build && renderlint public` |
 | Eleventy / Hugo / Jekyll | `renderlint _site` / `renderlint public` |
 | Plain HTML | `renderlint .` or `renderlint index.html` |
+| WordPress (themes, plugins, Elementor) | no build step: `renderlint` checks the local site (wp-env, LocalWP, DDEV…). See [wordpress.md](wordpress.md) |
 | Rails / Django / Laravel / PHP / anything with a server | `renderlint --serve "bin/rails s -p 4319" --url http://localhost:4319` |
 
 ## Vite plugin

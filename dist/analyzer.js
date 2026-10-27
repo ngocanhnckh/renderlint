@@ -83,21 +83,23 @@ function isOutOfFlow(el) {
 RL.isOutOfFlow = isOutOfFlow;
 
 // Which edges of a box are visible: a background/shadow shows all edges, a
-// border-top alone only separates vertically. Returns { x, y } or null.
+// border-top alone only separates vertically, and only at the top.
+// Returns { x, y, top, right, bottom, left } or null.
 function boundarySides(el) {
   if (el === document.body || el === document.documentElement) return null;
   const s = cs(el);
   const bg = RL.parseColor(s.backgroundColor);
   if ((s.backgroundImage && s.backgroundImage !== 'none') || (bg && bg.a > 0.05) ||
-    (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow))) return { x: true, y: true };
+    (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow))) return { x: true, y: true, top: true, right: true, bottom: true, left: true };
   const side = (n) => {
     const w = parseFloat(s['border' + n + 'Width']);
     if (!(w > 0) || s['border' + n + 'Style'] === 'none' || s['border' + n + 'Style'] === 'hidden') return false;
     const c = RL.parseColor(s['border' + n + 'Color']);
     return !!(c && c.a > 0.05);
   };
-  const x = side('Left') || side('Right'), y = side('Top') || side('Bottom');
-  return x || y ? { x, y } : null;
+  const top = side('Top'), right = side('Right'), bottom = side('Bottom'), left = side('Left');
+  const x = left || right, y = top || bottom;
+  return x || y ? { x, y, top, right, bottom, left } : null;
 }
 RL.boundarySides = boundarySides;
 
@@ -341,11 +343,39 @@ RL.snippet = function (el, max) {
 const BAD_FRAME = /node_modules|react-dom|react\.|jsx-dev-runtime|chunk-|\/\.next\/|\/_next\/|\/chunks\/|about:\/\/|react_stack|fakeJSXCallSite|<anonymous>/;
 const INTERNAL_COMPONENT = /^(Fragment|Suspense|StrictMode|Provider|Consumer|ErrorBoundary|Router|Link|Slot|Primitive|Presence|SegmentViewNode|SegmentStateProvider|InnerLayoutRouter|OuterLayoutRouter|LayoutRouter|RenderFromTemplateContext|ScrollAndFocusHandler|InnerScrollAndFocusHandler|RedirectBoundary|RedirectErrorBoundary|NotFoundBoundary|HTTPAccessFallbackBoundary|HTTPAccessFallbackErrorBoundary|DevRootHTTPAccessFallbackBoundary|LoadingBoundary|AppRouter|ServerRoot|HotReload|ClientPageRoot|ClientSegmentRoot|MetadataBoundary|ViewportBoundary|OutletBoundary|ReactDevOverlay|AppDevOverlay|_c\d*|[a-z].*|[A-Za-z$_]{1,2}\d?)$/;
 
+// WordPress and Elementor pages, recognized from the generator meta and asset paths.
+RL.platform = function () {
+  if (RL._platform) return RL._platform;
+  const gen = Array.from(document.querySelectorAll('meta[name="generator"]')).map((m) => m.content || '').join(' ');
+  const wordpress = /WordPress/i.test(gen) || !!document.querySelector('link[href*="/wp-content/"],script[src*="/wp-content/"],link[href*="/wp-includes/"],script[src*="/wp-includes/"]');
+  const elementor = /Elementor/i.test(gen) || !!document.querySelector('[data-elementor-type]');
+  return (RL._platform = { wordpress, elementor });
+};
+
+const ELEMENTOR_DOC = { 'wp-page': 'page', 'wp-post': 'post', header: 'header template', footer: 'footer template', popup: 'popup', 'single-post': 'single post template', 'single-page': 'single page template', single: 'single template', archive: 'archive template', 'loop-item': 'loop item template', section: 'saved section', container: 'saved container', page: 'saved page' };
+
 // Best-effort mapping from a DOM node back to the component / source file.
 RL.sourceOf = function (el) {
   const out = {};
-  for (let n = el, depth = 0; n && depth < 25; n = parentOf(n), depth++) {
+  for (let n = el, depth = 0; n && depth < 40; n = parentOf(n), depth++) {
     if (n.nodeType !== 1) continue;
+    // Elementor: the widget or container, and the document it belongs to (page, header/footer template, popup)
+    if (n.classList.contains('elementor-element') && n.dataset.id && !out.elementor) {
+      const wt = n.dataset.widget_type;
+      out.elementor = { id: n.dataset.id, type: wt ? wt.split('.')[0] : (n.dataset.element_type || n.dataset.eType || 'element') };
+    }
+    if (out.elementor && !out.elementor.doc && n.hasAttribute('data-elementor-id')) {
+      const doc = parseInt(n.getAttribute('data-elementor-id'), 10), type = n.getAttribute('data-elementor-type') || '';
+      out.elementor.doc = doc;
+      out.elementor.docType = ELEMENTOR_DOC[type] || type || 'document';
+      if (doc > 0) out.elementor.edit = location.origin + '/wp-admin/post.php?post=' + doc + '&action=elementor';
+    }
+    // WordPress blocks (block themes, the block editor): the nearest block and its template part
+    if (!out.block && !out.elementor && n.classList.length) {
+      const b = Array.from(n.classList).find((c) => /^wp-block-[a-z0-9-]+$/.test(c) && c !== 'wp-block-template-part');
+      if (b) out.block = b.slice(9);
+    }
+    if (out.block && !out.templatePart && n.classList.contains('wp-block-template-part')) out.templatePart = n.tagName === 'HEADER' ? 'header' : n.tagName === 'FOOTER' ? 'footer' : n.tagName.toLowerCase();
     // Astro dev
     if (!out.file && n.hasAttribute('data-astro-source-file')) {
       out.file = n.getAttribute('data-astro-source-file');
@@ -398,8 +428,9 @@ RL.sourceOf = function (el) {
       }
     }
     if (out.component && out.file) break;
+    if (out.elementor && out.elementor.doc) break;
   }
-  return out.component || out.file ? out : undefined;
+  return out.component || out.file || out.elementor || out.block ? out : undefined;
 };
 
 RL.describe = function (el) {
@@ -419,7 +450,7 @@ RL.describe = function (el) {
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'TITLE', 'IFRAME', 'OBJECT', 'OPTION', 'DATALIST',
   // framework dev tools / overlays are not part of the app
   'NEXTJS-PORTAL', 'VITE-ERROR-OVERLAY', 'ASTRO-DEV-TOOLBAR', 'ASTRO-DEV-OVERLAY', 'NUXT-DEVTOOLS', 'VUE-DEVTOOLS', 'SVELTE-INSPECTOR', 'TANSTACK-ROUTER-DEVTOOLS', 'GRAMMARLY-DESKTOP-INTEGRATION']);
-const SKIP_IDS = /^(__renderlint|__next-build-watcher|__nuxt-devtools|nuxt-devtools|vue-devtools|__vconsole|svelte-inspector|react-query-devtools|tsqd-parent-container|webpack-dev-server-client-overlay)/;
+const SKIP_IDS = /^(__renderlint|wpadminbar$|__next-build-watcher|__nuxt-devtools|nuxt-devtools|vue-devtools|__vconsole|svelte-inspector|react-query-devtools|tsqd-parent-container|webpack-dev-server-client-overlay)/;
 RL.isDevTool = (n) => SKIP_TAGS.has(n.tagName) || SKIP_IDS.test(n.id || '') || n.hasAttribute('data-nextjs-toast') || n.hasAttribute('data-nextjs-dialog-overlay') || n.hasAttribute('data-tsqd-container');
 
 RL.allElements = function () {
@@ -636,6 +667,7 @@ RL.rule({
           const cx = needX && sides.x, cy = needY && sides.y;
           if (!cx) { o.left = 0; o.right = 0; }
           if (!cy) { o.top = 0; o.bottom = 0; }
+          for (const k of ['top', 'right', 'bottom', 'left']) if (!sides[k]) o[k] = 0; // past an edge that isn't drawn
           if (sides.x) needX = false;
           if (sides.y) needY = false;
           if ((o.left > tolX || o.right > tolX || o.top > tolY || o.bottom > tolY) && !seen.has(n)) {
@@ -782,8 +814,7 @@ RL.rule({
         if (sides) {
           if (seen.has(n)) break;
           const o = overflowBeyond([er], paddingBox(n));
-          if (!sides.x) { o.left = 0; o.right = 0; }
-          if (!sides.y) { o.top = 0; o.bottom = 0; }
+          for (const k of ['top', 'right', 'bottom', 'left']) if (!sides[k]) o[k] = 0; // past an edge that isn't drawn
           if (o.left > 2 || o.right > 2 || o.top > 2 || o.bottom > 2) {
             seen.add(n);
             ctx.report({ rule: 'content-overflow', el, related: n, message: 'Element sticks out of its container (' + fmtOver(o, 2, 2) + ').', details: { overflow: o } });
@@ -1150,10 +1181,27 @@ const LEAK_PATTERNS = [
   [/\b(Your|Company|Product|Brand) (Name|Logo) Here\b|^(Image|Logo|Title|Heading|Placeholder)( \d+)?$/i, 'warn', 'placeholder copy'],
 ];
 
+// WordPress sample content and Elementor's default widget texts, left on a published page.
+// Only checked on WordPress/Elementor pages, and the generic ones only inside the widget they come from.
+const WP_DEFAULTS = [
+  [/^Just another WordPress site$/, null, 'the default WordPress tagline'],
+  [/^Hello world!$|^Welcome to WordPress\. This is your first post\.|^This is an example page\.|^Sample Page$|^A WordPress Commenter$|^Hi, this is a comment\./, null, 'WordPress sample content'],
+  [/^Add Your Heading Text Here$|^I am a description\. Click the edit button to change this text\.$|Click edit button to change this text/, null, 'Elementor\'s default widget text'],
+  [/^This is the heading$/, '.elementor-widget-icon-box,.elementor-widget-image-box', 'Elementor\'s default widget text'],
+  [/^Cool Number$/, '.elementor-widget-counter', 'Elementor\'s default widget text'],
+  [/^(My Skill|Web Designer)$/, '.elementor-widget-progress', 'Elementor\'s default widget text'],
+  [/^This is an Alert$/, '.elementor-widget-alert', 'Elementor\'s default widget text'],
+  [/^List Item #\d+$/, '.elementor-widget-icon-list', 'Elementor\'s default widget text'],
+  [/^(Tab|Accordion|Toggle) #\d+$/, '.elementor-widget-tabs,.elementor-widget-accordion,.elementor-widget-toggle,.elementor-widget-n-tabs,.elementor-widget-n-accordion', 'Elementor\'s default widget text'],
+  [/^(John Doe|Designer)$/, '.elementor-widget-testimonial', 'Elementor\'s default widget text'],
+  [/^Click here$/, '.elementor-widget-button', 'Elementor\'s default button text'],
+];
+
 RL.rule({
   id: 'placeholder-text',
   run(ctx) {
     const seen = new Set();
+    const wp = RL.platform();
     for (const t of ctx.texts) {
       if (seen.has(t.el) || RL.isIgnored(t.el, 'placeholder-text')) continue;
       const tag = t.el.tagName;
@@ -1162,6 +1210,15 @@ RL.rule({
         if (re.test(t.text)) {
           seen.add(t.el);
           ctx.report({ rule: 'placeholder-text', el: t.el, severity: sev, message: 'Visible text contains ' + what + ': "' + RL.snippet(t.node, 50) + '".' });
+          break;
+        }
+      }
+      if (seen.has(t.el) || !(wp.wordpress || wp.elementor)) continue;
+      const full = (t.el.textContent || '').replace(/\s+/g, ' ').trim();
+      for (const [re, scope, what] of WP_DEFAULTS) {
+        if (re.test(full) && (!scope || t.el.closest(scope))) {
+          seen.add(t.el);
+          ctx.report({ rule: 'placeholder-text', el: t.el, severity: 'warn', message: 'Visible text is ' + what + ', never replaced: "' + RL.snippet(t.el, 50) + '".', details: { wordpress: true } });
           break;
         }
       }
@@ -1321,30 +1378,52 @@ RL.rule({
   },
 });
 
-// In-flow content that is still fully transparent after the page was scrolled
-// through and animations finished: typically a scroll-reveal that never fires
-// (IntersectionObserver threshold too high for tall sections on phones).
+// In-flow content that is still invisible after the page was scrolled through
+// and animations finished: typically a scroll-reveal that never fires
+// (IntersectionObserver threshold too high for tall sections on phones, or the
+// reveal script delayed or broken, as with WordPress optimisation plugins).
+// Reveal libraries hide with opacity (AOS, Framer Motion, GSAP) or with
+// visibility (Elementor entrance animations, WOW.js, ScrollReveal).
+const REVEAL_HIDDEN = '.elementor-invisible, .wow, [data-sr-id]';
 RL.rule({
   id: 'invisible-content',
   run(ctx) {
     const reported = [];
+    const vw = document.documentElement.clientWidth;
     for (const el of ctx.elements) {
       const s = RL.cs(el);
-      if (parseFloat(s.opacity) > 0.05 || s.position === 'absolute' || s.position === 'fixed') continue;
-      if (s.display === 'none' || s.visibility === 'hidden') continue;
+      if (s.position === 'absolute' || s.position === 'fixed' || s.display === 'none') continue;
+      const hiddenByVisibility = s.visibility === 'hidden';
+      if (!hiddenByVisibility && parseFloat(s.opacity) > 0.05) continue;
       if (reported.some((r) => r.contains(el))) continue;
       const p = RL.parentOf(el);
-      if (p && p !== document.body && RL.effectiveOpacity(p) <= 0.05) continue; // report the outermost one only
+      if (hiddenByVisibility) {
+        // Report the outermost hidden element only, and only when it takes up room on the page.
+        if (p && p !== document.body && RL.cs(p).visibility === 'hidden') continue;
+        if (el.closest('[aria-hidden="true"],[inert],details:not([open]),[role="menu"],[role="dialog"],[role="tabpanel"],[role="listbox"],[role="tooltip"],nav')) continue;
+      } else if (p && p !== document.body && RL.effectiveOpacity(p) <= 0.05) continue; // report the outermost one only
       const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
       if (text.length < 20 || el.getAttribute('aria-hidden') === 'true' || el.hasAttribute('inert')) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 40 || r.height < 16) continue;
+      if (hiddenByVisibility) {
+        const reveal = el.matches(REVEAL_HIDDEN);
+        // Without a reveal class: only a large block that leaves a blank gap, with nothing inside made visible again.
+        if (!reveal && (r.height < 120 || r.width < vw * 0.3 || text.length < 40)) continue;
+        if (Array.from(el.querySelectorAll('*')).some((d) => RL.cs(d).visibility === 'visible' && d.getBoundingClientRect().width > 0)) continue;
+      }
       if (RL.isIgnored(el, 'invisible-content')) continue;
       // stacked slides/tabs: a visible sibling occupies the same box
-      const sib = p ? Array.from(p.children).find((c) => c !== el && parseFloat(RL.cs(c).opacity) > 0.5 && (() => { const i = RL.intersect(RL.rectOf(c), RL.rectOf(el)); return i && i.w * i.h > 0.5 * r.width * r.height; })()) : null;
+      const sib = p ? Array.from(p.children).find((c) => c !== el && parseFloat(RL.cs(c).opacity) > 0.5 && RL.cs(c).visibility !== 'hidden' && (() => { const i = RL.intersect(RL.rectOf(c), RL.rectOf(el)); return i && i.w * i.h > 0.5 * r.width * r.height; })()) : null;
       if (sib) continue;
       reported.push(el);
-      ctx.report({ rule: 'invisible-content', el, message: 'Content stays invisible (opacity: ' + s.opacity + ') even after scrolling through the page — a reveal animation that never triggers?', details: { opacity: s.opacity } });
+      if (hiddenByVisibility) {
+        const elementor = el.classList.contains('elementor-invisible');
+        ctx.report({ rule: 'invisible-content', el, message: 'Content stays invisible (visibility: hidden' + (elementor ? ', class elementor-invisible' : '') + ') even after scrolling through the page, leaving a blank gap — ' +
+          (elementor ? 'its Elementor entrance animation never ran (Elementor\'s script delayed or deferred by an optimisation plugin, a JavaScript error, or an animation the element doesn\'t support)?' : 'a reveal animation that never triggers?'), details: { visibility: 'hidden', elementor } });
+      } else {
+        ctx.report({ rule: 'invisible-content', el, message: 'Content stays invisible (opacity: ' + s.opacity + ') even after scrolling through the page — a reveal animation that never triggers?', details: { opacity: s.opacity } });
+      }
     }
   },
 });
@@ -1961,6 +2040,7 @@ RL.analyze = function (options) {
     darkModeCss: RL.hasDarkModeCss(),
     links: Array.from(document.querySelectorAll('a[href]')).map((a) => a.href).filter((h) => /^https?:/.test(h)).slice(0, 500),
     suppressed: document.querySelectorAll('[data-renderlint-ignore]').length,
+    platform: RL.platform(),
   };
   if (options.restoreScroll && !options.noScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
   return { issues: ctx.issues, errors: ctx.errors, contrast, meta };

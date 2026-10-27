@@ -1,0 +1,19 @@
+# WordPress + Elementor for `npm run test:wordpress` (not part of `npm test`: needs Docker and network).
+services:
+  db:
+    image: mariadb:11
+    environment: { MARIADB_ROOT_PASSWORD: root, MARIADB_DATABASE: wp, MARIADB_USER: wp, MARIADB_PASSWORD: wp }
+  wordpress:
+    image: wordpress:latest
+    depends_on: [db]
+    ports: ["${RL_WP_PORT:-8099}:80"]
+    environment: { WORDPRESS_DB_HOST: db, WORDPRESS_DB_USER: wp, WORDPRESS_DB_PASSWORD: wp, WORDPRESS_DB_NAME: wp }
+    volumes: [wp:/var/www/html]
+  cli:
+    image: wordpress:cli
+    depends_on: [db, wordpress]
+    user: "33:33"
+    environment: { WORDPRESS_DB_HOST: db, WORDPRESS_DB_USER: wp, WORDPRESS_DB_PASSWORD: wp, WORDPRESS_DB_NAME: wp, WP_CLI_CACHE_DIR: /tmp/wp-cli-cache }
+    volumes: [wp:/var/www/html, ./:/scripts:ro]
+    entrypoint: ["wp"]
+volumes: { wp: {} }

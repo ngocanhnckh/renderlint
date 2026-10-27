@@ -5,11 +5,11 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'nod
 import { dirname, join, relative, resolve, basename } from 'node:path';
 import { loadConfig, normalize, DEFAULTS } from './config.js';
 import { launchBrowser } from './browser.js';
-import { serveStatic, startAndWait, waitForUrl } from './server.js';
+import { serveStatic, startAndWait, waitForUrl, probe } from './server.js';
 import { runChecks } from './runner.js';
 import { mergeIssues, formatPretty, formatMarkdown, formatGithub } from './report.js';
 import { scanSources } from './scan.js';
-import { detectProject, COMMON_PORTS } from './detect.js';
+import { detectProject, detectWordPress, looksLikeWordPress, COMMON_PORTS } from './detect.js';
 
 export { RULES, RULE_IDS } from './rules-meta.js';
 export { analyzerSource } from './analyzer/bundle.js';
@@ -31,7 +31,8 @@ function htmlFilesIn(dir, max = 50) {
 }
 
 async function reachable(url) {
-  try { const r = await fetch(url, { signal: AbortSignal.timeout(1500) }); return r.status < 500; } catch { return false; }
+  const r = await probe(url, { timeout: 1500 });
+  return !!r && r.status < 500;
 }
 
 // Is the server on this port really *this project's* dev server (and not some
@@ -43,6 +44,20 @@ async function looksLikeDevServer(url, fw, cwd) {
     const r = await fetch(url + '/@fs' + cwd.split('\\').join('/') + '/package.json', { signal: AbortSignal.timeout(2000) });
     return r.status === 200;
   } catch { return false; }
+}
+
+// The first of these URLs that serves a WordPress page (following one redirect, e.g. to the canonical host).
+export async function findWordPress(urls) {
+  for (const url of urls) {
+    let res = await probe(url, { timeout: 1500 });
+    let at = url;
+    if (res && res.status >= 300 && res.status < 400 && res.headers.location) {
+      at = new URL(res.headers.location, url).href.replace(/\/$/, '');
+      res = await probe(at, { timeout: 2500 });
+    }
+    if (looksLikeWordPress(res)) return new URL(at).origin + new URL(at).pathname.replace(/\/$/, '');
+  }
+  return null;
 }
 
 export async function resolveTargets(targets, config, cwd, log) {
@@ -103,8 +118,24 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
   } else {
     // Zero-config: running dev server → dev script → static build → index.html
     const proj = detectProject(cwd);
+    if (proj.wordpress) {
+      // PHP renders the pages: find the local site (a theme's `npm run dev` usually only builds assets).
+      const wp = proj.wordpress;
+      base = await findWordPress(wp.urls);
+      if (!base && wp.devCommand) {
+        log(`Starting the local WordPress site: ${wp.devCommand}`);
+        const s = await startAndWait(wp.devCommand, { url: wp.urls[0], cwd, timeout: config.serverTimeout, log });
+        cleanup.push(s.stop);
+        base = wp.urls[0];
+      }
+      if (!base) {
+        throw new Error(`renderlint: this looks like a WordPress ${wp.kind} (${wp.name}), but no local WordPress site answered at ${wp.urls.slice(0, 4).join(', ')}.\n` +
+          'Start your local site (wp-env, LocalWP, DDEV, Docker…) and pass its URL: `npx renderlint https://mysite.local`, or set "url" in renderlint.config.json.');
+      }
+      log(`Checking the WordPress site at ${base}`);
+    }
     const ports = proj.framework ? [proj.framework.port, ...COMMON_PORTS.filter((p) => p !== proj.framework.port)] : [];
-    for (const port of proj.pkg ? ports.slice(0, 1) : []) {
+    for (const port of proj.pkg && !base ? ports.slice(0, 1) : []) {
       if (await looksLikeDevServer(`http://localhost:${port}`, proj.framework, cwd)) { base = `http://localhost:${port}`; log(`Using the dev server already running at ${base}`); break; }
     }
     if (!base && proj.devCommand) {
@@ -155,7 +186,7 @@ export async function check(options = {}) {
     const { issues: raw, pages } = await runChecks(browser, { urls, config, log });
     let scanned = [];
     const doScan = options.scan !== undefined ? options.scan : config.scan && !targets.some((t) => /^https?:/.test(t));
-    if (doScan) scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules });
+    if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
     const issues = mergeIssues([...raw, ...scanned], config);
     const schemes = Array.from(new Set(raw.map((i) => i.scheme).filter(Boolean)));
     const stats = {

@@ -45,10 +45,36 @@ const useColor = process.stdout.isTTY && !process.env.NO_COLOR;
 const c = (code, s) => (useColor ? `\x1b[${code}m${s}\x1b[0m` : s);
 const red = (s) => c('31', s), yellow = (s) => c('33', s), dim = (s) => c('2', s), bold = (s) => c('1', s), cyan = (s) => c('36', s), green = (s) => c('32', s);
 
+// Where to make the fix in the Elementor editor, shown when a finding comes from an Elementor widget.
+const RESPONSIVE = 'switch the editor to Mobile/Tablet view and set a smaller size there (Style > Typography > Size), replace fixed px widths with % or "Full Width" (Advanced > Layout > Width), and set the container\'s Direction to Column on mobile.';
+const ELEMENTOR_FIX = {
+  'text-overflow': RESPONSIVE + ' Long words: Advanced > Custom CSS `selector { overflow-wrap: anywhere; hyphens: auto; }` (Pro), or the site\'s custom CSS.',
+  'text-clipped': RESPONSIVE,
+  'text-crowding': RESPONSIVE,
+  'fragile-layout': RESPONSIVE,
+  'viewport-overflow': RESPONSIVE + ' Also check negative margins and Advanced > Position on each device.',
+  'content-overflow': 'check the widget\'s Advanced > Layout width and negative margins on each device, and Advanced > Position (absolute) offsets.',
+  'element-overlap': 'check negative margins, Advanced > Position (absolute) and Z-index on each device, or use container Gap instead of margins.',
+  'text-overlap': 'check negative margins and Advanced > Position on each device; on mobile set the container\'s Direction to Column.',
+  contrast: 'change the widget\'s Style > Text Color, or fix the Global Colors in Site Settings once (Elementor\'s default Primary #6EC1E4 and Text #7A7A7A both fail on white).',
+  'image-distortion': 'in the Image widget set only Width and leave Height on auto, or set Object Fit to Cover.',
+  emoji: 'use an Icon, Icon Box or Icon List widget (Font Awesome or an uploaded SVG) instead of emoji in the text.',
+  'placeholder-text': 'edit the widget and replace the default text.',
+  'dead-link': 'set the button\'s Link field, or remove the button.',
+  'font-size-min': 'raise Style > Typography > Size for Mobile.',
+  'tap-target': 'increase the button\'s Padding (Style) or Size for Mobile.',
+  'icon-misaligned': 'set Vertical Align / Icon Position in the widget, or Align Items: Center on the container.',
+};
+
 function sourceStr(src) {
   if (!src) return '';
+  if (src.elementor) {
+    const e = src.elementor;
+    return `Elementor ${e.type} ${e.id}` + (e.doc ? ` in ${e.docType} #${e.doc} — edit: ${e.edit}` : '');
+  }
   const file = src.file ? src.file.replace(/^.*?\/(src|app|pages|components)\//, '$1/') : '';
-  return [src.component, file && (file + (src.line ? ':' + src.line : ''))].filter(Boolean).join(' — ');
+  const block = src.block && `block ${src.block}` + (src.templatePart ? ` in the ${src.templatePart} template part` : '');
+  return [src.component, file && (file + (src.line ? ':' + src.line : '')), !src.component && !file && block].filter(Boolean).join(' — ');
 }
 
 export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = {}) {
@@ -92,7 +118,11 @@ export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = 
     lines.push('');
   }
   lines.push(bold('How to fix'));
-  for (const rule of byRule.keys()) if (RULES[rule]) lines.push(`  ${bold(rule)}: ${RULES[rule].fix}`);
+  for (const [rule, list] of byRule) {
+    if (!RULES[rule]) continue;
+    lines.push(`  ${bold(rule)}: ${RULES[rule].fix}`);
+    if (ELEMENTOR_FIX[rule] && list.some((i) => i.source && i.source.elementor)) lines.push(`    ${dim('In Elementor:')} ${ELEMENTOR_FIX[rule]}`);
+  }
   lines.push('');
   lines.push(dim(IGNORE_HELP));
   const e = stats.errors, w = stats.warnings;

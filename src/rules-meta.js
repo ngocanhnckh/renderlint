@@ -72,8 +72,8 @@ export const RULES = {
   'placeholder-text': {
     severity: 'error',
     category: 'content',
-    summary: 'Leaked placeholders or broken data: [object Object], undefined, NaN, Invalid Date, {{template}}, lorem ipsum, TODO.',
-    fix: 'Render real content: fix the data binding / formatting, provide fallbacks for missing values, and replace lorem ipsum with real copy.',
+    summary: 'Leaked placeholders or broken data: [object Object], undefined, NaN, Invalid Date, {{template}}, lorem ipsum, TODO. On WordPress sites also the sample content ("Hello world!", "Just another WordPress site") and Elementor\'s default widget texts ("Add Your Heading Text Here").',
+    fix: 'Render real content: fix the data binding / formatting, provide fallbacks for missing values, and replace lorem ipsum with real copy. WordPress: delete the sample post, page and comment, and set a tagline (Settings > General) or remove it from the theme.',
   },
   'broken-image': {
     severity: 'error',
@@ -96,8 +96,8 @@ export const RULES = {
   'invisible-content': {
     severity: 'error',
     category: 'content',
-    summary: 'In-flow content (text) that is still fully transparent after scrolling through the page: usually a scroll-reveal animation that never fires (e.g. IntersectionObserver threshold too high for tall sections on phones) or a missing "visible" class.',
-    fix: 'Use a low IntersectionObserver threshold (0–0.15) or rootMargin, reveal elements already in view on load, and make content visible by default when JS or animations are unavailable (prefers-reduced-motion).',
+    summary: 'In-flow content (text) that is still transparent or `visibility: hidden` after scrolling through the page, leaving a blank gap: usually a scroll-reveal animation that never fires (IntersectionObserver threshold too high for tall sections on phones, a missing "visible" class, or an Elementor/WOW.js entrance animation whose script was delayed by an optimisation plugin or broken by a JavaScript error).',
+    fix: 'Use a low IntersectionObserver threshold (0–0.15) or rootMargin, reveal elements already in view on load, and make content visible by default when JS or animations are unavailable (prefers-reduced-motion). WordPress: exclude Elementor\'s frontend scripts (and jQuery) from "delay JavaScript" in WP Rocket/Perfmatters/LiteSpeed, check the console for errors, or remove the entrance animation.',
   },
   'missing-alt': {
     severity: 'warn',

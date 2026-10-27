@@ -48,10 +48,27 @@ const LEAK_PATTERNS = [
   [/\b(Your|Company|Product|Brand) (Name|Logo) Here\b|^(Image|Logo|Title|Heading|Placeholder)( \d+)?$/i, 'warn', 'placeholder copy'],
 ];
 
+// WordPress sample content and Elementor's default widget texts, left on a published page.
+// Only checked on WordPress/Elementor pages, and the generic ones only inside the widget they come from.
+const WP_DEFAULTS = [
+  [/^Just another WordPress site$/, null, 'the default WordPress tagline'],
+  [/^Hello world!$|^Welcome to WordPress\. This is your first post\.|^This is an example page\.|^Sample Page$|^A WordPress Commenter$|^Hi, this is a comment\./, null, 'WordPress sample content'],
+  [/^Add Your Heading Text Here$|^I am a description\. Click the edit button to change this text\.$|Click edit button to change this text/, null, 'Elementor\'s default widget text'],
+  [/^This is the heading$/, '.elementor-widget-icon-box,.elementor-widget-image-box', 'Elementor\'s default widget text'],
+  [/^Cool Number$/, '.elementor-widget-counter', 'Elementor\'s default widget text'],
+  [/^(My Skill|Web Designer)$/, '.elementor-widget-progress', 'Elementor\'s default widget text'],
+  [/^This is an Alert$/, '.elementor-widget-alert', 'Elementor\'s default widget text'],
+  [/^List Item #\d+$/, '.elementor-widget-icon-list', 'Elementor\'s default widget text'],
+  [/^(Tab|Accordion|Toggle) #\d+$/, '.elementor-widget-tabs,.elementor-widget-accordion,.elementor-widget-toggle,.elementor-widget-n-tabs,.elementor-widget-n-accordion', 'Elementor\'s default widget text'],
+  [/^(John Doe|Designer)$/, '.elementor-widget-testimonial', 'Elementor\'s default widget text'],
+  [/^Click here$/, '.elementor-widget-button', 'Elementor\'s default button text'],
+];
+
 RL.rule({
   id: 'placeholder-text',
   run(ctx) {
     const seen = new Set();
+    const wp = RL.platform();
     for (const t of ctx.texts) {
       if (seen.has(t.el) || RL.isIgnored(t.el, 'placeholder-text')) continue;
       const tag = t.el.tagName;
@@ -60,6 +77,15 @@ RL.rule({
         if (re.test(t.text)) {
           seen.add(t.el);
           ctx.report({ rule: 'placeholder-text', el: t.el, severity: sev, message: 'Visible text contains ' + what + ': "' + RL.snippet(t.node, 50) + '".' });
+          break;
+        }
+      }
+      if (seen.has(t.el) || !(wp.wordpress || wp.elementor)) continue;
+      const full = (t.el.textContent || '').replace(/\s+/g, ' ').trim();
+      for (const [re, scope, what] of WP_DEFAULTS) {
+        if (re.test(full) && (!scope || t.el.closest(scope))) {
+          seen.add(t.el);
+          ctx.report({ rule: 'placeholder-text', el: t.el, severity: 'warn', message: 'Visible text is ' + what + ', never replaced: "' + RL.snippet(t.el, 50) + '".', details: { wordpress: true } });
           break;
         }
       }
@@ -219,30 +245,52 @@ RL.rule({
   },
 });
 
-// In-flow content that is still fully transparent after the page was scrolled
-// through and animations finished: typically a scroll-reveal that never fires
-// (IntersectionObserver threshold too high for tall sections on phones).
+// In-flow content that is still invisible after the page was scrolled through
+// and animations finished: typically a scroll-reveal that never fires
+// (IntersectionObserver threshold too high for tall sections on phones, or the
+// reveal script delayed or broken, as with WordPress optimisation plugins).
+// Reveal libraries hide with opacity (AOS, Framer Motion, GSAP) or with
+// visibility (Elementor entrance animations, WOW.js, ScrollReveal).
+const REVEAL_HIDDEN = '.elementor-invisible, .wow, [data-sr-id]';
 RL.rule({
   id: 'invisible-content',
   run(ctx) {
     const reported = [];
+    const vw = document.documentElement.clientWidth;
     for (const el of ctx.elements) {
       const s = RL.cs(el);
-      if (parseFloat(s.opacity) > 0.05 || s.position === 'absolute' || s.position === 'fixed') continue;
-      if (s.display === 'none' || s.visibility === 'hidden') continue;
+      if (s.position === 'absolute' || s.position === 'fixed' || s.display === 'none') continue;
+      const hiddenByVisibility = s.visibility === 'hidden';
+      if (!hiddenByVisibility && parseFloat(s.opacity) > 0.05) continue;
       if (reported.some((r) => r.contains(el))) continue;
       const p = RL.parentOf(el);
-      if (p && p !== document.body && RL.effectiveOpacity(p) <= 0.05) continue; // report the outermost one only
+      if (hiddenByVisibility) {
+        // Report the outermost hidden element only, and only when it takes up room on the page.
+        if (p && p !== document.body && RL.cs(p).visibility === 'hidden') continue;
+        if (el.closest('[aria-hidden="true"],[inert],details:not([open]),[role="menu"],[role="dialog"],[role="tabpanel"],[role="listbox"],[role="tooltip"],nav')) continue;
+      } else if (p && p !== document.body && RL.effectiveOpacity(p) <= 0.05) continue; // report the outermost one only
       const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
       if (text.length < 20 || el.getAttribute('aria-hidden') === 'true' || el.hasAttribute('inert')) continue;
       const r = el.getBoundingClientRect();
       if (r.width < 40 || r.height < 16) continue;
+      if (hiddenByVisibility) {
+        const reveal = el.matches(REVEAL_HIDDEN);
+        // Without a reveal class: only a large block that leaves a blank gap, with nothing inside made visible again.
+        if (!reveal && (r.height < 120 || r.width < vw * 0.3 || text.length < 40)) continue;
+        if (Array.from(el.querySelectorAll('*')).some((d) => RL.cs(d).visibility === 'visible' && d.getBoundingClientRect().width > 0)) continue;
+      }
       if (RL.isIgnored(el, 'invisible-content')) continue;
       // stacked slides/tabs: a visible sibling occupies the same box
-      const sib = p ? Array.from(p.children).find((c) => c !== el && parseFloat(RL.cs(c).opacity) > 0.5 && (() => { const i = RL.intersect(RL.rectOf(c), RL.rectOf(el)); return i && i.w * i.h > 0.5 * r.width * r.height; })()) : null;
+      const sib = p ? Array.from(p.children).find((c) => c !== el && parseFloat(RL.cs(c).opacity) > 0.5 && RL.cs(c).visibility !== 'hidden' && (() => { const i = RL.intersect(RL.rectOf(c), RL.rectOf(el)); return i && i.w * i.h > 0.5 * r.width * r.height; })()) : null;
       if (sib) continue;
       reported.push(el);
-      ctx.report({ rule: 'invisible-content', el, message: 'Content stays invisible (opacity: ' + s.opacity + ') even after scrolling through the page — a reveal animation that never triggers?', details: { opacity: s.opacity } });
+      if (hiddenByVisibility) {
+        const elementor = el.classList.contains('elementor-invisible');
+        ctx.report({ rule: 'invisible-content', el, message: 'Content stays invisible (visibility: hidden' + (elementor ? ', class elementor-invisible' : '') + ') even after scrolling through the page, leaving a blank gap — ' +
+          (elementor ? 'its Elementor entrance animation never ran (Elementor\'s script delayed or deferred by an optimisation plugin, a JavaScript error, or an animation the element doesn\'t support)?' : 'a reveal animation that never triggers?'), details: { visibility: 'hidden', elementor } });
+      } else {
+        ctx.report({ rule: 'invisible-content', el, message: 'Content stays invisible (opacity: ' + s.opacity + ') even after scrolling through the page — a reveal animation that never triggers?', details: { opacity: s.opacity } });
+      }
     }
   },
 });

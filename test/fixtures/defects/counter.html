@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="expect" content="text-overflow"><title>t</title>
+<style>
+body{font-family:sans-serif;margin:0;padding:16px;color:#18181b;background:#fff}
+.spacer{height:1400px}
+/* Fits while counting, but the final value doesn't: renderlint must wait for the counter to finish. */
+.stat{width:130px;border:1px solid #d4d4d8;border-radius:12px;padding:16px}
+.stat b{display:block;font-size:40px;white-space:nowrap}
+</style></head><body>
+<div class="spacer">Scroll down</div>
+<div class="stat"><b id="n">0</b><span>Orders shipped</span></div>
+<script>
+const n = document.getElementById('n');
+new IntersectionObserver(([e], io) => {
+  if (!e.isIntersecting) return;
+  io.disconnect();
+  const t0 = performance.now(), to = 1284500;
+  const tick = (t) => { const k = Math.min(1, (t - t0) / 1500); n.textContent = Math.round(to * k * k).toLocaleString('en-US'); if (k < 1) requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}).observe(n);
+</script>
+</body></html>

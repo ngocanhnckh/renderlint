@@ -75,6 +75,7 @@ RL.analyze = function (options) {
     darkModeCss: RL.hasDarkModeCss(),
     links: Array.from(document.querySelectorAll('a[href]')).map((a) => a.href).filter((h) => /^https?:/.test(h)).slice(0, 500),
     suppressed: document.querySelectorAll('[data-renderlint-ignore]').length,
+    platform: RL.platform(),
   };
   if (options.restoreScroll && !options.noScroll) window.scrollTo({ left: startX, top: startY, behavior: 'instant' });
   return { issues: ctx.issues, errors: ctx.errors, contrast, meta };

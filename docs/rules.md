@@ -17,11 +17,11 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`obscured-content`](#obscured-content) | error | Text or a control is hidden underneath another opaque element (fixed header covering the hero, absolutely positioned image over a button). |
 | [`contrast`](#contrast) | error | Text does not have enough contrast with what is actually behind it (WCAG AA: 4.5:1, or 3:1 for large text). Measured from real rendered pixels, so it works over gradients and images. |
 | [`emoji`](#emoji) | error | Emoji used as icons or decoration in the interface. |
-| [`placeholder-text`](#placeholder-text) | error | Leaked placeholders or broken data: [object Object], undefined, NaN, Invalid Date, {{template}}, lorem ipsum, TODO. |
+| [`placeholder-text`](#placeholder-text) | error | Leaked placeholders or broken data: [object Object], undefined, NaN, Invalid Date, {{template}}, lorem ipsum, TODO. On WordPress sites also the sample content ("Hello world!", "Just another WordPress site") and Elementor's default widget texts ("Add Your Heading Text Here"). |
 | [`broken-image`](#broken-image) | error | An image failed to load or has no src. |
 | [`image-distortion`](#image-distortion) | error | An image is rendered at a different aspect ratio than its natural one (stretched or squashed). |
 | [`oversized-icon`](#oversized-icon) | error | An icon-sized SVG (viewBox ≤ 48) renders huge because it has no width/height, so it stretches to fill its container. |
-| [`invisible-content`](#invisible-content) | error | In-flow content (text) that is still fully transparent after scrolling through the page: usually a scroll-reveal animation that never fires (e.g. IntersectionObserver threshold too high for tall sections on phones) or a missing "visible" class. |
+| [`invisible-content`](#invisible-content) | error | In-flow content (text) that is still transparent or `visibility: hidden` after scrolling through the page, leaving a blank gap: usually a scroll-reveal animation that never fires (IntersectionObserver threshold too high for tall sections on phones, a missing "visible" class, or an Elementor/WOW.js entrance animation whose script was delayed by an optimisation plugin or broken by a JavaScript error). |
 | [`missing-alt`](#missing-alt) | warn | An &lt;img> has no alt attribute. |
 | [`dead-link`](#dead-link) | warn | A link with href="#" (or none) and no click handler: a CTA that goes nowhere. |
 | [`nested-interactive`](#nested-interactive) | error | A link or button nested inside another link or button (invalid HTML; causes hydration errors and unpredictable clicks). |
@@ -187,9 +187,9 @@ An icon next to a single line of text sits visibly above or below the text's cen
 
 **Default:** error
 
-Leaked placeholders or broken data: [object Object], undefined, NaN, Invalid Date, {{template}}, lorem ipsum, TODO.
+Leaked placeholders or broken data: [object Object], undefined, NaN, Invalid Date, {{template}}, lorem ipsum, TODO. On WordPress sites also the sample content ("Hello world!", "Just another WordPress site") and Elementor's default widget texts ("Add Your Heading Text Here").
 
-**How to fix:** Render real content: fix the data binding / formatting, provide fallbacks for missing values, and replace lorem ipsum with real copy.
+**How to fix:** Render real content: fix the data binding / formatting, provide fallbacks for missing values, and replace lorem ipsum with real copy. WordPress: delete the sample post, page and comment, and set a tagline (Settings > General) or remove it from the theme.
 
 ### broken-image
 
@@ -211,9 +211,9 @@ An image is rendered at a different aspect ratio than its natural one (stretched
 
 **Default:** error
 
-In-flow content (text) that is still fully transparent after scrolling through the page: usually a scroll-reveal animation that never fires (e.g. IntersectionObserver threshold too high for tall sections on phones) or a missing "visible" class.
+In-flow content (text) that is still transparent or `visibility: hidden` after scrolling through the page, leaving a blank gap: usually a scroll-reveal animation that never fires (IntersectionObserver threshold too high for tall sections on phones, a missing "visible" class, or an Elementor/WOW.js entrance animation whose script was delayed by an optimisation plugin or broken by a JavaScript error).
 
-**How to fix:** Use a low IntersectionObserver threshold (0–0.15) or rootMargin, reveal elements already in view on load, and make content visible by default when JS or animations are unavailable (prefers-reduced-motion).
+**How to fix:** Use a low IntersectionObserver threshold (0–0.15) or rootMargin, reveal elements already in view on load, and make content visible by default when JS or animations are unavailable (prefers-reduced-motion). WordPress: exclude Elementor's frontend scripts (and jQuery) from "delay JavaScript" in WP Rocket/Perfmatters/LiteSpeed, check the console for errors, or remove the entrance animation.
 
 ### dead-link
 

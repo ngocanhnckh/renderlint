@@ -15,6 +15,10 @@ const SETTLE_SCRIPT = async ({ autoScroll }) => {
   if (document.fonts && document.fonts.ready) await Promise.race([document.fonts.ready, sleep(3000)]);
   mark();
   document.querySelectorAll('img[loading="lazy"]').forEach((i) => { i.loading = 'eager'; });
+  // Counters that count up when scrolled into view (Elementor, countUp.js…): note when numbers last changed.
+  let lastCount = 0;
+  const mo = new MutationObserver((ms) => { for (const m of ms) if (/\d/.test(m.target.textContent || '')) { lastCount = performance.now(); break; } });
+  if (document.body) mo.observe(document.body, { characterData: true, childList: true, subtree: true });
   if (autoScroll) {
     // Trigger lazy-loading and scroll-reveal animations, then return to the top.
     const step = Math.max(300, innerHeight);
@@ -37,6 +41,9 @@ const SETTLE_SCRIPT = async ({ autoScroll }) => {
     } catch { /* ignore */ }
   }
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // Let running counters reach their final value (up to 3s).
+  for (const t = performance.now(); lastCount && performance.now() - lastCount < 400 && performance.now() - t < 3000;) await sleep(100);
+  mo.disconnect();
   mark();
   return T.slice(1);
 };
@@ -51,6 +58,18 @@ function slugFor(url) {
 }
 
 const NAV_SKIP = /\.(pdf|zip|png|jpe?g|gif|svg|webp|avif|mp4|webm|mp3|xml|txt|json|css|js|ico|woff2?)(\?|#|$)/i;
+// WordPress: admin, login, feeds, REST and links with side effects (log out, add to cart) are never crawled.
+const WP_SKIP = /^\/(wp-admin|wp-login\.php|wp-json|wp-content|wp-includes|xmlrpc\.php|wp-cron\.php|wp-signup\.php|wp-activate\.php)\b|\/(feed|trackback|embed)\/?$|\/comments\/feed|\/customer-logout\b/;
+const WP_SKIP_QUERY = /[?&](replytocom|feed|rest_route|add-to-cart|add_to_wishlist|remove_item|undo_item|action|share|preview|_wpnonce|wc-ajax|elementor-preview|ver)=/;
+// Posts, archives and pagination share templates: two of each kind are enough.
+function wpGroup(u) {
+  if (/\/page\/\d+\/?$|[?&]paged=/.test(u.pathname + u.search)) return 'paged';
+  const m = /^\/(category|tag|author|product-category|product-tag)\//.exec(u.pathname) || /[?&](cat|tag|author|m)=/.exec(u.search);
+  if (m) return 'archive:' + m[1];
+  if (/^\/\d{4}\/\d{2}\//.test(u.pathname) || /^\/\d{4}\/\d{2}\/?$/.test(u.pathname)) return 'dated';
+  if (/[?&]p=\d+/.test(u.search) || /^\/(blog|news|product|products|shop)\/[^/]+\/?$/.test(u.pathname)) return 'single:' + (u.pathname.split('/')[1] || 'p');
+  return null;
+}
 
 export async function runChecks(browser, { urls, config, log = () => {} }) {
   const viewports = config.viewports;
@@ -70,6 +89,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
 
   const queue = urls.slice();
   const visited = new Set(queue.map(normalizeUrl));
+  const groups = new Map(); // WordPress: crawled pages per template kind
   const origin = new URL(urls[0]).origin;
   const allIssues = [];
   const pages = [];
@@ -106,6 +126,11 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
             const key = normalizeUrl(u.href);
             if (visited.has(key)) continue;
             if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
+            if (res.meta.platform && res.meta.platform.wordpress) {
+              if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
+              const g = wpGroup(u);
+              if (g && (groups.set(g, (groups.get(g) || 0) + 1).get(g)) > 2) continue;
+            }
             visited.add(key);
             queue.push(u.href);
           }
@@ -200,7 +225,8 @@ async function mapLimit(items, limit, fn) {
   return out;
 }
 
-function normalizeUrl(u) { try { const x = new URL(u); x.hash = ''; return x.href.replace(/\/$/, ''); } catch { return u; } }
+// /about/, /about and /about/index.html are the same page.
+function normalizeUrl(u) { try { const x = new URL(u); x.hash = ''; x.pathname = x.pathname.replace(/\/index\.html?$/, '/'); return x.href.replace(/\/$/, ''); } catch { return u; } }
 function pathOf(url, origin) { const u = new URL(url); return u.origin === origin ? (u.pathname + u.search) : url; }
 export function globMatch(pattern, str) {
   const re = new RegExp('^' + pattern.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
