@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Usage</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Inter,system-ui,sans-serif;margin:0;padding:32px;color:#18181b;background:#f4f4f5}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{margin:0 0 20px;color:#52525b;font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;max-width:1216px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.kpis{grid-template-columns:1fr}}
+.kpi{border:1px solid #e4e4e7;border-radius:16px;padding:22px;background:#fff;overflow:hidden}
+.kpi .l{color:#52525b;font-size:14px;font-weight:500;margin-bottom:8px}
+.kpi .v{font-size:44px;font-weight:700;line-height:1.1;white-space:nowrap;letter-spacing:-.02em}
+.kpi .d{margin-top:8px;font-size:13px;color:#15803d;font-weight:600}
+</style></head><body>
+<h1>Usage this month</h1>
+<p class="sub">All workspaces · updated 2 min ago</p>
+<div class="kpis">
+  <div class="kpi"><div class="l">Spend</div><div class="v">$4,939.27</div><div class="d">+12% vs last month</div></div>
+  <div class="kpi"><div class="l">Jobs completed</div><div class="v">288/289</div><div class="d">99.7% success</div></div>
+  <div class="kpi"><div class="l">Tokens</div><div class="v">43.3M</div><div class="d">+4.1M this week</div></div>
+  <div class="kpi"><div class="l">Throughput</div><div class="v">0.88/h</div><div class="d">steady</div></div>
+</div>
+</body></html>

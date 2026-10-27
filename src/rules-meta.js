@@ -9,6 +9,12 @@ export const RULES = {
     summary: 'Text spills outside the box (card, button, badge, input) that is supposed to contain it.',
     fix: 'Let the text wrap: remove fixed widths/heights or `white-space: nowrap`, add `overflow-wrap: anywhere` (Tailwind `break-words`) for long words/URLs, and use `min-width: 0` on flex/grid children so they can shrink.',
   },
+  'text-crowding': {
+    severity: 'error',
+    category: 'layout',
+    summary: 'Text still fits inside its card, button or badge, but has run through the side padding and nearly touches the edge (a KPI number, a long label).',
+    fix: 'Give the text room to shrink or wrap: `min-width: 0` and `overflow-wrap: anywhere` on flex/grid children, a fluid font size for big numbers (`font-size: clamp(1.5rem, 4cqi, 2.5rem)` with `container-type: inline-size` on the card), fewer columns at that width, or a shorter format (`4.9K`).',
+  },
   'text-clipped': {
     severity: 'error',
     category: 'layout',
@@ -156,7 +162,7 @@ export const RULES = {
   'fragile-layout': {
     severity: 'warn',
     category: 'responsive',
-    summary: 'Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names).',
+    summary: 'Stress test: the layout breaks with content the sample data doesn\'t have yet: ~50% longer text, long unbreakable emails/URLs/IDs, numbers with three more digits, longer API data, or the worst case declared with data-renderlint-maxlength / data-renderlint-sample (that last one is an error).',
     fix: 'Design for longer content: allow wrapping, avoid fixed heights/widths on text containers, add `min-width: 0` to flex children and `overflow-wrap: anywhere` for long words.',
   },
   'dropdown-arrow': {

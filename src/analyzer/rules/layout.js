@@ -88,6 +88,43 @@ RL.rule({
   },
 });
 
+// Text that still fits inside the box but has eaten its side padding and nearly
+// touches the border: the box was designed with room, the content outgrew it.
+RL.rule({
+  id: 'text-crowding',
+  run(ctx) {
+    const seen = new Set();
+    for (const t of ctx.texts) {
+      if (RL.isIgnored(t.el, 'text-crowding') || RL.flagged.has(t.el)) continue;
+      const block = RL.nearestBlock(t.el);
+      if (block.namespaceURI === SVG_NS) continue;
+      for (let n = block, d = 0; n && n !== document.body && n !== document.documentElement && d < 6; n = RL.parentOf(n), d++) {
+        const sides = !RL.isInline(n) && RL.boundarySides(n);
+        if (sides && sides.x) {
+          const s = RL.cs(n);
+          const pl = parseFloat(s.paddingLeft) || 0, pr = parseFloat(s.paddingRight) || 0;
+          const box = paddingBox(n);
+          const minX = Math.min(...t.rects.map((r) => r.x)), maxX = Math.max(...t.rects.map((r) => r.right));
+          const gapL = minX - box.x, gapR = box.right - maxX;
+          // Only boxes designed with side padding; text past the padding box is text-overflow's job.
+          const side = pr >= 8 && gapR > -1.5 && gapR < Math.min(4, pr * 0.35) ? 'right' : pl >= 8 && gapL > -1.5 && gapL < Math.min(4, pl * 0.35) ? 'left' : null;
+          if (side && !seen.has(n) && box.w < innerWidth - 4) {
+            seen.add(n);
+            const gap = Math.max(0, Math.round(side === 'right' ? gapR : gapL));
+            ctx.report({
+              rule: 'text-crowding', el: t.el, related: n === block ? undefined : n,
+              message: 'Text has run through the box\'s ' + Math.round(side === 'right' ? pr : pl) + 'px ' + side + ' padding and sits ' + gap + 'px from its edge.',
+              details: { side, gap, padding: side === 'right' ? pr : pl },
+            });
+          }
+          break;
+        }
+        if (RL.isOutOfFlow(n) || RL.clips(n, 'x')) break;
+      }
+    }
+  },
+});
+
 // ---------------------------------------------------------------------------
 RL.rule({
   id: 'text-clipped',

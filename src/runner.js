@@ -1,11 +1,12 @@
 // Drives a headless browser over pages × viewports × color schemes and
 // collects issues from the in-page analyzer plus screenshot-based checks.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
 import { measureDropdowns } from './controls.js';
 import { RULES } from './rules-meta.js';
+import { stressJson } from './stress-data.js';
 
 const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -38,27 +39,6 @@ const SETTLE_SCRIPT = async ({ autoScroll }) => {
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   mark();
   return T.slice(1);
-};
-
-const STRESS_SCRIPT = (factor) => {
-  // Lengthen every visible text node to simulate real-world content.
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    const p = n.parentElement;
-    if (!p || /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|OPTION|CODE|PRE)$/.test(p.tagName) || p.closest('svg')) continue;
-    const txt = n.textContent.trim();
-    if (txt.length <= 3 || !/\p{L}{2}/u.test(txt)) continue; // initials, numbers, icons don't grow with real data
-    nodes.push(n);
-  }
-  for (const n of nodes) {
-    const words = n.textContent.trim().split(/\s+/);
-    const extra = Math.max(1, Math.round(words.length * (factor - 1)));
-    const add = [];
-    for (let i = 0; i < extra; i++) add.push(words[i % words.length]);
-    n.textContent = n.textContent.replace(/\s*$/, '') + ' ' + add.join(' ') + (/\s$/.test(n.textContent) ? ' ' : '');
-  }
-  return nodes.length;
 };
 
 function slugFor(url) {
@@ -94,26 +74,30 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   const allIssues = [];
   const pages = [];
 
-  while (queue.length && pages.length < config.maxPages) {
-    const url = queue.shift();
-    const pageInfo = { url, path: pathOf(url, origin), runs: [] };
+  let darkSeen = false;
+  const states = (config.states || []).map((st) => ({ ...st, url: st.page ? new URL(st.page, urls[0]).href : urls[0] }));
+  while ((queue.length && pages.length < config.maxPages) || states.length) {
+    const state = queue.length && pages.length < config.maxPages ? null : states.shift();
+    const url = state ? state.url : queue.shift();
+    const pageInfo = { url, path: pathOf(url, origin) + (state ? ` [state: ${state.name}]` : ''), runs: [] };
     pages.push(pageInfo);
-    let schemes = config.colorSchemes === 'auto' ? ['light'] : config.colorSchemes.slice();
+    let schemes = config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
     for (let si = 0; si < schemes.length; si++) {
       const scheme = schemes[si];
       // viewports run concurrently in separate browser contexts
+      const sweepFor = sweepAssignment(state || si > 0 ? [] : config.sweep, viewports);
       const results = await mapLimit(viewports, config.concurrency || 3, async (vp, vi) => {
         const t0 = Date.now();
-        const res = await checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, focus: si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log });
+        const res = await checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log });
         log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms`);
         return { vp, res, ms: Date.now() - t0 };
       });
       for (const { vp, res, ms } of results) {
         pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error });
-        for (const is of res.issues) allIssues.push({ ...is, page: pageInfo.path, url, viewport: vp.width, scheme, screenshot: res.screenshot });
+        for (const is of res.issues) allIssues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
         if (res.error) allIssues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
-        if (config.colorSchemes === 'auto' && scheme === 'light' && res.meta && res.meta.darkModeCss && !schemes.includes('dark')) schemes.push('dark');
-        if (config.crawl && res.meta && si === 0) {
+        if (config.colorSchemes === 'auto' && scheme === 'light' && res.meta && res.meta.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; }
+        if (config.crawl && !state && res.meta && si === 0) {
           for (const link of res.meta.links) {
             let u;
             try { u = new URL(link); } catch { continue; }
@@ -132,11 +116,78 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   return { issues: allIssues, pages };
 }
 
+// Spread sweep widths over the configured viewports: each runs in the context
+// (touch, height) of the nearest tested width.
+function sweepAssignment(widths, viewports) {
+  const tested = new Set(viewports.map((v) => v.width));
+  const out = new Map();
+  for (const w of widths || []) {
+    if (tested.has(w)) continue;
+    const near = viewports.reduce((a, b) => (Math.abs(b.width - w) < Math.abs(a.width - w) ? b : a));
+    if (!out.has(near.width)) out.set(near.width, []);
+    out.get(near.width).push(w);
+  }
+  return out;
+}
+
+const STRESSED_RULES = ['text-overflow', 'text-crowding', 'text-clipped', 'content-overflow', 'viewport-overflow', 'text-overlap', 'element-overlap'];
+
+// Mocked responses (config.mock / state.mock) and data stress share one route handler.
+async function handleRoute(route, routes) {
+  const req = route.request();
+  const spec = mockFor(req.url(), routes.mock);
+  try {
+    if (spec) {
+      let body = spec.file ? readFileSync(spec.file, 'utf8') : spec.body !== undefined ? (typeof spec.body === 'string' ? spec.body : JSON.stringify(spec.body)) : JSON.stringify(spec.json !== undefined ? spec.json : spec.data);
+      const isJson = spec.file ? /\.json$/i.test(spec.file) : typeof spec.body !== 'string';
+      if (routes.stressData && isJson) { try { body = JSON.stringify(stressJson(JSON.parse(body), routes.stressData)); } catch { /* not JSON */ } }
+      return await route.fulfill({ status: spec.status || 200, headers: { 'content-type': isJson ? 'application/json' : 'text/plain', ...(spec.headers || {}) }, body });
+    }
+    if (!routes.stressData || !/^(fetch|xhr)$/.test(req.resourceType())) return await route.fallback();
+    const resp = await route.fetch();
+    const headers = { ...resp.headers() };
+    if (!/json/.test(headers['content-type'] || '')) return await route.fulfill({ response: resp });
+    let data;
+    try { data = await resp.json(); } catch { return await route.fulfill({ response: resp }); }
+    delete headers['content-length']; delete headers['content-encoding'];
+    return await route.fulfill({ response: resp, headers, body: JSON.stringify(stressJson(data, routes.stressData)) });
+  } catch {
+    try { await route.fallback(); } catch { /* already handled */ }
+  }
+}
+
+function mockFor(url, mock) {
+  for (const [pattern, v] of Object.entries(mock || {})) {
+    if (!globMatch(pattern, url) && !globMatch(pattern, new URL(url).pathname + new URL(url).search)) continue;
+    if (v && typeof v === 'object' && !Array.isArray(v) && ('file' in v || 'status' in v || 'json' in v || 'body' in v)) return v;
+    return { data: v };
+  }
+  return null;
+}
+
+// UI states that don't render on load: open menus and dialogs, other tabs, filled forms.
+async function applyState(page, state, info) {
+  const list = (v) => (v === undefined ? [] : Array.isArray(v) ? v : [v]);
+  for (const sel of list(state.click)) await page.click(sel, { timeout: 5000 });
+  for (const sel of list(state.hover)) await page.hover(sel, { timeout: 5000 });
+  for (const [sel, value] of Object.entries(state.fill || {})) await page.fill(sel, String(value), { timeout: 5000 });
+  for (const key of list(state.press)) await page.keyboard.press(key);
+  if (typeof state.run === 'function') await state.run(page, info);
+  if (state.waitFor) await page.waitForSelector(state.waitFor, { timeout: 5000 });
+  await page.waitForTimeout(state.delay || 300);
+  await page.evaluate(() => {
+    for (const a of document.getAnimations ? document.getAnimations() : []) {
+      try { const end = a.effect && a.effect.getComputedTiming().endTime; if (end !== undefined && isFinite(end)) a.finish(); else a.pause(); } catch { /* ignore */ }
+    }
+    return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  });
+}
+
 // In the stress pass, selectors ignored for fragile-layout apply to every stressed rule.
 function ignoreSelectorsFor(sel) {
   const out = { ...sel };
   const extra = sel['fragile-layout'] || [];
-  for (const r of ['text-overflow', 'text-clipped', 'content-overflow', 'viewport-overflow', 'text-overlap', 'element-overlap']) out[r] = [...(out[r] || []), ...extra];
+  for (const r of STRESSED_RULES) out[r] = [...(out[r] || []), ...extra];
   return out;
 }
 
@@ -156,7 +207,7 @@ export function globMatch(pattern, str) {
   return re.test(str);
 }
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, focus, log }) {
+async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths = [], focus, log }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -165,16 +216,22 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   const page = await context.newPage();
   const issues = [];
   const origin = new URL(url).origin;
+  // Console errors and failed requests count only in the main pass, not while data is stressed.
+  let phase = 'main', sawJson = false;
+  const routes = { mock: { ...(config.mock || {}), ...((state && state.mock) || {}) }, stressData: false };
+  let routed = false;
+  const ensureRoutes = async () => { if (!routed) { routed = true; await page.route('**/*', (route) => handleRoute(route, routes)); } };
+  if (Object.keys(routes.mock).length) await ensureRoutes(); // interception disables the HTTP cache, so only when needed
   const consoleSeen = new Set();
   page.on('pageerror', (err) => {
-    if (config.rules['console-error'] === 'off') return;
+    if (config.rules['console-error'] === 'off' || phase !== 'main') return;
     const msg = String(err && err.message || err).split('\n')[0].slice(0, 300);
     if (consoleSeen.has(msg)) return;
     consoleSeen.add(msg);
     issues.push({ rule: 'console-error', severity: 'error', message: 'Uncaught error: ' + msg, details: { stack: String(err && err.stack || '').split('\n').slice(0, 6).join('\n') } });
   });
   page.on('console', (m) => {
-    if (m.type() !== 'error' || config.rules['console-error'] === 'off') return;
+    if (m.type() !== 'error' || config.rules['console-error'] === 'off' || phase !== 'main') return;
     const text = m.text();
     if (/Failed to load resource|favicon|net::ERR_|Download the React DevTools|\[vite\]|\[HMR\]/i.test(text)) return;
     const loc = m.location() && m.location().url;
@@ -186,6 +243,8 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   });
   const failed = new Set();
   page.on('response', (r) => {
+    if (phase !== 'main') return;
+    if (/^(fetch|xhr)$/.test(r.request().resourceType()) && /json/.test(r.headers()['content-type'] || '')) sawJson = true;
     const u = r.url();
     if (r.status() < 400 || !u.startsWith(origin) || /favicon|apple-touch-icon|\.map(\?|$)|__nextjs|_next\/webpack-hmr|\/@vite\//.test(u)) return;
     const type = r.request().resourceType();
@@ -218,6 +277,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (process.env.RENDERLINT_DEBUG) log('    settle marks: ' + st.join(', '));
     lap('settle');
     if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
+    if (state) await applyState(page, state, { viewport: vp, scheme });
     await page.evaluate(source);
     const res = await page.evaluate((o) => window.__renderlint.analyze(o), { ...analyzeOpts, contrastCandidates: false });
     meta = res.meta;
@@ -267,20 +327,96 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     }
     lap('screenshot');
 
-    if (config.stress && config.stress > 1) {
-      const baseline = new Set(issues.map((i) => i.rule + '|' + i.selector));
-      await page.evaluate(STRESS_SCRIPT, config.stress);
-      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-      const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, ['text-overflow', 'text-clipped', 'content-overflow', 'viewport-overflow', 'text-overlap', 'element-overlap'].includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
-      const stressIgnore = { ...ignoreSelectorsFor(analyzeOpts.ignoreSelectors) };
-      const sres = await page.evaluate((o) => window.__renderlint.analyze(o), { ...analyzeOpts, ignoreSelectors: stressIgnore, alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false });
-      const seen = new Set();
-      for (const i of sres.issues) {
-        if (baseline.has(i.rule + '|' + i.selector)) continue;
-        const key = i.rule + '|' + i.selector;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        issues.push({ ...i, rule: 'fragile-layout', severity: undefined, message: `With ~${Math.round((config.stress - 1) * 100)}% longer text: ${i.message}`, details: { ...(i.details || {}), stressedRule: i.rule } });
+    if (config.stress) {
+      const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
+      const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
+      const known = new Set(issues.map((i) => i.rule + '|' + i.selector));
+      const collect = (found, label, profile, severity) => {
+        for (const i of found) {
+          const key = i.rule + '|' + i.selector;
+          if (known.has(key)) continue;
+          known.add(key);
+          issues.push({ ...i, rule: 'fragile-layout', severity, message: `${label}: ${i.message}`, details: { ...(i.details || {}), stressedRule: i.rule, profile } });
+        }
+      };
+      const pct = Math.round((config.stress - 1) * 100);
+      for (const p of [
+        { id: 'declared', label: 'With the worst-case text declared on the element', severity: 'error' },
+        { id: 'longer', label: `With ~${pct}% longer text` },
+        { id: 'long-words', label: 'With a long unbreakable word (email, URL or ID)' },
+        { id: 'big-numbers', label: 'With bigger numbers (three more digits)' },
+      ]) {
+        if (p.id === 'longer' && config.stress <= 1) continue;
+        const n = await page.evaluate(([id, f]) => window.__renderlint.stress(id, f), [p.id, config.stress]);
+        if (!n) continue;
+        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        const sres = await page.evaluate((o) => window.__renderlint.analyze(o), stressOpts);
+        await page.evaluate(() => window.__renderlint.unstress());
+        collect(sres.issues, p.label, p.id, p.severity);
+      }
+      lap('stress');
+    }
+
+    // Responsive sweep: layouts often fit at the tested widths and break in between
+    // (1100px, 1366px…). Resize in place and re-run the layout rules at each width.
+    if (sweepWidths.length) {
+      const sweepRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) && config.rules[k] !== 'off' ? (config.rules[k] || RULES[k].severity) : 'off']));
+      const sweepOpts = { ...analyzeOpts, rules: sweepRules, contrastCandidates: false };
+      for (const w of sweepWidths) {
+        await page.setViewportSize({ width: w, height: vp.height });
+        await page.waitForTimeout(150); // resize listeners, container queries, JS breakpoints
+        await page.evaluate(() => { window.__renderlint.finishAnimations(); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
+        const r = await page.evaluate((o) => window.__renderlint.analyze(o), sweepOpts);
+        const found = r.issues.map((i) => ({ ...i, sweepWidth: w, details: { ...(i.details || {}), sweep: true } }));
+        const shown = found.filter((i) => i.rect && effectiveSeverity(i, config) === 'error');
+        if (config.screenshots && shown.length) {
+          const shot = join(outDir, 'screens', `${slugFor(url)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
+          shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; });
+          await annotate(page, shown, config);
+          const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
+          await page.screenshot({ path: shot, clip: { x: 0, y: 0, width: w, height: Math.min(config.maxScreenshotHeight, h) }, fullPage: true, animations: 'disabled', caret: 'hide' });
+          await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+        }
+        issues.push(...found);
+      }
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.waitForTimeout(100);
+      lap('sweep');
+    }
+
+    if (config.stress) {
+      const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
+      const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
+      const known = new Set(issues.filter((i) => !i.sweepWidth).map((i) => i.rule + '|' + i.selector));
+      const collect = (found, label, profile, severity) => {
+        for (const i of found) {
+          const key = i.rule + '|' + i.selector;
+          if (known.has(key)) continue;
+          known.add(key);
+          issues.push({ ...i, rule: 'fragile-layout', severity, message: `${label}: ${i.message}`, details: { ...(i.details || {}), stressedRule: i.rule, profile } });
+        }
+      };
+      // Data stress: reload with the app's JSON responses rewritten (longer names, titles,
+      // emails), so content rendered from an API is tested through the app's own code path.
+      if (config.stressData !== false && sawJson) {
+        phase = 'data';
+        routes.stressData = Math.max(2, config.stress);
+        try {
+          await ensureRoutes();
+          await page.reload({ waitUntil: 'load', timeout: config.timeout });
+          await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+          if (config.waitFor) await page.waitForSelector(config.waitFor, { timeout: config.timeout }).catch(() => {});
+          if (config.delay) await page.waitForTimeout(config.delay);
+          await page.evaluate(SETTLE_SCRIPT, { autoScroll: config.autoScroll });
+          if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
+          if (state) await applyState(page, state, { viewport: vp, scheme });
+          await page.evaluate(source);
+          const dres = await page.evaluate((o) => window.__renderlint.analyze(o), stressOpts);
+          collect(dres.issues, 'With longer data from the API (names, titles, emails)', 'data');
+        } catch (e) {
+          log(`  data stress skipped on ${url}: ${String(e && e.message || e).split('\n')[0]}`);
+        }
+        lap('data-stress');
       }
     }
   } catch (e) {

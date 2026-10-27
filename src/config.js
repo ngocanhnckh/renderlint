@@ -21,7 +21,11 @@ export const DEFAULTS = {
   outputDir: '.renderlint',
   autoScroll: true,
   reducedMotion: true,
-  stress: 1.5,             // re-check with 50% longer text (reports fragile-layout warnings); false to disable
+  stress: 1.5,             // re-check with 50% longer text, long unbreakable words and declared samples (fragile-layout); false to disable
+  sweep: true,             // also check these widths between the main viewports (layout rules only); false to disable
+  stressData: true,        // also reload pages that fetch JSON with longer API data; false to disable
+  states: [],              // extra UI states to check: [{ name, page, click, hover, fill, press, waitFor, mock, run }]
+  mock: {},                // API responses to serve instead: { "**/api/orders*": "fixtures/orders.json" | { status, json } | data }
   scan: true,              // static source scan (emoji, placeholder copy) in addition to rendering
   scanDirs: undefined,
   contrastLevel: 'AA',
@@ -35,6 +39,8 @@ export const DEFAULTS = {
   waitFor: undefined,      // selector to wait for before checking
   delay: 0,                // extra ms to wait after load
 };
+
+export const SWEEP_WIDTHS = [320, 360, 414, 480, 600, 720, 900, 1024, 1100, 1366, 1440, 1536, 1920];
 
 const FILES = ['renderlint.config.js', 'renderlint.config.mjs', 'renderlint.config.cjs', 'renderlint.config.json', '.renderlintrc.json', '.renderlintrc'];
 
@@ -83,7 +89,24 @@ export function normalize(c, cwd = process.cwd()) {
     if (out[k] !== undefined) out[k] = +out[k];
   }
   if (out.stress !== false && out.stress !== undefined && !(Number.isFinite(+out.stress) && +out.stress >= 1)) throw new Error(`renderlint: "stress" must be a factor >= 1 or false (got ${JSON.stringify(c.stress)})`);
+  out.sweep = out.sweep === false ? [] : out.sweep === true || out.sweep === undefined ? SWEEP_WIDTHS.slice() : (Array.isArray(out.sweep) ? out.sweep : String(out.sweep).split(',')).map(Number);
+  if (out.sweep.some((w) => !(w >= 200 && w <= 4000))) throw new Error(`renderlint: "sweep" must be true, false or a list of widths (got ${JSON.stringify(c.sweep)})`);
+  out.mock = resolveMocks(c.mock, cwd, 'mock');
+  if (!Array.isArray(out.states)) throw new Error('renderlint: "states" must be an array of { name, page, click, … }');
+  out.states = out.states.map((st, i) => {
+    if (!st || typeof st !== 'object' || !st.name) throw new Error(`renderlint: states[${i}] needs a "name"`);
+    return { ...st, mock: resolveMocks(st.mock, cwd, `states[${i}].mock`) };
+  });
   if (!['error', 'warn', 'never'].includes(out.failOn)) throw new Error(`renderlint: "failOn" must be error | warn | never`);
+  return out;
+}
+
+// "pattern": "file.json" serves a file (relative to the project); anything else is served as JSON.
+function resolveMocks(mock, cwd, where) {
+  if (mock === undefined || mock === null) return {};
+  if (typeof mock !== 'object' || Array.isArray(mock)) throw new Error(`renderlint: "${where}" must map URL patterns to responses`);
+  const out = {};
+  for (const [pattern, v] of Object.entries(mock)) out[pattern] = typeof v === 'string' && /\.json$/i.test(v) ? { file: resolve(cwd, v) } : v && typeof v === 'object' && typeof v.file === 'string' ? { ...v, file: resolve(cwd, v.file) } : v;
   return out;
 }
 

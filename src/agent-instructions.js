@@ -7,7 +7,7 @@ export function agentSection(cmd = 'npx renderlint') {
   return `${START}
 ## UI quality gate: renderlint
 
-This project uses **renderlint** to catch visual UI defects that type checks and code review miss: text overflowing its box, low contrast, overlapping elements and chart labels, layouts that break on phones, emoji used as icons, leaked \`undefined\`/\`NaN\`, broken or stretched images, hidden content, misbuilt form controls (dropdown arrows on the border, stretched checkboxes, icons over input text), missing focus states. It renders the app in a real browser at phone, tablet and desktop widths (and dark mode) and reports every defect with the element, the source component/file when available, and a fix hint.
+This project uses **renderlint** to catch visual UI defects that type checks and code review miss: text overflowing its box, low contrast, overlapping elements and chart labels, layouts that break on phones, emoji used as icons, leaked \`undefined\`/\`NaN\`, broken or stretched images, hidden content, misbuilt form controls (dropdown arrows on the border, stretched checkboxes, icons over input text), missing focus states. It renders the app in a real browser at phone, tablet and desktop widths, sweeps the widths in between, re-checks with longer text, long emails/URLs, bigger numbers and longer API data (and dark mode), and reports every defect with the element, the source component/file when available, and a fix hint.
 
 **Required workflow for coding agents**
 1. After any change to UI code (components, pages, styles, templates), run \`${cmd}\` and fix **every error** before you say the task is done. Re-run until it reports \`0 errors\`. Treat it like a failing build.
@@ -23,9 +23,11 @@ This project uses **renderlint** to catch visual UI defects that type checks and
 - Charts and diagrams: leave margins for axis labels, limit the number of ticks, and rotate, abbreviate or wrap long labels so they never overlap or get clipped.
 - Every interactive element needs a visible \`:focus-visible\` style, an accessible name (\`aria-label\` on icon-only buttons), and a hit area of at least 24×24px (44×44px on touch).
 - Form controls: a native \`<select>\` draws its arrow next to the border whatever its \`padding-right\`, so styled selects need \`appearance: none\` and a chevron inset like the text (e.g. \`right 12px center\` with \`padding-right: 40px\`). Scope \`width: 100%\` input styles to text fields so checkboxes and radios stay small and sit beside their labels. Pad inputs on the side of any icon drawn inside them (\`pl-10\`). Give controls in the same row the same height, and center icons with their text (\`inline-flex items-center\`).
+- Content you can't see: when a field has a known limit or a realistic worst case, declare it so renderlint tests it: \`data-renderlint-maxlength="60"\` or \`data-renderlint-sample="Aleksandra Wiśniewska-Kowalczyk"\` on the element that shows it. Keep text clear of the padding at every width, not just at 375/768/1280 (\`text-crowding\`, \`@1024px\` findings come from the width sweep).
+- States behind interaction: add menus, dialogs, tabs, filled forms, and empty/error API states to \`states\` in \`renderlint.config.mjs\` (\`{ name, page, click, waitFor }\`, \`mock: { "**/api/items*": [] }\` for empty data, \`{ status: 500, json: {...} }\` for errors) so they get checked too.
 - No placeholder leaks: format numbers and dates and handle \`null\` values so the UI never shows \`undefined\`, \`NaN\`, \`[object Object]\`, \`Invalid Date\` or lorem ipsum.
 
-Warnings (\`fragile-layout\` = breaks when text is 50% longer, small tap targets, tiny text…) don't fail the run, but fix them when it's cheap.
+Warnings (\`fragile-layout\` = breaks with longer text, long words, bigger numbers or longer API data; small tap targets; tiny text…) don't fail the run, but fix them when it's cheap.
 
 Commands: \`${cmd}\` (auto-detects the dev server or build output), \`${cmd} http://localhost:3000\`, \`${cmd} dist\`, \`${cmd} --pages /,/pricing\`, \`${cmd} --json\`.
 ${END}

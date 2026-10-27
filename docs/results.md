@@ -5,7 +5,7 @@ To find out whether renderlint helps agents ship a correct UI first time, we ran
 - **baseline**: just the prompt.
 - **with renderlint**: the same prompt plus the setup sentence from the README ("run `npx renderlint init`, then follow the 'UI quality gate: renderlint' section…").
 
-Every resulting app was then re-scored with the final renderlint 0.1.0 build (3 viewports, light and dark mode, stress pass). Findings were spot-checked by eye on the annotated screenshots to confirm they were real defects.
+Every resulting app was then re-scored with the renderlint 0.1.0 build of the time (3 viewports, light and dark mode, stress pass). Findings were spot-checked by eye on the annotated screenshots to confirm they were real defects.
 
 Screenshots of several of these apps, side by side, are in the [gallery](gallery.md).
 
@@ -36,6 +36,21 @@ Screenshots of several of these apps, side by side, are in the [gallery](gallery
 | Marketing analytics (recharts) | 16: 14 contrast, plus 2 **donut-chart labels cut off by the SVG edge** at 375px ("Organic Searc…", "…aid Social") | **0** |
 
 **Total across all 22 sessions: 229 errors in the 11 baseline apps, 0 in the 11 apps built with renderlint.** Every renderlint-enabled session ended with the agent running the check and reaching 0 errors on its own. No human intervention was needed.
+
+## Round 4: rescoring everything with the new checks
+
+renderlint later gained a width sweep (13 widths from 320 to 1920px), more stress profiles (long words, big numbers, longer API data), `text-crowding` and five form-control rules. We rescored all 22 apps with that build, without touching the apps. The agents never saw these checks, so this shows what the checks add on top of what the agents already fixed.
+
+| | Baseline apps (11) | Apps built with renderlint (11) |
+|---|---|---|
+| Errors at the time of the experiment | 229 | 0 |
+| Errors with the new build | 225 | **11**, in 5 apps |
+| …of which from the new checks | 11 | 11 |
+
+- **Every new finding was checked by eye on the annotated screenshots.** All of them are real: text running through card padding to the border, a newsletter card overflowing the viewport at 320px, chart labels clipped by the SVG edge at 720px, donut labels colliding at 320px, native `<select>` arrows 3px from the border.
+- **What the renderlint-built apps still had:** 9 errors only appear at 320 or 360px, narrower than the 375px phone viewport the agents were checking. The other 2 are `dropdown-arrow` on native selects. None of these was checkable when the sessions ran. With today's build the agent would get them in the same report as everything else.
+- **The weather baseline went from 42 to 28 errors** because the app picks a day or night theme from the current time, and the rescore ran at night. The other baselines kept their old findings exactly.
+- **Cost:** on a typical page the width sweep adds 1.5–2 seconds and the stress passes about 0.5 seconds (5.7s instead of 3.8s for the React dashboard, 11.0s instead of 8.3s for the German B2B page).
 
 ## What we learned
 

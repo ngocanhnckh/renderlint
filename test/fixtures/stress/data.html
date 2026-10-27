@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>t</title>
+<style>body{font-family:sans-serif;margin:0;padding:16px;color:#111;background:#fff}
+.list{display:grid;grid-template-columns:repeat(3,200px);gap:12px}
+.item{height:34px;border:1px solid #ccc;border-radius:8px;padding:10px;overflow:hidden}
+.item b{display:block;font-size:15px}
+.item small{color:#444}</style></head><body>
+<div class="list" id="list">Loading…</div>
+<script>
+fetch('accounts.json').then((r) => r.json()).then((rows) => {
+  document.getElementById('list').innerHTML = rows.map((a) => `<div class="item"><b>${a.name}</b><small>${a.plan}</small></div>`).join('');
+});
+</script>
+</body></html>

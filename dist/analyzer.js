@@ -655,6 +655,43 @@ RL.rule({
   },
 });
 
+// Text that still fits inside the box but has eaten its side padding and nearly
+// touches the border: the box was designed with room, the content outgrew it.
+RL.rule({
+  id: 'text-crowding',
+  run(ctx) {
+    const seen = new Set();
+    for (const t of ctx.texts) {
+      if (RL.isIgnored(t.el, 'text-crowding') || RL.flagged.has(t.el)) continue;
+      const block = RL.nearestBlock(t.el);
+      if (block.namespaceURI === SVG_NS) continue;
+      for (let n = block, d = 0; n && n !== document.body && n !== document.documentElement && d < 6; n = RL.parentOf(n), d++) {
+        const sides = !RL.isInline(n) && RL.boundarySides(n);
+        if (sides && sides.x) {
+          const s = RL.cs(n);
+          const pl = parseFloat(s.paddingLeft) || 0, pr = parseFloat(s.paddingRight) || 0;
+          const box = paddingBox(n);
+          const minX = Math.min(...t.rects.map((r) => r.x)), maxX = Math.max(...t.rects.map((r) => r.right));
+          const gapL = minX - box.x, gapR = box.right - maxX;
+          // Only boxes designed with side padding; text past the padding box is text-overflow's job.
+          const side = pr >= 8 && gapR > -1.5 && gapR < Math.min(4, pr * 0.35) ? 'right' : pl >= 8 && gapL > -1.5 && gapL < Math.min(4, pl * 0.35) ? 'left' : null;
+          if (side && !seen.has(n) && box.w < innerWidth - 4) {
+            seen.add(n);
+            const gap = Math.max(0, Math.round(side === 'right' ? gapR : gapL));
+            ctx.report({
+              rule: 'text-crowding', el: t.el, related: n === block ? undefined : n,
+              message: 'Text has run through the box\'s ' + Math.round(side === 'right' ? pr : pl) + 'px ' + side + ' padding and sits ' + gap + 'px from its edge.',
+              details: { side, gap, padding: side === 'right' ? pr : pl },
+            });
+          }
+          break;
+        }
+        if (RL.isOutOfFlow(n) || RL.clips(n, 'x')) break;
+      }
+    }
+  },
+});
+
 // ---------------------------------------------------------------------------
 RL.rule({
   id: 'text-clipped',
@@ -1964,6 +2001,114 @@ RL.hasDarkModeCss = function () {
   }
   const scheme = document.querySelector('meta[name="color-scheme"]');
   return !!(scheme && /dark/.test(scheme.content));
+};
+
+// Stress profiles: rewrite visible text to simulate content the sample data
+// doesn't have, so layouts that only fit the current copy are caught.
+//   longer      every text run gets ~factor× as many words (still wrappable)
+//   long-words  emails, URLs, domains and IDs become 36+ character unbreakable tokens
+//   big-numbers numbers (KPIs, counters, prices) get three more digits
+//   declared    elements with data-renderlint-sample / data-renderlint-maxlength
+//               get the worst case the developer declared
+// RL.unstress() restores the original text.
+const DATA_TOKEN = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+|https?:\/\/[^\s]+|www\.[^\s]+|\b[\w-]+\.(?:com|net|org|io|app|dev|co|ai|de|fr|uk|vn|jp|cn|ru|br|in|us|info|biz|eu|me|tech|cloud|so|sh|xyz)\b|\b(?=[A-Za-z-]*\d)(?=[\d-]*[A-Za-z])[A-Za-z\d-]{6,}\b/;
+const FILLER = 'internationalizationprocurementdepartment';
+RL.stressSaved = [];
+
+function stressNodes() {
+  const out = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const p = n.parentElement;
+    if (!p || /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|OPTION|CODE|PRE)$/.test(p.tagName) || p.closest('svg') || RL.isDevTool(p)) continue;
+    out.push(n);
+  }
+  return out;
+}
+
+function declaredHost(n) {
+  const p = n.parentElement;
+  return p && p.closest('[data-renderlint-sample],[data-renderlint-maxlength]');
+}
+
+function setText(n, text) {
+  RL.stressSaved.push([n, n.textContent]);
+  n.textContent = text;
+}
+
+function fillTo(text, len) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return text;
+  let out = text.trim();
+  for (let i = 0; out.length < len; i++) out += ' ' + words[i % words.length];
+  return out.slice(0, len);
+}
+
+function longToken(tok) {
+  if (tok.length >= 36) return tok;
+  const at = tok.indexOf('@');
+  const cut = at > 0 ? at : Math.ceil(tok.length / 2);
+  return tok.slice(0, cut) + FILLER.slice(0, 36 - tok.length) + tok.slice(cut);
+}
+
+RL.stress = function (profile, factor) {
+  RL.unstress();
+  let count = 0;
+  if (profile === 'declared') {
+    for (const host of document.querySelectorAll('[data-renderlint-sample],[data-renderlint-maxlength]')) {
+      if (RL.isDevTool(host)) continue;
+      const texts = [];
+      const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.data.trim()) texts.push(n);
+      if (!texts.length) continue;
+      const sample = host.getAttribute('data-renderlint-sample');
+      const max = parseInt(host.getAttribute('data-renderlint-maxlength'), 10);
+      const full = texts.map((t) => t.data).join('').trim();
+      const target = sample != null ? sample : max > 0 ? fillTo(full, max) : null;
+      if (target == null) continue;
+      setText(texts[0], target);
+      for (const t of texts.slice(1)) setText(t, '');
+      count++;
+    }
+    return count;
+  }
+  for (const n of stressNodes()) {
+    if (declaredHost(n)) continue;
+    const txt = n.textContent.trim();
+    if (profile === 'big-numbers') {
+      // KPI values and counters grow: 288 → 288,000, $4939.27 → $4,939,000.27. Dates and times stay.
+      const digits = (txt.match(/\d/g) || []).length, letters = (txt.match(/\p{L}/gu) || []).length;
+      if (!digits || digits < letters || txt.length > 40 || /\d{1,2}:\d{2}|\d{4}-\d{2}-\d{2}|\d{1,2}[/.]\d{1,2}[/.]\d{2,4}/.test(txt)) continue;
+      setText(n, n.textContent.replace(/\d[\d,]*(?:\.\d+)?/g, (tok) => {
+        const [int, dec] = tok.replace(/,/g, '').split('.');
+        const grown = String(Math.max(1000, (+int) * 1000)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return grown + (dec !== undefined ? '.' + dec : '');
+      }));
+      count++;
+    } else if (profile === 'long-words') {
+      const m = DATA_TOKEN.exec(txt);
+      if (!m) continue;
+      setText(n, n.textContent.replace(m[0], longToken(m[0])));
+      count++;
+    } else {
+      if (txt.length <= 3 || !/\p{L}{2}/u.test(txt)) continue; // initials, numbers, icons don't grow with real data
+      const words = txt.split(/\s+/);
+      const extra = Math.max(1, Math.round(words.length * ((factor || 1.5) - 1)));
+      const add = [];
+      for (let i = 0; i < extra; i++) add.push(words[i % words.length]);
+      setText(n, n.textContent.replace(/\s*$/, '') + ' ' + add.join(' ') + (/\s$/.test(n.textContent) ? ' ' : ''));
+      count++;
+    }
+  }
+  return count;
+};
+
+RL.unstress = function () {
+  for (let i = RL.stressSaved.length - 1; i >= 0; i--) {
+    const [n, text] = RL.stressSaved[i];
+    n.textContent = text;
+  }
+  RL.stressSaved = [];
 };
 
 window.__renderlint = RL;

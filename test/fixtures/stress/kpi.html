@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>t</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:sans-serif;margin:0;padding:16px;color:#fafafa;background:#18181b}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.kpis{grid-template-columns:1fr}}
+.kpi{border:1px solid #3f3f46;border-radius:16px;padding:20px;background:#27272a;overflow:hidden}
+.kpi .v{font-size:48px;font-weight:700;line-height:1.1;white-space:nowrap}
+.kpi .l{color:#d4d4d8;font-size:14px}
+</style></head><body>
+<!-- Fits at 375, 768 and 1280px. Between 901 and ~1160px the 4-column grid squeezes the cards. -->
+<div class="kpis">
+  <div class="kpi"><div class="v">$4,939.27</div><div class="l">Spend (SDK)</div></div>
+  <div class="kpi"><div class="v">288/289</div><div class="l">Jobs done</div></div>
+  <div class="kpi"><div class="v">43.3M</div><div class="l">Tokens</div></div>
+  <div class="kpi"><div class="v">0.88/h</div><div class="l">Throughput</div></div>
+</div>
+</body></html>

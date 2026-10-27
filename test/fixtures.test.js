@@ -33,7 +33,7 @@ for (const f of readdirSync(join(here, 'fixtures/defects')).filter((f) => f.ends
   const expected = metaList(html, 'expect').sort();
   const warns = metaList(html, 'expect-warn');
   test(`defect: ${f} → ${expected.concat(warns.map((w) => w + ' (warn)')).join(', ')}`, async () => {
-    const res = await check(opts(file));
+    const res = await check(opts(file, { sweep: false })); // one rule per fixture; the sweep has its own tests
     const dump = res.issues.map((i) => `${i.severity} ${i.rule}: ${i.message} @ ${i.selector}`).join('\n');
     const errors = Array.from(new Set(res.issues.filter((i) => i.severity === 'error').map((i) => i.rule))).sort();
     assert.deepEqual(errors, expected, dump);

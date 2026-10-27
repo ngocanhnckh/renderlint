@@ -27,7 +27,7 @@ npm install
 node bin/renderlint.js examples/demo
 ```
 
-It reports 44 errors and 10 warnings across 21 rules. Some of them:
+It reports 50 errors and 13 warnings across 22 rules. Some of them:
 
 ### Text that is longer than the design expected
 
@@ -39,7 +39,17 @@ On a phone the same email runs off the card and off the screen:
 
 ![The same card at 375px: the email runs past the card border and the screen edge](images/demo-long-text-375.png)
 
-renderlint reports the exact overflow, for example `Text spills outside its container (61px past the right edge)`, with the fix: `overflow-wrap: anywhere` (Tailwind `break-words`) for long words and URLs, `min-width: 0` on flex and grid children, and no fixed widths on text boxes. It also runs every page a second time with all text made 50% longer. Layouts that only fit the current sample copy are reported as `fragile-layout` warnings before real data breaks them.
+renderlint reports the exact overflow, for example `Text spills outside its container (61px past the right edge)`, with the fix: `overflow-wrap: anywhere` (Tailwind `break-words`) for long words and URLs, `min-width: 0` on flex and grid children, and no fixed widths on text boxes. It also reruns every page with stressed content (see [below](#widths-and-data-nobody-looked-at)). Layouts that only fit the current sample copy are reported as `fragile-layout` warnings before real data breaks them.
+
+### Widths and data nobody looked at
+
+An agent checks its work at a phone, a tablet and a desktop width. This KPI row fits at all three. Between 901px and about 1160px, though, the four-column grid squeezes the cards and the spend figure is cut off. renderlint sweeps 13 widths between 320 and 1920px with the layout rules, so the bug turns up at 1024px with its own screenshot. The page is [`examples/kpi-sweep/`](../examples/kpi-sweep/index.html).
+
+![KPI cards: fine at 1280px, the spend value cut off at 1024px and boxed by renderlint](images/demo-sweep.png)
+
+It then reruns the page with content that hasn't shown up yet: numbers with three more digits, 50% longer text, 36-character emails and IDs with no break points, longer strings in every JSON API response, and any worst case you declare with `data-renderlint-maxlength` or `data-renderlint-sample`. Whatever breaks is reported as `fragile-layout`:
+
+![The same KPI row with three more digits per number: two values cut off](images/demo-big-numbers.png)
 
 ### Form controls that render but are built wrong
 

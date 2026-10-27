@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>t</title>
+<style>body{font-family:sans-serif;margin:0;padding:16px;color:#111;background:#fff}
+dialog{border:1px solid #ccc;border-radius:12px;padding:20px}
+button{font:inherit;padding:8px 14px}</style></head><body>
+<button id="open" onclick="document.getElementById('d').showModal()">Invite teammates</button>
+<dialog id="d"><h2>🎉 Invite your team</h2><p>They'll get an email with a link.</p><button onclick="this.closest('dialog').close()">Done</button></dialog>
+<p id="summary"></p>
+<script>
+fetch('/api/summary').then((r) => r.json()).then((s) => { document.getElementById('summary').textContent = 'Plan: ' + s.plan; }).catch(() => {});
+</script>
+</body></html>

@@ -1,6 +1,36 @@
-# renderlint
+<h1 align="center">renderlint</h1>
 
-**A linter for the rendered UI.** It catches the visual mistakes that AI coding agents (and people) keep shipping: text spilling out of its box, unreadable contrast, overlapping chart labels, layouts that break on phones, emoji used as icons, leaked `undefined`/`NaN`. Your build fails until they're fixed, and the agent gets a precise report it can act on.
+<p align="center"><b>A linter for the rendered UI.</b> It opens your app in a real browser, finds the visual defects coding agents ship, and fails the build until they're fixed.</p>
+
+<p align="center">
+  <a href="https://github.com/ngocanhnckh/renderlint/actions/workflows/ci.yml"><img src="https://github.com/ngocanhnckh/renderlint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D18.17-brightgreen.svg" alt="Node >= 18.17">
+  <img src="https://img.shields.io/badge/framework-any-8b5cf6.svg" alt="Any framework">
+</p>
+
+![Same weather-app prompt in two Claude Code sessions: 42 contrast errors without renderlint, 0 with it](docs/images/compare-weather.png)
+<p align="center"><sub>The same prompt in two Claude Code sessions. Left: no renderlint, 42 errors (its annotated report). Right: the session that ran renderlint and fixed its own findings.</sub></p>
+
+Text spilling out of cards, gray-on-gray captions, chart labels on top of each other, a layout that only breaks at 1024px, a dropdown arrow jammed against the border, `$undefined` in a KPI tile, emoji where icons should be. TypeScript and ESLint can't see any of this, because the code is fine. It's the *pixels* that are wrong.
+
+renderlint renders every page at phone, tablet and desktop widths (and dark mode), sweeps the widths in between, and re-checks with longer text, bigger numbers and longer API data. Each defect is reported with the element, the source file, an annotated screenshot and a concrete fix, in plain text an agent can act on.
+
+## Quick start
+
+**Paste this into your coding agent** (Claude Code, Cursor, Codex, Copilot, Gemini CLI, Windsurf, Aider, Zed, Amp…):
+
+> Set up renderlint in this project: run `npx -y github:ngocanhnckh/renderlint init`, then follow the "UI quality gate: renderlint" section it adds to AGENTS.md: after every UI change run `npx renderlint` and fix every reported error until it shows 0 errors.
+
+Or run it yourself:
+
+```bash
+npx -y github:ngocanhnckh/renderlint init   # one-time setup: config, build gate, agent instructions, Claude Code hook
+npx renderlint                              # check: exits 1 if any error is found
+```
+
+> [!NOTE]
+> renderlint isn't on npm yet, so install it from GitHub as above. Once it's published, the command becomes `npx -y renderlint init`.
 
 ```
 ✖ contrast (3)  Text does not have enough contrast with what is actually behind it …
@@ -10,66 +40,99 @@
         page / · all viewports · see .renderlint/screens/index@375.png #3
        fix use text #2e2e2e (currently #ffffff on #459bf4)
 
-✖ text-overflow (1)  Text spills outside the box (card, button, badge, input) that is supposed to contain it.
-  error Text spills outside its container (153px past the right edge).
-        at div.card > p  "Email: verylongemailaddress_without_breaks@enterprise-example.com"
-        page /account · at 375px
+✖ text-clipped (1)  Text is partially cut off by an `overflow: hidden` container …
+  error Text is cut off by an overflow:hidden container (12px past the right edge).
+        at div.kpis > div.kpi:nth-of-type(1) > div.v  "$4,939.27"
+        page /usage · at 1024px · see .renderlint/screens/usage@1024.png #1
 
 ✖ 4 error(s), 2 warning(s) · screenshots in .renderlint/screens
 ```
 
-![Same weather-app prompt in two Claude Code sessions: 42 contrast errors without renderlint, 0 with it](docs/images/compare-weather.png)
-<sub>The same prompt in two Claude Code sessions. Left: the baseline, with renderlint's annotated screenshot of its 42 errors. Right: the session that ran renderlint and fixed its own findings. More in the [gallery](docs/gallery.md).</sub>
+## Contents
 
-ESLint and TypeScript read your code. renderlint opens the page in a real headless Chromium at phone, tablet and desktop widths (plus dark mode when your CSS supports it). It measures what was actually painted, then reports each defect with the element, the component and source file when it can find them, an annotated screenshot, and a concrete fix.
+- [What it catches](#what-it-catches)
+- [Content you didn't render](#content-you-didnt-render)
+- [How it compares](#how-it-compares)
+- [Does it work?](#does-it-work)
+- [See it](#see-it)
+- [Make it impossible to ship defects](#make-it-impossible-to-ship-defects)
+- [Intentional? Say so.](#intentional-say-so)
+- [Configuration](#configuration)
+- [How it works](#how-it-works)
+- [Limitations](#limitations)
+- Docs: [rules](docs/rules.md) · [configuration](docs/configuration.md) · [integrations](docs/integrations.md) · [gallery](docs/gallery.md) · [results](docs/results.md)
 
-It doesn't care which framework you use. If it renders in a browser, renderlint can lint it: React, Next.js, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, Solid, Qwik, Remix, plain HTML, and anything else.
+## What it catches
 
----
-
-## Paste this into your coding agent
-
-> Set up renderlint in this project: run `npx -y github:ngocanhnckh/renderlint init`, then follow the "UI quality gate: renderlint" section it adds to AGENTS.md: after every UI change run `npx renderlint` and fix every reported error until it shows 0 errors.
-
-This works in Claude Code, Cursor, Codex, Copilot, Gemini CLI, Windsurf, Aider, Zed, Amp and others. `init` does the rest (details [below](#what-init-does)). Once renderlint is published to npm, the command becomes `npx -y renderlint init`.
-
----
-
-## Why
-
-Agents are great at writing frontend code, but they can't see what they built. The same small defects show up again and again, and someone has to spot each one by eye:
+36 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
-| Longer text pokes out of a card, button or badge, or touches its border | `text-overflow`, `text-clipped`, `fragile-layout` |
+| Longer text pokes out of a card, button or badge, or runs right up to its border | `text-overflow`, `text-clipped`, `text-crowding` |
+| A layout that fits today's sample copy but breaks with real data | `fragile-layout` |
 | Gray-on-gray or white-on-yellow text you can barely read | `contrast` (measured from real pixels, so it works on gradients and images) |
 | Elements overlap when the window shrinks, instead of wrapping | `element-overlap`, `viewport-overflow`, `content-overflow` |
-| 🚀✨✅ emoji instead of a proper icon set | `emoji` (rendered DOM and source files) |
 | Chart and diagram labels collide or get cut off | `text-overlap`, `text-clipped` (works on SVG charts) |
 | A fixed header covers the hero, or a decoration covers a button | `obscured-content` |
+| 🚀✨✅ emoji instead of a proper icon set | `emoji` (rendered DOM and source files) |
 | `undefined`, `NaN`, `[object Object]`, `Invalid Date`, lorem ipsum | `placeholder-text` |
 | Broken or stretched images, giant unsized SVG icons | `broken-image`, `image-distortion`, `oversized-icon` |
-| A dropdown arrow jammed against the border, a checkbox floating above its label, a search icon on top of the placeholder, a squashed input | `dropdown-arrow`, `checkbox-layout`, `input-icon-overlap`, `squashed-control` |
+| A dropdown arrow on the border, a checkbox floating above its label, an icon over the placeholder, a squashed input | `dropdown-arrow`, `checkbox-layout`, `input-icon-overlap`, `squashed-control` |
 | An input and its button at different heights, an icon sitting higher than its text | `control-height-mismatch`, `icon-misaligned` |
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
-| No viewport meta, so the page is zoomed out on phones | `missing-viewport-meta` |
-| A 3px overflow that adds a pointless scrollbar | `accidental-scrollbar` |
-| `href="#"` buttons that go nowhere | `dead-link` |
+| No viewport meta, a pointless 3px scrollbar, `href="#"` links | `missing-viewport-meta`, `accidental-scrollbar`, `dead-link` |
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
-| Hydration errors and crashes | `console-error`, `broken-resource` |
+| Hydration errors, crashes, 404s | `page-error`, `console-error`, `broken-resource` |
 
-See [docs/rules.md](docs/rules.md) for all 35 rules, their defaults and fix guidance.
+All rules, their defaults and fix guidance: [docs/rules.md](docs/rules.md). `npx renderlint explain <rule>` prints the same in the terminal.
+
+## Content you didn't render
+
+Most layout bugs show up with content nobody had on screen during development. renderlint generates those cases instead of waiting for production to find them:
+
+| Check | What renderlint does |
+|---|---|
+| **Width sweep** | Re-runs the layout rules at 13 widths from 320 to 1920px, so a grid that only breaks at 1024px is caught (`@1024px` in the report, with its own screenshot). |
+| **Longer text** | Lengthens every text by 50%. |
+| **Long words** | Turns emails, URLs, domains and IDs into 36+ character strings with no break points. |
+| **Big numbers** | Gives KPIs, prices and counters three more digits. |
+| **Longer API data** | If the page fetched JSON, reloads it with longer names, titles and emails in every response. |
+| **Declared worst cases** | `data-renderlint-maxlength="60"` or `data-renderlint-sample="…"` on an element tests exactly that content, and failures are errors. |
+| **States and mocks** | `states` opens menus and dialogs, fills forms, or serves empty and failing API responses before checking. |
+
+![KPI cards: fine at 1280px, the spend value cut off at 1024px and boxed by renderlint](docs/images/demo-sweep.png)
+
+> [!TIP]
+> When a field has a known limit, declare it: `<h3 data-renderlint-maxlength="60">{project.name}</h3>`. The attribute does nothing in production. See [docs/configuration.md](docs/configuration.md#content-you-didnt-render) for `states` and `mock`.
+
+## How it compares
+
+renderlint doesn't replace your other tools. It covers the gap between "the code is valid" and "the page looks right".
+
+| | Reads | Catches overflow, overlap, clipping | Contrast over gradients and images | Needs a baseline | Tells you the fix |
+|---|---|---|---|---|---|
+| **ESLint, stylelint, TypeScript** | Source code | No | No | No | Yes, for code issues |
+| **axe-core, Lighthouse** | DOM and computed CSS | No | Reported as "needs review" | No | Yes, for a11y rules |
+| **Visual regression** (Percy, Chromatic, BackstopJS, Playwright screenshots) | Pixels, against approved images | Only as a diff from the baseline | Only as a diff | Yes: a defect in the first version becomes the baseline | No: shows *what changed*, not *what's wrong* |
+| **renderlint** | Rendered geometry and pixels | Yes, at every width and with stressed content | Yes, from the real pixels behind each glyph | No | Yes: element, source file, screenshot and fix |
+
+Visual regression testing is still the right tool for catching unintended *changes* to a design you've approved. renderlint catches defects in a page nobody has approved yet, which is what an agent produces every time.
 
 ## Does it work?
 
-We ran 22 headless Claude Code sessions (Opus and Haiku), each building a typical frontend: landing pages, dashboards, a kanban board, a weather app, an SVG org chart and analytics charts, in HTML, React, Next.js, Vue and Svelte. Half of them got the one-line setup prompt above. The **11 baseline apps had 229 errors between them** (mostly WCAG contrast failures, plus emoji icons and clipped chart labels). **All 11 apps built with renderlint finished at 0 errors**, because the agents fixed the issues themselves. Details and lessons are in [docs/results.md](docs/results.md).
+We ran 22 headless Claude Code sessions (Opus and Haiku), each building a typical frontend: landing pages, dashboards, a kanban board, a weather app, an SVG org chart and analytics charts, in HTML, React, Next.js, Vue and Svelte. Half of them also got the one-line setup prompt above.
+
+- The **11 baseline apps had 229 errors** between them: mostly WCAG contrast failures, plus emoji icons and clipped chart labels.
+- **All 11 apps built with renderlint finished at 0 errors**, because the agents fixed the issues themselves.
+- Rescored later with the width sweep, the extra stress profiles and the form rules, the renderlint-built apps show **11 errors in 5 apps**. All of them are real and none were checkable at the time (9 only appear at 320–360px). The baselines show 225 errors.
+
+Details, per-app numbers and lessons: [docs/results.md](docs/results.md).
 
 ## See it
 
 Every run saves annotated screenshots with each finding boxed and numbered, so agents with vision (and humans) can see what's wrong.
 
 ![A long email runs out of its account card and under the next one, and a status label spills out of its chip; renderlint marks both as text-overflow](docs/images/demo-long-text.png)
-<sub>Sample copy fits, real data doesn't: a long email runs under the next card and a status label spills out of its chip (<code>text-overflow</code>). A second pass with 50% longer text catches layouts that are about to break (<code>fragile-layout</code>).</sub>
 
 <table>
 <tr>
@@ -87,14 +150,9 @@ Every run saves annotated screenshots with each finding boxed and numbered, so a
 
 <p align="center"><img src="docs/images/dev-overlay.png" width="720" alt="renderlint's dev overlay on a React dashboard, listing findings with source file and line"><br><sub>The Vite plugin's live overlay: hover a finding to highlight it. Each finding links to its component file and line.</sub></p>
 
-All screenshots, including a deliberately broken [demo page](examples/demo/index.html) that triggers 21 rules: [docs/gallery.md](docs/gallery.md).
+More, including a deliberately broken [demo page](examples/demo/index.html) that triggers 22 rules: [docs/gallery.md](docs/gallery.md).
 
-## Quick start
-
-```bash
-npx -y github:ngocanhnckh/renderlint init   # one-time setup
-npx renderlint                              # check: exits 1 if any error is found
-```
+## Usage
 
 Without config, `renderlint` works out what to check: a running dev server, then your `dev` script (started and stopped for you), then a build folder (`dist`, `build`, `out`…), then `index.html`. You can also point it at a target:
 
@@ -104,10 +162,13 @@ npx renderlint dist                             # a static build (served for you
 npx renderlint index.html about.html            # plain files
 npx renderlint --serve "npm run preview" --url http://localhost:4173
 npx renderlint --pages /,/pricing,/dashboard --viewports 360,768,1440
+npx renderlint --sweep 1024,1366                # only these extra widths (--no-sweep to skip)
 npx renderlint explain contrast                 # what a rule means and how to fix it
 ```
 
-The output is plain text that agents can read. `--json`, `--format md` and `--format github` (PR annotations) are also available. Every run writes `.renderlint/report.json`, `.renderlint/report.md` and annotated screenshots to `.renderlint/screens/`, with each finding numbered on the image.
+The output is plain text that agents can read. `--json`, `--format md` and `--format github` (PR annotations) are also available. Every run writes `.renderlint/report.json`, `.renderlint/report.md` and annotated screenshots to `.renderlint/screens/` (`--out <dir>` to change).
+
+It doesn't care which framework you use. If it renders in a browser, renderlint can lint it: React, Next.js, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, Solid, Qwik, Remix, plain HTML, and anything else.
 
 ## Make it impossible to ship defects
 
@@ -122,7 +183,8 @@ renderlint exits non-zero when it finds errors, so you can gate any step on it:
 | **CI** | `npx renderlint --format github` gives inline PR annotations. See [docs/integrations.md](docs/integrations.md). |
 | **Any bundler, in dev** | `import('renderlint/client').then((m) => m.start())` adds the live overlay to any app. |
 
-### What `init` does
+<details>
+<summary><b>What <code>init</code> does</b></summary>
 
 1. Adds renderlint as a dev dependency (creating a `package.json` for plain HTML sites).
 2. Writes `renderlint.config.json`, pointed at your dev command or static folder.
@@ -132,6 +194,7 @@ renderlint exits non-zero when it finds errors, so you can gate any step on it:
 6. Adds `.renderlint/` to `.gitignore` and makes sure a headless Chromium is available.
 
 `init` is idempotent, so you can run it again safely.
+</details>
 
 ## Intentional? Say so.
 
@@ -152,6 +215,9 @@ const greeting = '👋 Welcome'; // renderlint-ignore emoji   (static source sca
 
 You can also ignore by selector or page in config: `"ignore": [{ "rule": "contrast", "selector": ".legal" }, { "rule": "dead-link", "page": "/blog/*" }]`.
 
+> [!WARNING]
+> An ignore is reviewed like an `eslint-disable`. The agent instructions tell agents to fix root causes first and to add a `data-renderlint-reason` whenever they ignore something.
+
 ## Configuration
 
 `renderlint.config.json` (or `.js`/`.mjs`, or a `"renderlint"` key in `package.json`):
@@ -163,23 +229,25 @@ You can also ignore by selector or page in config: `"ignore": [{ "rule": "contra
   "viewports": [375, 768, 1280],
   "colorSchemes": "auto",
   "rules": { "line-length": "off", "tap-target": "error" },
-  "ignore": [{ "rule": "contrast", "selector": ".legal-footnote" }]
+  "ignore": [{ "rule": "contrast", "selector": ".legal-footnote" }],
+  "states": [{ "name": "account menu", "click": "[aria-label=Account]", "waitFor": "[role=menu]" }],
+  "mock": { "**/api/notifications*": [] }
 }
 ```
 
-All options, including crawling, stress factor, WCAG AAA, timeouts and waiting for selectors, are covered in [docs/configuration.md](docs/configuration.md).
+All options, including the width sweep, stress profiles, states and mocks, crawling, WCAG AAA, timeouts and authenticated pages: [docs/configuration.md](docs/configuration.md).
 
 ## How it works
 
 1. **Render.** Each page loads in headless Chromium at each viewport (and in dark mode if your CSS has `prefers-color-scheme: dark`). renderlint scrolls the page to trigger lazy content and scroll-reveal animations, waits for fonts and images, then jumps animations to their final state.
 2. **Measure.** An analyzer runs in the page and checks geometry: the rects of every text run against its containers and clip boxes, box intersections, hit-testing (`elementsFromPoint`) for occlusion, and computed styles.
-3. **Look at the pixels.** For contrast, the page is captured twice: once normally and once with all text made transparent. The second capture shows the real background behind each glyph, including gradients, images, translucent overlays and glass effects. Gradient or clipped text is measured from the ink pixels themselves.
-4. **Stress test.** All text is lengthened by 50% and the layout re-checked. Anything that breaks becomes a `fragile-layout` warning, because real data is always longer than sample copy.
+3. **Look at the pixels.** For contrast, the page is captured twice: once normally and once with all text made transparent. The second capture shows the real background behind each glyph, including gradients, images, translucent overlays and glass effects. Dropdown arrows are measured from pixels too, since the browser draws them outside the DOM.
+4. **Stress.** The layout rules run again at the sweep widths, then with longer text, long words, bigger numbers, declared samples and longer API data. Anything that only breaks under stress becomes a `fragile-layout` warning.
 5. **Report.** Findings are merged across viewports and pages, and repeats such as the same badge on 40 cards are grouped. Each is mapped back to a component or file where possible: React (including Server Components), Vue, Svelte and Astro dev builds. A fix hint and a numbered screenshot are attached.
 
 It's tuned for a low false-positive rate. Things that are usually intentional are left alone: screen-reader-only text, `text-overflow: ellipsis`, `line-clamp`, closed accordions, off-canvas menus, carousels, scroll areas, overlapping avatar stacks, badges positioned outside cards, stacked-card illustrations, stretched links, modals and backdrops.
 
-## Programmatic API
+### Programmatic API
 
 ```js
 import { check, formatPretty } from 'renderlint';
@@ -192,8 +260,9 @@ process.exit(result.ok ? 0 : 1);
 ## Limitations
 
 - `<canvas>` charts (Chart.js, ECharts in canvas mode) are pixels, so their labels can't be inspected. Use an SVG renderer, or rely on your chart library's own label-collision handling.
-- renderlint checks the initial state of each page. Hover, open menus and states behind login need `beforeCheck` in a JS config (a function that receives the Playwright `page`).
+- Pages are checked as they load. Menus, dialogs, tabs and empty or error states are only checked when you list them in `states`, and pages behind login need `contextOptions.storageState` or `beforeCheck`.
 - Contrast follows WCAG 2 AA math. It doesn't model font weight beyond the large-text rule, and doesn't apply APCA.
+- Every sweep width and stress pass adds time: a typical page takes 5–15 seconds, of which the sweep is 1.5–2 seconds. Use `--sweep 1024` or `--no-sweep` for a faster inner loop.
 
 ## Development
 

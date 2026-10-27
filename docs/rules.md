@@ -7,6 +7,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | Rule | Default | What it catches |
 |---|---|---|
 | [`text-overflow`](#text-overflow) | error | Text spills outside the box (card, button, badge, input) that is supposed to contain it. |
+| [`text-crowding`](#text-crowding) | error | Text still fits inside its card, button or badge, but has run through the side padding and nearly touches the edge (a KPI number, a long label). |
 | [`text-clipped`](#text-clipped) | error | Text is partially cut off by an `overflow: hidden` container or the edge of an &lt;svg> (e.g. chart axis labels). |
 | [`content-overflow`](#content-overflow) | error | A child element (image, button, inner card) sticks out of its visible container. |
 | [`viewport-overflow`](#viewport-overflow) | error | Content is wider than the viewport: the page scrolls sideways on phones, or content is cut off at the screen edge. |
@@ -31,7 +32,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`button-text-wrap`](#button-text-wrap) | warn | A short button label breaks onto multiple lines. |
 | [`line-length`](#line-length) | warn | Paragraph lines are very long (>120 characters), which is tiring to read. |
 | [`focus-indicator`](#focus-indicator) | warn | A focusable element shows no visible change when focused (outline removed without replacement). |
-| [`fragile-layout`](#fragile-layout) | warn | Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names). |
+| [`fragile-layout`](#fragile-layout) | warn | Stress test: the layout breaks with content the sample data doesn't have yet: ~50% longer text, long unbreakable emails/URLs/IDs, numbers with three more digits, longer API data, or the worst case declared with data-renderlint-maxlength / data-renderlint-sample (that last one is an error). |
 | [`dropdown-arrow`](#dropdown-arrow) | error | A dropdown's arrow sits much closer to the border than its text does to the other side, so it looks jammed against the edge. Measured from pixels, so it covers native arrows, background-image chevrons and custom triggers. |
 | [`checkbox-layout`](#checkbox-layout) | error | A checkbox or radio button is stretched to the full width (drawn in the middle, away from its label), or sits on its own row above its label. |
 | [`input-icon-overlap`](#input-icon-overlap) | error | An icon (search, mail, calendar) is drawn over the part of an input where its text and placeholder appear, so typed text runs underneath it. |
@@ -51,6 +52,14 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 Text spills outside the box (card, button, badge, input) that is supposed to contain it.
 
 **How to fix:** Let the text wrap: remove fixed widths/heights or `white-space: nowrap`, add `overflow-wrap: anywhere` (Tailwind `break-words`) for long words/URLs, and use `min-width: 0` on flex/grid children so they can shrink.
+
+### text-crowding
+
+**Default:** error
+
+Text still fits inside its card, button or badge, but has run through the side padding and nearly touches the edge (a KPI number, a long label).
+
+**How to fix:** Give the text room to shrink or wrap: `min-width: 0` and `overflow-wrap: anywhere` on flex/grid children, a fluid font size for big numbers (`font-size: clamp(1.5rem, 4cqi, 2.5rem)` with `container-type: inline-size` on the card), fewer columns at that width, or a shorter format (`4.9K`).
 
 ### text-clipped
 
@@ -98,7 +107,7 @@ No <meta name="viewport"> tag, so mobile browsers render the page zoomed out at 
 
 **Default:** warn
 
-Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names).
+Stress test: the layout breaks with content the sample data doesn't have yet: ~50% longer text, long unbreakable emails/URLs/IDs, numbers with three more digits, longer API data, or the worst case declared with data-renderlint-maxlength / data-renderlint-sample (that last one is an error).
 
 **How to fix:** Design for longer content: allow wrapping, avoid fixed heights/widths on text containers, add `min-width: 0` to flex children and `overflow-wrap: anywhere` for long words.
 
