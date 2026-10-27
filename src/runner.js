@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
+import { measureDropdowns } from './controls.js';
 import { RULES } from './rules-meta.js';
 
 const SETTLE_SCRIPT = async ({ autoScroll }) => {
@@ -239,6 +240,12 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       issues.push(...c);
     }
     lap('contrast');
+
+    if (config.rules['dropdown-arrow'] !== 'off') {
+      const cands = await page.evaluate(() => window.__renderlint.dropdownCandidates());
+      if (cands.length) issues.push(...await measureDropdowns(page, cands));
+    }
+    lap('dropdowns');
 
     if (focus) {
       const f = await page.evaluate(() => window.__renderlint.focusCheck(30));

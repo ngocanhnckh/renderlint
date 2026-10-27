@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="expect" content="dropdown-arrow"><title>t</title>
+<style>
+body{font-family:sans-serif;margin:0;padding:16px;color:#18181b;background:#fff}
+label{display:block;font-size:15px;color:#3f3f46;margin:16px 0 8px}
+.field{display:block;width:100%;max-width:420px;height:48px;padding:0 24px;font-size:16px;border:1px solid #d4d4d8;border-radius:10px;background:#fff;color:#18181b}
+.chev{appearance:none;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 2px center}
+</style></head><body>
+<!-- Native select styled into a padded box: the browser still draws the arrow ~5px from the border. -->
+<label for="g">Group</label>
+<select id="g" class="field"><option>Key indicators</option><option>Budget</option></select>
+<!-- Custom chevron positioned with almost no inset. -->
+<label for="m">Month</label>
+<select id="m" class="field chev"><option>September 2026 · Open</option></select>
+</body></html>

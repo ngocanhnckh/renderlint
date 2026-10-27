@@ -27,7 +27,7 @@ npm install
 node bin/renderlint.js examples/demo
 ```
 
-It reports 40 errors and 8 warnings across 16 rules. Some of them:
+It reports 44 errors and 10 warnings across 21 rules. Some of them:
 
 ### Text that is longer than the design expected
 
@@ -40,6 +40,24 @@ On a phone the same email runs off the card and off the screen:
 ![The same card at 375px: the email runs past the card border and the screen edge](images/demo-long-text-375.png)
 
 renderlint reports the exact overflow, for example `Text spills outside its container (61px past the right edge)`, with the fix: `overflow-wrap: anywhere` (Tailwind `break-words`) for long words and URLs, `min-width: 0` on flex and grid children, and no fixed widths on text boxes. It also runs every page a second time with all text made 50% longer. Layouts that only fit the current sample copy are reported as `fragile-layout` warnings before real data breaks them.
+
+### Form controls that render but are built wrong
+
+Nothing here is broken in the DOM sense, and the page looks fine at a glance. It just looks unfinished:
+
+![An alert-settings form as users see it: select arrows touching the border, a search icon on top of the placeholder, a checkbox floating above its label](images/demo-forms-plain.png)
+
+![The same form with renderlint's findings boxed](images/demo-forms-annotated.png)
+
+- **`dropdown-arrow`**: the selects have `padding: 0 20px`, but Chrome and Safari draw the native arrow about 3px from the border regardless of `padding-right`. renderlint measures the arrow from pixels (`3px from the right border while the text starts 25px from the left`), so it also catches `background-image` chevrons and custom triggers.
+- **`checkbox-layout`**: a global `input { width: 100%; display: block }` meant for text fields also hits the checkbox. The browser draws the box in the middle of the full-width input, on its own row above the label.
+- **`input-icon-overlap`**: the search icon is positioned at `left: 14px`, but the input only has `padding-left: 14px`, so the placeholder starts underneath the icon.
+- **`control-height-mismatch`** (warning): the email field is 48px tall and its Subscribe button 40px.
+- **`icon-misaligned`** (warning): the 22px document icon sits 6px above the center of the 14px link text.
+
+Warnings are listed in the report. The screenshot only boxes errors when a page has any.
+
+Also covered: **`squashed-control`**, an input or select too short for its font, so the text is clipped or pressed against the border.
 
 ### More from the demo page
 

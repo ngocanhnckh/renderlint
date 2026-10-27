@@ -49,6 +49,8 @@ Agents are great at writing frontend code, but they can't see what they built. T
 | A fixed header covers the hero, or a decoration covers a button | `obscured-content` |
 | `undefined`, `NaN`, `[object Object]`, `Invalid Date`, lorem ipsum | `placeholder-text` |
 | Broken or stretched images, giant unsized SVG icons | `broken-image`, `image-distortion`, `oversized-icon` |
+| A dropdown arrow jammed against the border, a checkbox floating above its label, a search icon on top of the placeholder, a squashed input | `dropdown-arrow`, `checkbox-layout`, `input-icon-overlap`, `squashed-control` |
+| An input and its button at different heights, an icon sitting higher than its text | `control-height-mismatch`, `icon-misaligned` |
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No viewport meta, so the page is zoomed out on phones | `missing-viewport-meta` |
 | A 3px overflow that adds a pointless scrollbar | `accidental-scrollbar` |
@@ -56,7 +58,7 @@ Agents are great at writing frontend code, but they can't see what they built. T
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
 | Hydration errors and crashes | `console-error`, `broken-resource` |
 
-See [docs/rules.md](docs/rules.md) for all 29 rules, their defaults and fix guidance.
+See [docs/rules.md](docs/rules.md) for all 35 rules, their defaults and fix guidance.
 
 ## Does it work?
 
@@ -80,9 +82,12 @@ Every run saves annotated screenshots with each finding boxed and numbered, so a
 </tr>
 </table>
 
+<img src="docs/images/demo-forms-annotated.png" alt="An alert-settings form: native select arrows on the border, a checkbox stretched above its label, and a search icon over the placeholder, each boxed by renderlint">
+<sub>Form controls that render but are built wrong: native select arrows on the border (<code>dropdown-arrow</code>), a checkbox stretched away from its label (<code>checkbox-layout</code>), a search icon over the placeholder (<code>input-icon-overlap</code>).</sub>
+
 <p align="center"><img src="docs/images/dev-overlay.png" width="720" alt="renderlint's dev overlay on a React dashboard, listing findings with source file and line"><br><sub>The Vite plugin's live overlay: hover a finding to highlight it. Each finding links to its component file and line.</sub></p>
 
-All screenshots, including a deliberately broken [demo page](examples/demo/index.html) that triggers 16 rules: [docs/gallery.md](docs/gallery.md).
+All screenshots, including a deliberately broken [demo page](examples/demo/index.html) that triggers 21 rules: [docs/gallery.md](docs/gallery.md).
 
 ## Quick start
 

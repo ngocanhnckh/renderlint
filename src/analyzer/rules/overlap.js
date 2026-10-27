@@ -103,6 +103,12 @@ function intentionalStacking(chain) {
   return null;
 }
 
+function isAdornment(field, el) {
+  if (!RL.isTextField(field)) return false;
+  const f = field.getBoundingClientRect(), r = el.getBoundingClientRect();
+  return r.left >= f.left - 1 && r.right <= f.right + 1 && r.top >= f.top - 1 && r.bottom <= f.bottom + 1;
+}
+
 RL.rule({
   id: 'element-overlap',
   order: 91,
@@ -129,6 +135,9 @@ RL.rule({
       const ca = commonAncestor(a, b);
       const why = intentionalStacking(chainUpTo(a, ca)) || intentionalStacking(chainUpTo(b, ca));
       if (why && !(why === 'positioned' && RL.isInteractive(a) && RL.isInteractive(b))) return true;
+      // A positioned button inside a text field's box (show-password, clear) is an adornment;
+      // if it covers the text area, input-icon-overlap reports that.
+      if (why === 'positioned' && (isAdornment(a, b) || isAdornment(b, a))) return true;
       if (reported.some(([x, y]) => (RL.containsComposed(x, a) && RL.containsComposed(y, b)) || (RL.containsComposed(x, b) && RL.containsComposed(y, a)))) return true;
       reported.push([a, b]);
       ctx.report({

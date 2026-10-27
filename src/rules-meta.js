@@ -159,6 +159,42 @@ export const RULES = {
     summary: 'Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names).',
     fix: 'Design for longer content: allow wrapping, avoid fixed heights/widths on text containers, add `min-width: 0` to flex children and `overflow-wrap: anywhere` for long words.',
   },
+  'dropdown-arrow': {
+    severity: 'error',
+    category: 'forms',
+    summary: 'A dropdown\'s arrow sits much closer to the border than its text does to the other side, so it looks jammed against the edge. Measured from pixels, so it covers native arrows, background-image chevrons and custom triggers.',
+    fix: 'Chrome and Safari draw the native arrow near the border and ignore padding-right. Use `appearance: none` with your own chevron, e.g. `background: url(chevron.svg) no-repeat right 12px center; padding-right: 40px`, or position an icon inside the padding. Keep the arrow\'s right inset close to the text\'s left inset.',
+  },
+  'checkbox-layout': {
+    severity: 'error',
+    category: 'forms',
+    summary: 'A checkbox or radio button is stretched to the full width (drawn in the middle, away from its label), or sits on its own row above its label.',
+    fix: 'Scope full-width input styles to text fields (`input:not([type=checkbox]):not([type=radio])`), give checkboxes `width: auto` (Tailwind `w-4 h-4 shrink-0`), and put the box and label in a row: `display: flex; align-items: center; gap: 8px` (or `items-start` for multi-line labels).',
+  },
+  'input-icon-overlap': {
+    severity: 'error',
+    category: 'forms',
+    summary: 'An icon (search, mail, calendar) is drawn over the part of an input where its text and placeholder appear, so typed text runs underneath it.',
+    fix: 'Add padding on the icon\'s side so the text starts after it: e.g. `padding-left: 40px` (Tailwind `pl-10`) for a 16px icon at `left: 12px`, or `pr-10` for a trailing icon.',
+  },
+  'squashed-control': {
+    severity: 'error',
+    category: 'forms',
+    summary: 'An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom.',
+    fix: 'Remove the fixed height or reduce vertical padding: use either `height` with `padding-block: 0`, or padding with `height: auto`. A 16px font needs about 20px of content height.',
+  },
+  'control-height-mismatch': {
+    severity: 'warn',
+    category: 'forms',
+    summary: 'Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don\'t line up.',
+    fix: 'Give controls in a row the same height (e.g. `h-10` on both), or let the row stretch them: `display: flex; align-items: stretch`.',
+  },
+  'icon-misaligned': {
+    severity: 'warn',
+    category: 'polish',
+    summary: 'An icon next to a single line of text sits visibly above or below the text\'s center (an inline SVG on the baseline, or a larger icon next to small text).',
+    fix: 'Lay the icon and text out with `display: inline-flex; align-items: center; gap: 6px`, and give the icon `flex-shrink: 0`.',
+  },
   'page-error': {
     severity: 'error',
     category: 'runtime',

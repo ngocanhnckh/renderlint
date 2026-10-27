@@ -32,6 +32,12 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`line-length`](#line-length) | warn | Paragraph lines are very long (>120 characters), which is tiring to read. |
 | [`focus-indicator`](#focus-indicator) | warn | A focusable element shows no visible change when focused (outline removed without replacement). |
 | [`fragile-layout`](#fragile-layout) | warn | Stress test: the layout breaks when text is longer than the current sample copy (real data, translations, user names). |
+| [`dropdown-arrow`](#dropdown-arrow) | error | A dropdown's arrow sits much closer to the border than its text does to the other side, so it looks jammed against the edge. Measured from pixels, so it covers native arrows, background-image chevrons and custom triggers. |
+| [`checkbox-layout`](#checkbox-layout) | error | A checkbox or radio button is stretched to the full width (drawn in the middle, away from its label), or sits on its own row above its label. |
+| [`input-icon-overlap`](#input-icon-overlap) | error | An icon (search, mail, calendar) is drawn over the part of an input where its text and placeholder appear, so typed text runs underneath it. |
+| [`squashed-control`](#squashed-control) | error | An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom. |
+| [`control-height-mismatch`](#control-height-mismatch) | warn | Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up. |
+| [`icon-misaligned`](#icon-misaligned) | warn | An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text). |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
 | [`console-error`](#console-error) | error | Uncaught JavaScript error or console.error while rendering (hydration mismatches, crashed components). |
 | [`broken-resource`](#broken-resource) | error | A same-origin stylesheet, script, font or image request failed (404/500), or a web font failed to load. |
@@ -158,6 +164,14 @@ A short button label breaks onto multiple lines.
 
 **How to fix:** Shorten the label, allow the button to grow (remove fixed width), or use `white-space: nowrap` with enough room.
 
+### icon-misaligned
+
+**Default:** warn
+
+An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text).
+
+**How to fix:** Lay the icon and text out with `display: inline-flex; align-items: center; gap: 6px`, and give the icon `flex-shrink: 0`.
+
 ## Content
 
 ### placeholder-text
@@ -259,6 +273,48 @@ Text smaller than 12px.
 Paragraph lines are very long (>120 characters), which is tiring to read.
 
 **How to fix:** Constrain text width, e.g. `max-width: 65ch` (Tailwind `max-w-prose`).
+
+## Forms
+
+### dropdown-arrow
+
+**Default:** error
+
+A dropdown's arrow sits much closer to the border than its text does to the other side, so it looks jammed against the edge. Measured from pixels, so it covers native arrows, background-image chevrons and custom triggers.
+
+**How to fix:** Chrome and Safari draw the native arrow near the border and ignore padding-right. Use `appearance: none` with your own chevron, e.g. `background: url(chevron.svg) no-repeat right 12px center; padding-right: 40px`, or position an icon inside the padding. Keep the arrow's right inset close to the text's left inset.
+
+### checkbox-layout
+
+**Default:** error
+
+A checkbox or radio button is stretched to the full width (drawn in the middle, away from its label), or sits on its own row above its label.
+
+**How to fix:** Scope full-width input styles to text fields (`input:not([type=checkbox]):not([type=radio])`), give checkboxes `width: auto` (Tailwind `w-4 h-4 shrink-0`), and put the box and label in a row: `display: flex; align-items: center; gap: 8px` (or `items-start` for multi-line labels).
+
+### input-icon-overlap
+
+**Default:** error
+
+An icon (search, mail, calendar) is drawn over the part of an input where its text and placeholder appear, so typed text runs underneath it.
+
+**How to fix:** Add padding on the icon's side so the text starts after it: e.g. `padding-left: 40px` (Tailwind `pl-10`) for a 16px icon at `left: 12px`, or `pr-10` for a trailing icon.
+
+### squashed-control
+
+**Default:** error
+
+An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom.
+
+**How to fix:** Remove the fixed height or reduce vertical padding: use either `height` with `padding-block: 0`, or padding with `height: auto`. A 16px font needs about 20px of content height.
+
+### control-height-mismatch
+
+**Default:** warn
+
+Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up.
+
+**How to fix:** Give controls in a row the same height (e.g. `h-10` on both), or let the row stretch them: `display: flex; align-items: stretch`.
 
 ## Runtime
 

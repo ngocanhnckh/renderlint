@@ -74,6 +74,24 @@
   .person b { display: block; }
   .person span { color: #64748b; font-size: 14px; }
 
+  /* Alert settings form: native selects styled into padded boxes, a global input rule, an unpadded search field. */
+  .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px 24px; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; }
+  .form label, .form .lbl { display: block; font-size: 15px; color: #334155; margin-bottom: 8px; }
+  .form input, .form select { display: block; width: 100%; height: 48px; padding: 0 20px; font: inherit; font-size: 16px; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+  .search-field { position: relative; }
+  .search-field svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: #64748b; }
+  .form .search-field input { padding: 0 14px; }
+  .subscribe { display: flex; gap: 8px; align-items: center; }
+  .subscribe input { flex: 1; }
+  .subscribe button { height: 40px; padding: 0 18px; border: 0; border-radius: 10px; background: #0f172a; color: #fff; font: inherit; font-weight: 600; }
+  .confirm { grid-column: 1 / -1; background: #1c1917; color: #e7e5e4; border-radius: 14px; padding: 20px; }
+  .confirm label { color: #e7e5e4; border: 1px solid #44403c; border-radius: 12px; padding: 16px; margin: 0; }
+  .confirm label input { height: 20px; margin: 0 0 12px; }
+  .confirm b { display: block; margin-bottom: 6px; }
+  .confirm p { margin: 0; color: #d6d3d1; line-height: 1.6; font-size: 15px; }
+  .doc-link { color: #4338ca; font-size: 14px; font-weight: 600; }
+  .doc-link svg { width: 22px; height: 22px; }
+
   /* Integrations table: fixed width, no scroll wrapper. */
   table { width: 680px; border-collapse: collapse; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
   th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
@@ -203,6 +221,25 @@
           <div><b>We're hiring</b><span>Founding designer</span></div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <section id="alerts" style="padding-top:0">
+    <div class="wrap">
+      <h2>Alert settings</h2>
+      <p class="sub">Tell Pulse when to ping you.</p>
+      <form class="form" onsubmit="return false">
+        <div><label for="grp">Metric group</label><select id="grp"><option>Key indicators</option><option>Revenue</option></select></div>
+        <div><label for="lvl">Severity</label><select id="lvl"><option>Urgent</option><option>Normal</option></select></div>
+        <div><span class="lbl" id="srch">Notify</span>
+          <div class="search-field"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search teammates" aria-labelledby="srch"></div>
+        </div>
+        <div><label for="sub">Weekly digest</label><div class="subscribe"><input id="sub" type="email" placeholder="you@company.com"><button>Subscribe</button></div></div>
+        <div class="confirm">
+          <label><input type="checkbox"><b>Also send to the on-call channel</b><p>Everyone on call will be paged, day or night. Ticking this confirms you want urgent alerts escalated.</p></label>
+        </div>
+        <div><a class="doc-link" href="/docs/alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19V5h11l5 5v9z"/></svg> How alerts work</a></div>
+      </form>
     </div>
   </section>
 

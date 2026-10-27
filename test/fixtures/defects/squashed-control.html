@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="expect" content="squashed-control"><title>t</title>
+<style>
+body{font-family:sans-serif;margin:0;padding:16px;color:#18181b;background:#fff}
+label{display:block;margin:12px 0 6px}
+/* height and padding both set: a select keeps the padding, so 32px - 2×12px leaves 8px for 16px text. */
+select{box-sizing:border-box;width:280px;height:32px;padding:12px 6px;font-size:16px;border:1px solid #d4d4d8;border-radius:8px;background:#fff}
+/* A 16px-tall input for 16px text: the glyphs run into the border. */
+input{box-sizing:border-box;width:280px;height:16px;padding:0 8px;font-size:16px;border:1px solid #d4d4d8;border-radius:4px}
+</style></head><body>
+<label for="r">Role</label>
+<select id="r"><option>Engineering manager</option></select>
+<label for="t">Team</label>
+<input id="t" value="Platform">
+</body></html>

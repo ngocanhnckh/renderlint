@@ -1,0 +1,120 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="no-warn" content="control-height-mismatch,icon-misaligned">
+<title>Well-built form controls</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:system-ui,sans-serif;margin:0;padding:20px;color:#18181b;background:#fafafa;max-width:720px}
+h2{font-size:18px;margin:28px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.lbl{display:block;font-size:14px;color:#3f3f46;margin-bottom:6px}
+.field{display:block;width:100%;height:44px;padding:0 14px;font-size:15px;color:#18181b;border:1px solid #d4d4d8;border-radius:10px;background:#fff}
+select.field{appearance:none;padding-right:40px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2352525b' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 14px center}
+select.pill{border-radius:999px}
+select.plain{font-size:15px}
+select.native-small{height:36px;padding:0 6px;font-size:15px;border:1px solid #d4d4d8;border-radius:6px;background:#fff;color:#18181b}
+.multi{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:44px;padding:6px 40px 6px 8px;border:1px solid #d4d4d8;border-radius:10px;background:#fff;position:relative}
+.multi .chip{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;background:#f4f4f5;font-size:14px}
+.multi > svg{position:absolute;right:14px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:#52525b}
+.trigger{display:flex;align-items:center;justify-content:space-between;width:100%;height:44px;padding:0 14px;font-size:15px;border:1px solid #d4d4d8;border-radius:10px;background:#fff;color:#18181b}
+.trigger svg{width:16px;height:16px;flex-shrink:0;color:#52525b}
+.check{display:flex;align-items:center;gap:10px;font-size:15px;margin:10px 0}
+.check input{width:16px;height:16px;margin:0;flex-shrink:0}
+.check.top{align-items:flex-start}
+.check.top input{margin-top:3px}
+.check.top span{line-height:1.5}
+.setting{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #e4e4e7}
+.setting input{width:18px;height:18px;margin:0}
+.option{position:relative;display:block;padding:16px;border:1px solid #d4d4d8;border-radius:12px;background:#fff}
+.option input{position:absolute;top:16px;right:16px;margin:0;width:16px;height:16px}
+.option b{display:block}
+.option small{color:#52525b}
+.search{position:relative}
+.search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:#52525b;pointer-events:none}
+.search input{padding-left:40px}
+.pw{position:relative}
+.pw input{padding-right:44px}
+.pw button{position:absolute;right:6px;top:6px;width:32px;height:32px;display:grid;place-items:center;border:0;background:transparent;border-radius:6px}
+.pw button svg{width:16px;height:16px}
+.row{display:flex;gap:8px;align-items:center}
+.row .field{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;font-size:15px;font-weight:600;border:0;border-radius:10px;background:#18181b;color:#fff;text-decoration:none}
+.btn.ghost{background:#fff;color:#18181b;border:1px solid #d4d4d8}
+.btn svg{width:16px;height:16px;flex-shrink:0}
+.addon{display:flex}
+.addon span{display:flex;align-items:center;height:44px;padding:0 12px;border:1px solid #d4d4d8;border-right:0;border-radius:10px 0 0 10px;background:#f4f4f5;color:#3f3f46;font-size:15px}
+.addon input{border-radius:0 10px 10px 0}
+.toolbar{display:flex;gap:6px;align-items:center}
+.seg{display:inline-flex;gap:2px;padding:3px;border:1px solid #d4d4d8;border-radius:8px;background:#f4f4f5}
+.seg button{height:28px;padding:0 10px;border:0;border-radius:6px;background:transparent;font-size:13px}
+.seg button[aria-pressed=true]{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.icon-btn{width:36px;height:36px;display:grid;place-items:center;border:1px solid #d4d4d8;border-radius:8px;background:#fff}
+.icon-btn svg{width:16px;height:16px}
+nav a{display:inline-flex;align-items:center;gap:6px;margin-right:16px;color:#18181b;text-decoration:none;font-size:15px}
+nav svg{width:18px;height:18px}
+.person{display:flex;align-items:center;gap:12px}
+.person svg{width:32px;height:32px;flex-shrink:0}
+.person b{display:block}
+.person span{color:#52525b;font-size:14px}
+ul.ticks{list-style:none;padding:0}
+ul.ticks li{display:flex;gap:8px;align-items:flex-start;line-height:1.5;margin:8px 0}
+ul.ticks svg{width:16px;height:16px;margin-top:4px;flex-shrink:0;color:#15803d}
+.inline-note svg{width:14px;height:14px;vertical-align:-2px}
+textarea.field{height:auto;padding:10px 14px}
+@media (prefers-color-scheme: dark){
+  body{background:#18181b;color:#fafafa}
+  .lbl,.check,.setting,.option small,.person span{color:#d4d4d8}
+  .field,select.field,.trigger,.multi,.option,.icon-btn,.btn.ghost,select.native-small{background-color:#27272a;color:#fafafa;border-color:#52525b}
+  .multi .chip,.addon span{background:#3f3f46;color:#fafafa}
+  .btn{background:#fafafa;color:#18181b}
+  nav a{color:#fafafa}
+  ::placeholder{color:#a1a1aa}
+  .search svg,.trigger svg,.multi > svg{color:#d4d4d8}
+}
+</style></head><body>
+<h2>Selects</h2>
+<div class="grid">
+  <div><label class="lbl" for="g">Group</label><select id="g" class="field"><option>Key indicators</option></select></div>
+  <div><label class="lbl" for="l">Level</label><select id="l" class="field pill"><option>Urgent</option></select></div>
+  <div><span class="lbl" id="rl">Recipients</span>
+    <div class="multi" role="combobox" aria-labelledby="rl" aria-expanded="false" tabindex="0">
+      <span class="chip">Chief of staff</span><span class="chip">Minister</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+  </div>
+  <div><span class="lbl" id="ml">Month</span>
+    <button class="trigger" role="combobox" aria-labelledby="ml" aria-expanded="false"><span>September 2026 · Open</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+  </div>
+</div>
+
+<p><label class="lbl" for="s">Sort</label><select id="s" class="native-small"><option>Newest first</option></select></p>
+<p><label class="lbl" for="u">Unstyled</label><select id="u"><option>Default select</option></select></p>
+
+<h2>Checkboxes and radios</h2>
+<label class="check"><input type="checkbox" checked> Remember me</label>
+<label class="check top"><input type="checkbox"><span>Also deploy to staging. Customers may be viewing staging, and ticking this approves the new build; your name is recorded with the deploy.</span></label>
+<div class="check"><input type="radio" name="p" id="p1" checked><label for="p1">Monthly billing</label></div>
+<div class="setting"><label for="n1">Email notifications</label><input type="checkbox" id="n1" checked></div>
+<label class="option"><input type="radio" name="plan" checked><b>Team</b><small>Unlimited seats, priority support</small></label>
+
+<h2>Inputs with icons and addons</h2>
+<div class="grid">
+  <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input class="field" type="search" placeholder="Search customers" aria-label="Search customers"></div>
+  <div class="pw"><input class="field" type="password" value="secret123" aria-label="Password"><button type="button" aria-label="Show password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+  <div class="addon"><span>https://</span><input class="field" value="acme.com" aria-label="Website"></div>
+  <textarea class="field" rows="3" aria-label="Notes">Notes</textarea>
+</div>
+
+<h2>Rows of controls</h2>
+<form class="row" onsubmit="return false"><input class="field" type="email" placeholder="you@company.com" aria-label="Email"><button class="btn">Subscribe</button></form>
+<p class="row"><a class="btn" href="/start"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Get started</a><a class="btn ghost" href="/docs">Read the docs</a></p>
+<div class="toolbar"><div class="seg"><button aria-pressed="true">3M</button><button aria-pressed="false">6M</button><button aria-pressed="false">12M</button></div><button class="icon-btn" aria-label="Bold"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 5h6a4 4 0 0 1 0 8H7zM7 13h7a4 4 0 0 1 0 8H7z"/></svg></button><button class="icon-btn" aria-label="Italic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 5h8M6 19h8M14 5l-4 14"/></svg></button></div>
+
+<h2>Icons next to text</h2>
+<nav><a href="/home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11 12 4l9 7v9H3z"/></svg>Home</a><a href="/settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg>Settings</a></nav>
+<div class="person"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="16" fill="#c7d2fe"/></svg><div><b>Maya Chen</b><span>maya@acme.com</span></div></div>
+<ul class="ticks">
+  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Unlimited projects</span></li>
+  <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg><span>Single sign-on with SAML and SCIM provisioning for every workspace in your organization, including guests</span></li>
+</ul>
+<p class="inline-note">Changes save automatically <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg></p>
+</body></html>

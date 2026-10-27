@@ -7,7 +7,7 @@ export function agentSection(cmd = 'npx renderlint') {
   return `${START}
 ## UI quality gate: renderlint
 
-This project uses **renderlint** to catch visual UI defects that type checks and code review miss: text overflowing its box, low contrast, overlapping elements and chart labels, layouts that break on phones, emoji used as icons, leaked \`undefined\`/\`NaN\`, broken or stretched images, hidden content, missing focus states. It renders the app in a real browser at phone, tablet and desktop widths (and dark mode) and reports every defect with the element, the source component/file when available, and a fix hint.
+This project uses **renderlint** to catch visual UI defects that type checks and code review miss: text overflowing its box, low contrast, overlapping elements and chart labels, layouts that break on phones, emoji used as icons, leaked \`undefined\`/\`NaN\`, broken or stretched images, hidden content, misbuilt form controls (dropdown arrows on the border, stretched checkboxes, icons over input text), missing focus states. It renders the app in a real browser at phone, tablet and desktop widths (and dark mode) and reports every defect with the element, the source component/file when available, and a fix hint.
 
 **Required workflow for coding agents**
 1. After any change to UI code (components, pages, styles, templates), run \`${cmd}\` and fix **every error** before you say the task is done. Re-run until it reports \`0 errors\`. Treat it like a failing build.
@@ -22,6 +22,7 @@ This project uses **renderlint** to catch visual UI defects that type checks and
 - Contrast: body text needs at least 4.5:1, large text 3:1. Light text on light accent colors (white on yellow, sky, lime, or light purple) almost always fails. Check text placed over images and gradients, and check dark mode.
 - Charts and diagrams: leave margins for axis labels, limit the number of ticks, and rotate, abbreviate or wrap long labels so they never overlap or get clipped.
 - Every interactive element needs a visible \`:focus-visible\` style, an accessible name (\`aria-label\` on icon-only buttons), and a hit area of at least 24×24px (44×44px on touch).
+- Form controls: a native \`<select>\` draws its arrow next to the border whatever its \`padding-right\`, so styled selects need \`appearance: none\` and a chevron inset like the text (e.g. \`right 12px center\` with \`padding-right: 40px\`). Scope \`width: 100%\` input styles to text fields so checkboxes and radios stay small and sit beside their labels. Pad inputs on the side of any icon drawn inside them (\`pl-10\`). Give controls in the same row the same height, and center icons with their text (\`inline-flex items-center\`).
 - No placeholder leaks: format numbers and dates and handle \`null\` values so the UI never shows \`undefined\`, \`NaN\`, \`[object Object]\`, \`Invalid Date\` or lorem ipsum.
 
 Warnings (\`fragile-layout\` = breaks when text is 50% longer, small tap targets, tiny text…) don't fail the run, but fix them when it's cheap.
