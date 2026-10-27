@@ -9,8 +9,8 @@
   <img src="https://img.shields.io/badge/framework-any-8b5cf6.svg" alt="Any framework">
 </p>
 
-![Same weather-app prompt in two Claude Code sessions: 42 contrast errors without renderlint, 0 with it](docs/images/compare-weather.png)
-<p align="center"><sub>The same prompt in two Claude Code sessions. Left: no renderlint, 42 errors (its annotated report). Right: the session that ran renderlint and fixed its own findings.</sub></p>
+![Six overflow bugs renderlint caught: a long email running off its card, a total cut off only at 1024px, a heading running off a phone screen, chart labels cut off by the SVG edge, a heading clipped by its card, a feature list spilling out of a pricing card](docs/images/hero-overflow.png)
+<p align="center"><sub>Six times text didn't fit its box, each one renderlint's own annotated screenshot: from example pages, from apps Claude built in headless sessions, and from an Elementor page. More in the <a href="docs/gallery.md">gallery</a>.</sub></p>
 
 Text spilling out of cards, gray-on-gray captions, chart labels on top of each other, a layout that only breaks at 1024px, a dropdown arrow jammed against the border, `$undefined` in a KPI tile, emoji where icons should be. TypeScript and ESLint can't see any of this, because the code is fine. It's the *pixels* that are wrong.
 
@@ -127,13 +127,14 @@ We ran 22 headless Claude Code sessions (Opus and Haiku), each building a typica
 - **All 11 apps built with renderlint finished at 0 errors**, because the agents fixed the issues themselves.
 - Rescored later with the width sweep, the extra stress profiles and the form rules, the renderlint-built apps show **11 errors in 5 apps**. All of them are real and none were checkable at the time (9 only appear at 320–360px). The baselines show 225 errors.
 
+![Same weather-app prompt in two Claude Code sessions: 42 contrast errors without renderlint, 0 with it](docs/images/compare-weather.png)
+<p align="center"><sub>The same weather-app prompt in two sessions. Left: no renderlint, 42 errors (its annotated report). Right: the session that ran renderlint and fixed its own findings.</sub></p>
+
 Details, per-app numbers and lessons: [docs/results.md](docs/results.md).
 
 ## See it
 
 Every run saves annotated screenshots with each finding boxed and numbered, so agents with vision (and humans) can see what's wrong.
-
-![A long email runs out of its account card and under the next one, and a status label spills out of its chip; renderlint marks both as text-overflow](docs/images/demo-long-text.png)
 
 <table>
 <tr>

@@ -502,10 +502,62 @@ async function annotate(page, issues, config) {
       add(b.rect, false);
       const tag = document.createElement('div');
       tag.textContent = '#' + b.n + ' ' + b.rule;
-      tag.style.cssText = `position:absolute;left:${Math.max(0, b.rect.x - 2)}px;top:${Math.max(0, b.rect.y - 18)}px;background:${color};color:#fff;font:600 11px/16px system-ui,sans-serif;padding:0 4px;border-radius:3px;white-space:nowrap`;
+      tag.style.cssText = `position:absolute;left:0;top:0;background:${color};color:#fff;font:600 11px/16px system-ui,sans-serif;padding:0 4px;border-radius:3px;white-space:nowrap`;
       root.appendChild(tag);
+      b.tag = tag;
     }
     document.documentElement.appendChild(root);
+
+    // Place each label where it hides the least: not over the flagged element, other text or other labels.
+    const pageW = document.documentElement.clientWidth; // the screenshot is the viewport wide
+    const near = (r, m) => boxes.some((b) => r.x < b.rect.x + b.rect.w + m && r.x + r.w > b.rect.x - m && r.y < b.rect.y + b.rect.h + m && r.y + r.h > b.rect.y - m);
+    // Text that is actually painted: not hidden, and not clipped away (a collapsed accordion still has text rects).
+    const shown = (el, r) => {
+      for (let e = el; e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+        const st = getComputedStyle(e);
+        if (st.visibility === 'hidden' || st.opacity === '0' || st.display === 'none') return false;
+        if (st.overflowX !== 'visible' || st.overflowY !== 'visible') {
+          const q = e.getBoundingClientRect(), bx = q.left + scrollX, by = q.top + scrollY;
+          if (r.x + r.w <= bx || r.x >= bx + q.width || r.y + r.h <= by || r.y >= by + q.height) return false;
+        }
+      }
+      return true;
+    };
+    const texts = [];
+    const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    for (let t = walker.nextNode(); t && texts.length < 4000; t = walker.nextNode()) {
+      if (!t.data.trim() || root.contains(t)) continue;
+      range.selectNodeContents(t);
+      for (const q of range.getClientRects()) {
+        const r = { x: q.left + scrollX, y: q.top + scrollY, w: q.width, h: q.height };
+        if (r.w > 0 && r.h > 0 && near(r, 90) && shown(t.parentElement, r)) texts.push(r);
+      }
+    }
+    const overlap = (a, c) => Math.max(0, Math.min(a.x + a.w, c.x + c.w) - Math.max(a.x, c.x)) * Math.max(0, Math.min(a.y + a.h, c.y + c.h) - Math.max(a.y, c.y));
+    const placed = [];
+    for (const b of boxes) {
+      const w = b.tag.offsetWidth, h = b.tag.offsetHeight, r = b.rect;
+      const spots = [
+        [r.x - 2, r.y - h - 2], [r.x - 2, r.y + r.h + 3], [r.x + r.w - w + 2, r.y - h - 2], [r.x + r.w - w + 2, r.y + r.h + 3],
+        [r.x + r.w + 4, r.y], [r.x - w - 4, r.y], [r.x + r.w - w - 2, r.y + 2],
+      ];
+      let best = null;
+      for (const [i, [x, y]] of spots.entries()) {
+        const cand = { x, y, w, h };
+        if (x < 0 || y < 0 || x + w > pageW) continue;
+        let cost = i * 4; // prefer the usual spot above the box
+        for (const t of texts) cost += overlap(cand, t);
+        for (const o of boxes) cost += overlap(cand, o.rect) * (o === b ? 3 : 1);
+        for (const p of placed) cost += overlap(cand, p) * 5;
+        if (!best || cost < best.cost) best = { ...cand, cost };
+      }
+      if (!best) best = { x: Math.max(0, Math.min(r.x - 2, pageW - w)), y: Math.max(0, r.y - h - 2), w, h };
+      b.tag.style.left = best.x + 'px';
+      b.tag.style.top = best.y + 'px';
+      placed.push(best);
+      delete b.tag;
+    }
   }, boxes);
 }
 

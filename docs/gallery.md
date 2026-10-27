@@ -2,6 +2,12 @@
 
 Every renderlint run saves annotated screenshots to `.renderlint/screens/`. Each finding is boxed and numbered to match the text report, so a coding agent with vision (or a person) can see exactly what is wrong. The images below are crops of those screenshots.
 
+## Text that doesn't fit its box
+
+The most common and most annoying class of UI bug: it throws no error, passes every test, and looks fine on the screen it was built on. Each tile is a crop of renderlint's annotated screenshot. They come from the [demo page](../examples/demo/index.html), the [KPI example](../examples/kpi-sweep/index.html), two apps built in the [agent experiments](results.md), and an Elementor page ([WordPress](wordpress.md)).
+
+![Six overflow bugs renderlint caught](images/hero-overflow.png)
+
 ## Same prompt, with and without renderlint
 
 Each pair comes from two separate headless Claude Code sessions given the same app prompt. The left session got only the prompt. The right one also got the one-line renderlint setup prompt from the README, and fixed its own findings until the check passed. Details: [results.md](results.md).
