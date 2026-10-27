@@ -66,6 +66,9 @@ We ran 22 headless Claude Code sessions (Opus and Haiku), each building a typica
 
 Every run saves annotated screenshots with each finding boxed and numbered, so agents with vision (and humans) can see what's wrong.
 
+![A long email runs out of its account card and under the next one, and a status label spills out of its chip; renderlint marks both as text-overflow](docs/images/demo-long-text.png)
+<sub>Sample copy fits, real data doesn't: a long email runs under the next card and a status label spills out of its chip (<code>text-overflow</code>). A second pass with 50% longer text catches layouts that are about to break (<code>fragile-layout</code>).</sub>
+
 <table>
 <tr>
 <td width="50%"><img src="docs/images/demo-charts.png" alt="Bar-chart labels overlapping and donut labels cut off by the SVG edge"><br><sub>Colliding bar-chart labels (<code>text-overlap</code>) and donut labels cut off by the SVG edge (<code>text-clipped</code>).</sub></td>
@@ -79,7 +82,7 @@ Every run saves annotated screenshots with each finding boxed and numbered, so a
 
 <p align="center"><img src="docs/images/dev-overlay.png" width="720" alt="renderlint's dev overlay on a React dashboard, listing findings with source file and line"><br><sub>The Vite plugin's live overlay: hover a finding to highlight it. Each finding links to its component file and line.</sub></p>
 
-All screenshots, including a deliberately broken [demo page](examples/demo/index.html) that triggers 15 rules: [docs/gallery.md](docs/gallery.md).
+All screenshots, including a deliberately broken [demo page](examples/demo/index.html) that triggers 16 rules: [docs/gallery.md](docs/gallery.md).
 
 ## Quick start
 

@@ -27,7 +27,21 @@ npm install
 node bin/renderlint.js examples/demo
 ```
 
-It reports 38 errors and 7 warnings across 15 rules. Some of them:
+It reports 40 errors and 8 warnings across 16 rules. Some of them:
+
+### Text that is longer than the design expected
+
+The most common layout bug in agent-built UIs is that the sample copy fits, then real data doesn't. Here an account card gets a long company email with no break points. It runs out of the card and disappears under the next one. A status label in a fixed-width chip spills past the pill. Nothing errors, and a screenshot at a glance looks almost fine.
+
+![Account cards at 1280px: a long email runs under the neighbouring card and a status label spills out of its chip, with renderlint's text-overflow findings below](images/demo-long-text.png)
+
+On a phone the same email runs off the card and off the screen:
+
+![The same card at 375px: the email runs past the card border and the screen edge](images/demo-long-text-375.png)
+
+renderlint reports the exact overflow, for example `Text spills outside its container (61px past the right edge)`, with the fix: `overflow-wrap: anywhere` (Tailwind `break-words`) for long words and URLs, `min-width: 0` on flex and grid children, and no fixed widths on text boxes. It also runs every page a second time with all text made 50% longer. Layouts that only fit the current sample copy are reported as `fragile-layout` warnings before real data breaks them.
+
+### More from the demo page
 
 | | |
 |---|---|

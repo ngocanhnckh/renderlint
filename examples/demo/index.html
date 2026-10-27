@@ -59,6 +59,14 @@
   .plan ul { margin: 0 0 20px; padding-left: 18px; color: #334155; line-height: 1.9; font-size: 15px; }
   .plan .btn { width: 150px; white-space: nowrap; overflow: hidden; text-align: center; }
 
+  /* Account cards: long emails and labels the sample data never had. */
+  .accounts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+  .account { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+  .account b { display: block; font-size: 16px; }
+  .account .email { color: #475569; font-size: 14px; margin: 4px 0 14px; }
+  .chip { display: inline-block; width: 96px; white-space: nowrap; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #e0e7ff; color: #3730a3; }
+  .chip.warn { background: #fef3c7; color: #92400e; }
+
   /* Team */
   .team { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
   .person { display: flex; gap: 14px; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; }
@@ -138,6 +146,19 @@
             <text x="250" y="170">Starter 17%</text>
           </g>
         </svg>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <h2>Top accounts</h2>
+      <p class="sub">By events tracked this month.</p>
+      <div class="accounts">
+        <div class="account"><b>Northwind</b><div class="email">ops@northwind.io</div><span class="chip">Active</span></div>
+        <div class="account"><b>Internationale Versicherungsgesellschaft</b><div class="email">procurement.department@internationaleversicherung.de</div><span class="chip warn">Awaiting procurement approval</span></div>
+        <div class="account"><b>Lumen</b><div class="email">hello@lumen.app</div><span class="chip">Active</span></div>
+        <div class="account"><b>Acme Corp</b><div class="email">it@acme.com</div><span class="chip">Trial</span></div>
       </div>
     </div>
   </section>
