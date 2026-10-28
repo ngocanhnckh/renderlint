@@ -167,8 +167,12 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
         } : null });
       runs[si] = viewports.map((vp, vi) => slot(async () => {
         const t0 = Date.now();
-        const res = await checkOne(browser, url, opts(vp, vi, true));
-        if (si === 0) metas[vi].resolve(res.meta || null);
+        const res = await checkOne(browser, url, opts(vp, vi, true)).finally(() => {
+          // never leave the crawl or later pages waiting on a run that failed outright
+          if (si > 0) return;
+          metas[vi].resolve(null);
+          if (skeletons && !state) { skeletons[vi][k].resolve(null); decisions[vi].resolve(null); }
+        });
         log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms${res.reuse ? ' (renders like ' + res.reuse.path + ': later passes shared)' : res.templateOf ? ' (same template as ' + res.templateOf + ': base checks only)' : ''}`);
         return { vp, res, ms: Date.now() - t0 };
       }).then(async (r) => {
@@ -179,6 +183,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
         r.res.issues.push(...shared.issues.map(cloneIssue));
         return r;
       }));
+      for (const r of runs[si]) r.catch(() => {}); // rethrown by pageInfo.done
     };
     for (let si = 0; si < schemes.length; si++) startScheme(si);
     pageInfo.done = (async () => {
