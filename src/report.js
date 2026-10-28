@@ -1,7 +1,7 @@
 // Merges raw findings and formats them for humans and coding agents.
 import { relative } from 'node:path';
 import { RULES, IGNORE_HELP } from './rules-meta.js';
-import { effectiveSeverity } from './runner.js';
+import { effectiveSeverity, groupKey } from './runner.js';
 
 export function mergeIssues(raw, config) {
   const groups = new Map();
@@ -9,7 +9,7 @@ export function mergeIssues(raw, config) {
     const severity = effectiveSeverity(i, config);
     if (severity === 'off') continue;
     if ((config.ignore || []).some((ig) => !ig.selector && (!ig.rule || ig.rule === i.rule) && (!ig.page || globLike(ig.page, i.page || '')) && (!ig.message || new RegExp(ig.message).test(i.message)))) continue;
-    const key = [i.rule, i.selector || i.message, i.related ? i.related.selector : '', i.file || '', i.line || ''].join('|');
+    const key = groupKey(i);
     let g = groups.get(key);
     if (!g) {
       g = { ...i, severity, viewports: [], pages: [], markers: [], schemes: [] };
