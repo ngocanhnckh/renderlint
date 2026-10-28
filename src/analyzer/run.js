@@ -119,6 +119,192 @@ RL.hasDarkModeCss = function () {
   return !!(scheme && /dark/.test(scheme.content));
 };
 
+// Can the layout rules give different results in another color scheme? The runner
+// re-runs the stress passes in dark mode only when they can. Two parts:
+//   paintOnly  every CSS declaration that depends on prefers-color-scheme sets a
+//              property that never changes layout (colors, backgrounds, shadows,
+//              outlines), or a custom property only used by such properties. So any
+//              DOM, including stressed text and reloaded data, lays out the same.
+//   sig        a hash of what the layout rules read that CSS could still change or
+//              that JS could swap per scheme: the DOM (structure, attributes, text),
+//              the CSSOM, every element's box, and the alpha / presence of its
+//              colors, backgrounds and shadows (rules test "has a visible boundary",
+//              "is opaque", never the hue; shadows only for presence). Equal signatures + paintOnly ⇒ identical
+//              layout findings.
+const PAINT_PROP = /^(color|background(-color|-image|-position(-x|-y)?|-size|-repeat|-attachment|-origin|-clip|-blend-mode)?|border(-(top|right|bottom|left|block|inline|block-start|block-end|inline-start|inline-end))?-color|outline(-color|-style|-width|-offset)?|text-decoration(-color|-line|-style|-thickness)?|text-underline-offset|text-emphasis-color|caret-color|accent-color|column-rule-color|fill|stroke|stop-color|flood-color|lighting-color|color-scheme|box-shadow|text-shadow|-webkit-text-fill-color|-webkit-text-stroke-color|-webkit-tap-highlight-color|scrollbar-color|forced-color-adjust|print-color-adjust|-webkit-print-color-adjust|transition(-[a-z-]+)?)$/;
+const SCHEME_MQ = /prefers-color-scheme/i;
+const ALPHA_PROPS = ['color', 'backgroundColor', 'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor', 'webkitTextFillColor', 'fill'];
+const isColor = (v) => !/var\(/.test(v) && CSS.supports('color', v);
+// Is position i of a declaration value inside rgb(…), hsl(…), color-mix(…) etc.?
+function inColorFunction(value, i) {
+  let depth = 0;
+  for (let k = i - 1; k >= 0; k--) {
+    if (value[k] === ')') depth++;
+    else if (value[k] === '(') {
+      if (depth) { depth--; continue; }
+      if (/(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)$/i.test(value.slice(Math.max(0, k - 10), k))) return true;
+    }
+  }
+  return false;
+}
+const colorAlpha = (c) => { const p = RL.parseColor(c); return p ? Math.round(p.a * 100) : c; };
+const colorTokensToAlpha = (v) => v.replace(/(?:rgba?|hsla?|oklch|oklab|lab|lch|color|hwb)\([^()]*\)|#[0-9a-f]{3,8}\b|\btransparent\b/gi, (c) => 'a' + colorAlpha(c)).replace(/url\([^)]*\)/g, 'url');
+
+function cyrb53(str, seed) {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36);
+}
+
+// Top-level declarations of a style block, shorthands kept as written (var() in shorthands).
+function declarations(style) {
+  const out = [];
+  for (const part of (style.cssText || '').split(/;(?![^(]*\))/)) {
+    const i = part.indexOf(':');
+    if (i > 0) out.push([part.slice(0, i).trim().toLowerCase(), part.slice(i + 1).trim()]);
+  }
+  return out;
+}
+
+RL.schemeSignature = function (debug) {
+  const crossOrigin = [];
+  let paintOnly = true;
+  const schemeCustom = new Set(); // custom properties set under a color-scheme condition
+  const layoutVars = new Set(); // custom properties a layout property may substitute (outside a color function)
+  const varEdges = []; // [custom prop, var its value substitutes outside a color function]
+  const values = new Map(); // custom property → every value declared for it
+  const cssText = [];
+  const visitDecls = (style, conditioned) => {
+    for (const [prop, value] of declarations(style)) {
+      const custom = prop.startsWith('--');
+      if (conditioned) {
+        if (custom) schemeCustom.add(prop);
+        else if (!PAINT_PROP.test(prop)) paintOnly = false;
+      }
+      if (custom) { if (!values.has(prop)) values.set(prop, []); values.get(prop).push(value); }
+      for (const m of value.matchAll(/var\(\s*(--[\w-]+)/g)) {
+        if (inColorFunction(value, m.index)) continue; // hsl(var(--border)): a color whatever the value
+        if (custom) varEdges.push([prop, m[1]]);
+        else if (!PAINT_PROP.test(prop)) layoutVars.add(m[1]);
+      }
+    }
+  };
+  const visitRules = (rules, conditioned, depth) => {
+    if (!rules || depth > 12) return;
+    for (const r of rules) {
+      const cond = conditioned || (r.media && SCHEME_MQ.test(r.media.mediaText)) || (r.conditionText && SCHEME_MQ.test(r.conditionText));
+      if (r.style) visitDecls(r.style, cond);
+      if (r.styleSheet) visitSheet(r.styleSheet, cond); // @import
+      if (r.cssRules) visitRules(r.cssRules, cond, depth + 1);
+    }
+  };
+  const visitSheet = (sheet, conditioned) => {
+    const cond = conditioned || (sheet.media && SCHEME_MQ.test(sheet.media.mediaText));
+    let rules;
+    try { rules = sheet.cssRules; } catch (e) { crossOrigin.push({ href: sheet.href, conditioned: !!cond }); return; }
+    if (sheet.ownerNode && sheet.ownerNode.id === '__renderlint_pe') return;
+    visitRules(rules, cond, 0);
+    for (const r of rules) cssText.push(r.cssText);
+  };
+  const roots = [document];
+  for (const el of document.querySelectorAll('*')) if (el.shadowRoot) roots.push(el.shadowRoot);
+  for (const root of roots) {
+    for (const s of root.styleSheets) visitSheet(s, false);
+    for (const s of root.adoptedStyleSheets || []) visitSheet(s, false);
+  }
+  for (const el of document.querySelectorAll('[style]')) visitDecls(el.style, false);
+  // A custom property is layout-relevant if a layout property uses it, directly or through other custom properties.
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const [p, v] of varEdges) if (layoutVars.has(p) && !layoutVars.has(v)) { layoutVars.add(v); changed = true; }
+  }
+  // `border: 1px solid var(--line)` is fine when --line is a color in every declaration.
+  const isColorVar = (p, seen) => {
+    if (seen.has(p)) return false;
+    seen.add(p);
+    return (values.get(p) || []).every((v) => {
+      const ref = /^var\(\s*(--[\w-]+)\s*(?:,(.*))?\)$/.exec(v.replace(/\s*!important$/, ''));
+      if (ref) return isColorVar(ref[1], seen) && (ref[2] === undefined || isColor(ref[2].trim()));
+      return isColor(v.replace(/\s*!important$/, ''));
+    });
+  };
+  for (const p of schemeCustom) if (layoutVars.has(p) && !isColorVar(p, new Set())) paintOnly = false;
+
+  window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); // the stress passes start from the top too
+  const parts = [cyrb53(cssText.join('\n'), 1), innerWidth, innerHeight, document.documentElement.scrollWidth, document.documentElement.scrollHeight];
+  const walk = (root) => {
+    const it = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    for (let n = it.nextNode(); n; n = it.nextNode()) {
+      if (n.nodeType === 3) { parts.push('"' + n.data); continue; }
+      if (n.id === '__renderlint_overlay' || n.id === '__renderlint_pe') continue;
+      let line = '<' + n.tagName;
+      for (const a of n.attributes) line += ' ' + a.name + '=' + a.value;
+      if (n.value !== undefined && /^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName)) line += ' value=' + n.value;
+      const r = n.getBoundingClientRect();
+      line += ' @' + Math.round(r.x * 64) + ',' + Math.round(r.y * 64) + ',' + Math.round(r.width * 64) + ',' + Math.round(r.height * 64);
+      const s = getComputedStyle(n);
+      for (const p of ALPHA_PROPS) line += ' ' + colorAlpha(s[p]);
+      line += ' ' + colorTokensToAlpha(s.backgroundImage) + ' ' + (s.boxShadow === 'none' ? 'none' : /^rgba\(0, 0, 0, 0\)/.test(s.boxShadow) ? 'T' : 'V') + ' ' + s.backgroundClip + ' ' + s.webkitBackgroundClip;
+      parts.push(line);
+      if (n.shadowRoot) walk(n.shadowRoot);
+    }
+  };
+  walk(document.documentElement);
+  return {  sig: cyrb53(parts.join('\n'), 7), paintOnly, crossOrigin, ...(debug ? { parts, schemeCustom: [...schemeCustom], layoutVars: [...layoutVars] } : {}) };
+};
+
+// Viewport widths where the page's layout switches: from width media queries in
+// the CSS (also inside @import/<link media>, nested and @supports rules) and from
+// matchMedia() calls the page made (recorded by the runner's init script). Each
+// entry is the first width of the wider side: (min-width: 768px) → 768,
+// (max-width: 767.98px) → 768, (width > 40rem) → 641. Container queries depend on
+// container sizes, not the viewport, and are not included.
+const BP_FEATURE = /\((min|max)-width\s*:\s*([\d.]+)(px|r?em)\s*\)|\(([^()]*?\bwidth\b[^()]*?)\)/gi;
+RL.breakpoints = function () {
+  const out = new Set();
+  const px = (n, unit) => +n * (unit === 'px' ? 1 : 16); // em/rem in media queries: the initial font size
+  const add = (x, inclusive, upper) => {
+    // inclusive lower bound (min-width, >=) starts at ceil(x); exclusive (>) and max-width (≤ x) switch at floor(x)+1
+    const u = upper ? (inclusive ? Math.floor(x) + 1 : Math.ceil(x)) : (inclusive ? Math.ceil(x) : Math.floor(x) + 1);
+    if (u > 0 && u < 10000) out.add(u);
+  };
+  const parse = (text) => {
+    for (const m of String(text).matchAll(BP_FEATURE)) {
+      if (m[1]) { add(px(m[2], m[3]), true, m[1].toLowerCase() === 'max'); continue; }
+      // range syntax: (width >= 40rem), (640px < width <= 1024px)
+      for (const r of m[4].matchAll(/([\d.]+)(px|r?em)\s*(<=|>=|<|>)\s*width|width\s*(<=|>=|<|>)\s*([\d.]+)(px|r?em)/gi)) {
+        if (r[1]) { const op = r[3]; add(px(r[1], r[2]), op.length === 2, op[0] === '>'); } // 640px < width: lower bound; 1024px >= width: upper
+        else { const op = r[4]; add(px(r[5], r[6]), op.length === 2, op[0] === '<'); }
+      }
+    }
+  };
+  const visitRules = (rules, depth) => {
+    if (!rules || depth > 12) return;
+    for (const r of rules) {
+      if (r.media) parse(r.media.mediaText); // @media, @import … screen and (…)
+      if (r.styleSheet) visitSheet(r.styleSheet);
+      if (r.cssRules) visitRules(r.cssRules, depth + 1);
+    }
+  };
+  const visitSheet = (sheet) => {
+    if (sheet.media) parse(sheet.media.mediaText);
+    let rules;
+    try { rules = sheet.cssRules; } catch (e) { return; }
+    visitRules(rules, 0);
+  };
+  const roots = [document];
+  for (const el of document.querySelectorAll('*')) if (el.shadowRoot) roots.push(el.shadowRoot);
+  for (const root of roots) {
+    for (const s of root.styleSheets) visitSheet(s);
+    for (const s of root.adoptedStyleSheets || []) visitSheet(s);
+  }
+  for (const el of document.querySelectorAll('source[media],link[media]')) parse(el.getAttribute('media'));
+  for (const q of window.__renderlint_mq || []) parse(q);
+  return Array.from(out).sort((a, b) => a - b);
+};
+
 // Stress profiles: rewrite visible text to simulate content the sample data
 // doesn't have, so layouts that only fit the current copy are caught.
 //   longer      every text run gets ~factor× as many words (still wrappable)

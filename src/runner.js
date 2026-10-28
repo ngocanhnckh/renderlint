@@ -261,6 +261,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   // dedupe: "template": per viewport, each page's skeleton hash (in crawl order), so the representative is always the first page
   const skeletons = config.dedupe === 'template' ? viewports.map(() => []) : null;
   let darkSeen = false;
+  const cssCache = new Map(); // cross-origin stylesheet → can it depend on the color scheme?
   // Findings already marked on a written screenshot. The report points each finding to its
   // first screenshot, so a later one is written only when it marks something new.
   const marked = new Set();
@@ -276,11 +277,14 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     });
     const schemes = config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
     const metas = viewports.map(() => deferred()); // first scheme's analysis meta per viewport (null on error)
+    const sigs = viewports.map(() => deferred()); // first scheme's layout signature per viewport
     const runs = [];
     const startScheme = (si) => {
       const scheme = schemes[si];
-      const sweepFor = sweepAssignment(state || si > 0 ? [] : config.sweep, viewports);
-      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log,
+      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
+        // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
+        wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
+        onSig: si === 0 ? sigs[vi].resolve : null, refSig: si > 0 ? sigs[vi].promise : null,
         reps: dedupe && reps && !state ? reps : null, template: template(vi, si),
         onMeta: si === 0 ? (m) => {
           metas[vi].resolve(m);
@@ -300,9 +304,10 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
           // never leave the crawl or later pages waiting on a run that failed outright
           if (si > 0) return;
           metas[vi].resolve(null);
+          sigs[vi].resolve(null); // no signature (error, stress off, shared): later schemes run their own stress passes
           if (skeletons && !state) { skeletons[vi][k].resolve(null); decisions[vi].resolve(null); }
         });
-        log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms${res.reuse ? ' (renders like ' + res.reuse.path + ': later passes shared)' : res.templateOf ? ' (same template as ' + res.templateOf + ': base checks only)' : ''}`);
+        log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms${res.stressReused ? ' (+ stress findings of ' + schemes[0] + ': same layout)' : ''}${res.reuse ? ' (renders like ' + res.reuse.path + ': later passes shared)' : res.templateOf ? ' (same template as ' + res.templateOf + ': base checks only)' : ''}`);
         return { vp, res, ms: Date.now() - t0 };
       }).then(async (r) => {
         if (!r.res.reuse) return r;
@@ -321,8 +326,10 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
       const issues = [];
       for (let si = 0; si < schemes.length; si++) {
         const scheme = schemes[si];
-        for (const { vp, res, ms } of results[si]) {
-          pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}) });
+        for (const [vi, { vp, res, ms }] of results[si].entries()) {
+          // Same DOM, same layout, color-only CSS differences: the stress passes would find exactly what they found in the first scheme.
+          if (res.stressReused) res.issues.push(...results[0][vi].res.issues.filter((i) => i.rule === 'fragile-layout' && !i.sweepWidth).map(cloneIssue));
+          pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}), ...(res.stressReused ? { stressReused: true } : {}) });
           for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
           if (res.error) issues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
         }
@@ -367,9 +374,18 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   return { issues: allIssues, pages };
 }
 
+// Both sides of each breakpoint the page uses (u = first width of the wider layout), within the
+// sweep's range: a layout that only fits in the middle of its range breaks at an edge.
+export function breakpointWidths(sweep, bps) {
+  const lo = Math.min(...sweep), hi = Math.max(...sweep);
+  const out = new Set(sweep);
+  for (const u of bps) for (const w of [u - 1, u]) if (w >= lo && w <= hi) out.add(w);
+  return Array.from(out).sort((a, b) => a - b);
+}
+
 // Spread sweep widths over the configured viewports: each runs in the context
 // (touch, height) of the nearest tested width.
-function sweepAssignment(widths, viewports) {
+export function sweepAssignment(widths, viewports) {
   const tested = new Set(viewports.map((v) => v.width));
   const out = new Map();
   for (const w of widths || []) {
@@ -475,7 +491,15 @@ export function globMatch(pattern, str) {
   return re.test(str);
 }
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweepWidths = [], focus, log, session, crawled, reps, onMeta, template }) {
+// Records the media queries the page's JS asks about (useMediaQuery, matchMedia breakpoints) for the sweep.
+const MQ_RECORDER = () => {
+  const mm = window.matchMedia;
+  if (typeof mm !== 'function' || window.__renderlint_mq) return;
+  const seen = (window.__renderlint_mq = []);
+  window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
+};
+
+async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -486,6 +510,8 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
   const net = trackNetwork(page);
+  const bpSweep = sweep.length && config.sweepBreakpoints;
+  if (bpSweep) await page.addInitScript(MQ_RECORDER);
   if (reps) await page.addInitScript(() => { try { performance.setResourceTimingBufferSize(5000); } catch { /* old browser */ } });
   const issues = [];
   const origin = new URL(url).origin;
@@ -527,7 +553,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     issues.push({ rule: 'broken-resource', severity: 'error', message: `${type} failed to load (${r.status()}): ${u.replace(origin, '')}`, details: { url: u, status: r.status(), type } });
   });
 
-  let meta, screenshot, error;
+  let meta, screenshot, error, sig, stressReused = false;
   let mine = null, dupOf = null; // this run shares its later passes (mine), or uses those of an identical rendering (dupOf)
   let templateOf = null; // dedupe: "template": the earlier page with the same skeleton, whose stress and sweep stand for this one
   const T = { t: Date.now() };
@@ -595,7 +621,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       if (templateOf) lap('template of ' + templateOf);
     }
     if (fp) {
-      const key = [vp.width, vp.height, scheme, focus ? 'f' : '', sweepWidths.join(), fp].join('|');
+      const key = [vp.width, vp.height, scheme, focus ? 'f' : '', sweep.join(), fp].join('|');
       const other = reps.get(key);
       if (!other) reps.set(key, (mine = { path: new URL(url).pathname + new URL(url).search, base: deferred(), rest: deferred() }));
       else if ((dupOf = await other.base.promise)) { dupOf.path = other.path; dupOf.rest = other.rest.promise; issues.push(...dupOf.extra.map(cloneIssue)); }
@@ -652,7 +678,17 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     const iRest = issues.length;
     if (dupOf) return { issues, meta, screenshot, reuse: { path: dupOf.path, rest: dupOf.rest } };
 
-    if (config.stress && !templateOf) {
+    // Taken just before the stress passes, in the state they start from (after contrast, focus, screenshot).
+    const ref = config.stress && refSig ? await refSig : null;
+    if (config.stress && !templateOf && meta && (ref || (wantSig && wantSig(meta)))) {
+      sig = await page.evaluate(() => window.__renderlint.schemeSignature());
+      if (sig.paintOnly && sig.crossOrigin.length) sig.paintOnly = await crossOriginPaintOnly(context, sig.crossOrigin, cssCache);
+      if (onSig) onSig(sig);
+      stressReused = !!(ref && sig.paintOnly && ref.paintOnly && sig.sig === ref.sig);
+      lap('scheme-signature' + (refSig ? (stressReused ? ' (same layout)' : ' (layout differs)') : ''));
+    }
+
+    if (config.stress && !templateOf && !stressReused) {
       const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
       const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
       const known = new Set(issues.map((i) => i.rule + '|' + i.selector));
@@ -684,7 +720,13 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
 
     // Responsive sweep: layouts often fit at the tested widths and break in between
     // (1100px, 1366px…). Resize in place and re-run the layout rules at each width.
-    if (sweepWidths.length && !templateOf) {
+    let sweepWidths = [];
+    if (sweep.length && !templateOf) {
+      const all = bpSweep ? breakpointWidths(sweep, await page.evaluate(() => window.__renderlint.breakpoints())) : sweep;
+      sweepWidths = sweepAssignment(all, viewports).get(vp.width) || [];
+      if (process.env.RENDERLINT_DEBUG) log(`    [${vp.width}] sweep widths: ${sweepWidths.join(', ')}`);
+    }
+    if (sweepWidths.length) {
       const sweepRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) && config.rules[k] !== 'off' ? (config.rules[k] || RULES[k].severity) : 'off']));
       const sweepOpts = { ...analyzeOpts, rules: sweepRules, contrastCandidates: false };
       for (const w of sweepWidths) {
@@ -711,7 +753,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       lap('sweep');
     }
 
-    if (config.stress && !templateOf) {
+    if (config.stress && !templateOf && !stressReused) {
       const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
       const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
       const known = new Set(issues.filter((i) => !i.sweepWidth).map((i) => i.rule + '|' + i.selector));
@@ -754,7 +796,20 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (template && template.publish) { template.publish(null); template.decision.resolve(null); }
     await context.close().catch(() => {});
   }
-  return { issues, meta, screenshot, error, templateOf };
+  return { issues, meta, screenshot, error, templateOf, stressReused };
+}
+
+// Stylesheets the page can't read (cross-origin): fetch them. Any color-scheme condition,
+// @import or var() in them could change layout per scheme, so it counts as "not paint-only".
+async function crossOriginPaintOnly(context, sheets, cache) {
+  for (const { href, conditioned } of sheets) {
+    if (conditioned || !href) return false;
+    if (!cache.has(href)) {
+      cache.set(href, context.request.get(href, { timeout: 5000 }).then(async (r) => r.ok() && !/prefers-color-scheme|@import|var\(/i.test(await r.text())).catch(() => false));
+    }
+    if (!await cache.get(href)) return false;
+  }
+  return true;
 }
 
 async function confirmDeadLinks(page, dead, issues) {

@@ -94,7 +94,7 @@ Most layout bugs show up with content nobody had on screen during development. r
 
 | Check | What renderlint does |
 |---|---|
-| **Width sweep** | Re-runs the layout rules at 13 widths from 320 to 1920px, so a grid that only breaks at 1024px is caught (`@1024px` in the report, with its own screenshot). |
+| **Width sweep** | Re-runs the layout rules at 13 widths from 320 to 1920px and on both sides of every breakpoint the page uses, so a grid that only breaks at 1024px, or right above its `max-width: 900px` breakpoint, is caught (`@1024px` in the report, with its own screenshot). |
 | **Longer text** | Lengthens every text by 50%. |
 | **Long words** | Turns emails, URLs, domains and IDs into 36+ character strings with no break points. |
 | **Big numbers** | Gives KPIs, prices and counters three more digits. |

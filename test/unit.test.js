@@ -92,3 +92,13 @@ test('cli keeps the target after a bare --stress', async () => {
   assert.deepEqual(positionals, ['dist']);
   assert.equal(values['no-scan'], true);
 });
+
+test('sweep adds both sides of each breakpoint within its range', async () => {
+  const { breakpointWidths } = await import('../src/runner.js');
+  assert.deepEqual(breakpointWidths([320, 1024, 1920], [100, 641, 1024, 2560]), [320, 640, 641, 1023, 1024, 1920]);
+  const c = normalize({ ...DEFAULTS });
+  assert.equal(c.sweepBreakpoints, true);
+  assert.equal(normalize(c).sweepBreakpoints, true, 'normalizing twice keeps the default');
+  assert.equal(normalize({ ...DEFAULTS, sweep: '1024,1366' }).sweepBreakpoints, false);
+  assert.equal(normalize({ ...DEFAULTS, sweepBreakpoints: false }).sweepBreakpoints, false);
+});

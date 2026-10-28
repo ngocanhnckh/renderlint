@@ -18,7 +18,8 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `ignore` | `[]` | `[{ rule?, selector?, page?, message? }]` — suppress matching findings. `selector` entries are applied in the page (element and descendants). |
 | `failOn` | `"error"` | `"error"`, `"warn"` (warnings fail too) or `"never"`. |
 | `stress` | `1.5` | Re-check with stressed content (longer text by this factor, long unbreakable words, bigger numbers, declared samples) and report `fragile-layout`. `false` disables. See [Content you didn't render](#content-you-didnt-render). |
-| `sweep` | `true` | Also run the layout rules at 13 widths between 320 and 1920 px (each assigned to the nearest viewport). A list such as `[1024, 1366]` replaces the set; `false` disables. CLI: `--sweep 1024,1366`, `--no-sweep`. |
+| `sweep` | `true` | Also run the layout rules at 13 widths between 320 and 1920 px, plus both sides of every width breakpoint the page uses (each assigned to the nearest viewport). A list such as `[1024, 1366]` replaces the set and is used as is; `false` disables. CLI: `--sweep 1024,1366`, `--no-sweep`. |
+| `sweepBreakpoints` | `true` | With `sweep: true`, also check the two widths around each breakpoint in the page's CSS media queries (`min-width`, `max-width`, `width >= …`, in `<link media>` and `<source media>` too) and in the media queries its JS passes to `matchMedia()`: `(min-width: 1024px)` adds 1023 and 1024. Container queries are not included (they depend on the container, not the viewport). `false` keeps only the 13 widths. |
 | `stressData` | `true` | When a page fetched JSON, reload it once with every string in the API responses lengthened and re-check. CLI: `--no-stress-data`. |
 | `states` | `[]` | UI states that don't render on load: `[{ name, page?, click?, hover?, fill?, press?, waitFor?, delay?, mock?, run? }]`. Each is checked like a page. |
 | `mock` | `{}` | Serve these API responses instead of the real ones: `{ "**/api/orders*": "fixtures/orders.json" }`, `{ status, json }`, or the data itself. |
@@ -49,13 +50,15 @@ Most layout bugs show up with content nobody had on screen during development: a
 
 | Check | What changes | Reported as |
 |---|---|---|
-| Responsive sweep | Width set to 320, 360, 414, 480, 600, 720, 900, 1024, 1100, 1366, 1440, 1536, 1920 px; layout rules re-run at each | The normal rule (error/warn), labelled `@1024px`, with its own screenshot |
+| Responsive sweep | Width set to 320, 360, 414, 480, 600, 720, 900, 1024, 1100, 1366, 1440, 1536, 1920 px and to both sides of each breakpoint the page uses (`max-width: 900px` → 900 and 901); layout rules re-run at each | The normal rule (error/warn), labelled `@1024px`, with its own screenshot (unless all its errors are already on an earlier one) |
 | `longer` | Every text node gets `stress`× more words | `fragile-layout` (warn) |
 | `long-words` | Emails, URLs, domains and IDs become 36+ character unbreakable tokens | `fragile-layout` (warn) |
 | `big-numbers` | Numbers (KPIs, prices, counters) get three more digits, `12,400` → `12,400,000` | `fragile-layout` (warn) |
 | `declared` | Elements with `data-renderlint-sample` / `data-renderlint-maxlength` get that content | `fragile-layout` (**error**: you declared it can happen) |
 | Data stress | The page is reloaded with longer strings in every JSON response from `fetch`/XHR (names, titles, emails; ids, enums, URLs and dates are left alone) | `fragile-layout` (warn) |
 | `states` / `mock` | Clicks, hovers, form input, or substituted API responses before checking | All rules, on a page labelled `path [state: name]` |
+
+In dark mode the stress passes (not the sweep, which runs in light mode only) are skipped when they provably can't find anything new: every `prefers-color-scheme` rule only sets colors, backgrounds, shadows, outlines or custom properties holding colors, and the page has the same DOM, boxes and color opacities as in light mode. The light-mode `fragile-layout` findings are then reported for dark mode too.
 
 ### Declare your worst case
 

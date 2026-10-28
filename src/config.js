@@ -25,6 +25,7 @@ export const DEFAULTS = {
   reducedMotion: true,
   stress: 1.5,             // re-check with 50% longer text, long unbreakable words and declared samples (fragile-layout); false to disable
   sweep: true,             // also check these widths between the main viewports (layout rules only); false to disable
+  sweepBreakpoints: true,  // with sweep: true, also check both sides of every width breakpoint the page uses (CSS media queries, matchMedia)
   stressData: true,        // also reload pages that fetch JSON with longer API data; false to disable
   states: [],              // extra UI states to check: [{ name, page, click, hover, fill, press, waitFor, mock, run }]
   auth: null,              // signed-in pages: { login: '/login', user: '${RENDERLINT_USER}', password: '${RENDERLINT_PASSWORD}' } or { storage: { sessionStorage: { token: 'test' } } }
@@ -44,7 +45,7 @@ export const DEFAULTS = {
   delay: 0,                // extra ms to wait after load
 };
 
-export const SWEEP_WIDTHS = [320, 360, 414, 480, 600, 720, 900, 1024, 1100, 1366, 1440, 1536, 1920];
+export const SWEEP_WIDTHS = Object.freeze([320, 360, 414, 480, 600, 720, 900, 1024, 1100, 1366, 1440, 1536, 1920]);
 
 const FILES = ['renderlint.config.js', 'renderlint.config.mjs', 'renderlint.config.cjs', 'renderlint.config.json', '.renderlintrc.json', '.renderlintrc'];
 
@@ -93,7 +94,10 @@ export function normalize(c, cwd = process.cwd()) {
     if (out[k] !== undefined) out[k] = +out[k];
   }
   if (out.stress !== false && out.stress !== undefined && !(Number.isFinite(+out.stress) && +out.stress >= 1)) throw new Error(`renderlint: "stress" must be a factor >= 1 or false (got ${JSON.stringify(c.stress)})`);
-  out.sweep = out.sweep === false ? [] : out.sweep === true || out.sweep === undefined ? SWEEP_WIDTHS.slice() : (Array.isArray(out.sweep) ? out.sweep : String(out.sweep).split(',')).map(Number);
+  // sweep: true is the default list (the same array, so normalizing twice keeps it recognizable); an explicit list is used as is
+  const defaultSweep = out.sweep === true || out.sweep === undefined || out.sweep === SWEEP_WIDTHS;
+  out.sweepBreakpoints = out.sweepBreakpoints !== false && defaultSweep;
+  out.sweep = out.sweep === false ? [] : defaultSweep ? SWEEP_WIDTHS : (Array.isArray(out.sweep) ? out.sweep : String(out.sweep).split(',')).map(Number);
   if (out.sweep.some((w) => !(w >= 200 && w <= 4000))) throw new Error(`renderlint: "sweep" must be true, false or a list of widths (got ${JSON.stringify(c.sweep)})`);
   out.mock = resolveMocks(c.mock, cwd, 'mock');
   out.auth = normalizeAuth(c.auth);

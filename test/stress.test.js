@@ -66,3 +66,22 @@ test('big numbers: KPI values with three more digits', async () => {
   const res = await run('kpi.html', { sweep: false });
   assert.ok(fragile(res, 'big-numbers').length, dump(res));
 });
+
+test('responsive sweep checks both sides of the page\'s breakpoints', async () => {
+  // .kpis switches to 4 columns above 900px: the cards are narrowest at 901px.
+  const res = await run('kpi.html', { viewports: [375, 768, 1280], sweep: true });
+  assert.ok(res.issues.some((i) => i.severity === 'error' && i.viewports.includes(901)), dump(res));
+  const fixed = await run('kpi.html', { viewports: [375, 768, 1280], sweep: [1024] });
+  assert.ok(!fixed.issues.some((i) => i.viewports.includes(901)), 'an explicit list is used as is: ' + dump(fixed));
+});
+
+test('dark mode reuses the light stress findings only when the layout cannot differ', async () => {
+  const same = await run('dark-colors.html', { colorSchemes: ['light', 'dark'] });
+  const hit = fragile(same, 'long-words').find((i) => /email/.test(i.selector));
+  assert.ok(hit && hit.schemes.includes('light') && hit.schemes.includes('dark'), dump(same));
+  assert.ok(same.pages[0].runs.filter((r) => r.scheme === 'dark').every((r) => r.stressReused), JSON.stringify(same.pages[0].runs));
+  const differs = await run('dark-layout.html', { colorSchemes: ['light', 'dark'] });
+  assert.ok(differs.pages[0].runs.every((r) => !r.stressReused), JSON.stringify(differs.pages[0].runs));
+  const dark = fragile(differs, 'longer');
+  assert.ok(dark.length && dark.every((i) => i.schemes.join() === 'dark'), 'only the dark layout breaks: ' + dump(differs));
+});
