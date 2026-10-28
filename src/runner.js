@@ -321,8 +321,8 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       await page.evaluate(() => { window.scrollTo({ top: 0, behavior: 'instant' }); window.__renderlint.finishAnimations(); });
       await page.waitForTimeout(50);
       await page.evaluate(() => { window.__renderlint.finishAnimations(); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
-      const candidates = await page.evaluate(() => window.__renderlint.collectContrast());
-      const c = await measureContrast(page, candidates, { maxHeight: config.maxScreenshotHeight, level: config.contrastLevel });
+      const candidates = await page.evaluate(() => window.__renderlint.collectContrast(true));
+      const c = await measureContrast(page, candidates, { maxHeight: config.maxScreenshotHeight, level: config.contrastLevel, check: process.env.RENDERLINT_CONTRAST_CHECK });
       issues.push(...c);
     }
     lap('contrast');

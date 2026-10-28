@@ -83,13 +83,14 @@ RL.analyze = function (options) {
 
 // Contrast candidates, collected fresh (call after animations settled again,
 // since the occlusion rules scroll the page and may trigger reveal animations).
-RL.collectContrast = function () {
+RL.collectContrast = function (solid) {
   RL.resetCaches();
   const cands = RL.contrastCandidates(RL.collectText());
   window.__renderlint_cx = cands.map((c) => c.el);
+  if (solid) RL.solidBackgrounds(cands); // text on a provably flat colour needs no capture
   return cands.map((c) => ({
     idx: c.idx, rects: c.rects, color: c.color, opacity: c.opacity, fontSize: c.fontSize, fontWeight: c.fontWeight,
-    large: c.large, complex: c.complex, placeholder: c.placeholder, base: RL.issueBase(c.el),
+    large: c.large, complex: c.complex, placeholder: c.placeholder, bg: c.bg, why: c.why, base: RL.issueBase(c.el),
   }));
 };
 
