@@ -51,6 +51,13 @@ renderlint later gained a width sweep (13 widths from 320 to 1920px), more stres
 - **What the renderlint-built apps still had:** 9 errors only appear at 320 or 360px, narrower than the 375px phone viewport the agents were checking. The other 2 are `dropdown-arrow` on native selects. None of these was checkable when the sessions ran. With today's build the agent would get them in the same report as everything else.
 - **The weather baseline went from 42 to 28 errors** because the app picks a day or night theme from the current time, and the rescore ran at night. The other baselines kept their old findings exactly.
 - **Cost:** on a typical page the width sweep adds 1.5–2 seconds and the stress passes about 0.5 seconds (5.7s instead of 3.8s for the React dashboard, 11.0s instead of 8.3s for the German B2B page).
+- **Speed-up (later):** across the 22 benchmark targets a full run went from 289s to 138s wall time (0.48×) and 280s to 161s CPU, with no finding lost. The time came from:
+  - checking pages side by side and sharing checks between identical pages (a 12-page landing site: 101s → 12s);
+  - waiting for the page to go quiet instead of a fixed network-idle delay;
+  - faster screenshot encoding, and skipping screenshots that show nothing new;
+  - measuring contrast from styles where the background provably is one flat colour.
+
+  The same change sweeps both sides of each breakpoint the page uses. It found 4 more real defects, for example a price cut off at 901px just above a `max-width: 900px` breakpoint.
 
 ## What we learned
 

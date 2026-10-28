@@ -296,7 +296,7 @@ process.exit(result.ok ? 0 : 1);
 - `<canvas>` charts (Chart.js, ECharts in canvas mode) are pixels, so their labels can't be inspected. Use an SVG renderer, or rely on your chart library's own label-collision handling.
 - Pages are checked as they load. Menus, dialogs, tabs and empty or error states are only checked when you list them in `states`, and pages behind a login need [`auth`](docs/authentication.md).
 - Contrast follows WCAG 2 AA math. It doesn't model font weight beyond the large-text rule, and doesn't apply APCA.
-- Every sweep width and stress pass adds time: a typical page takes 5–15 seconds, of which the sweep is 1.5–2 seconds. Use `--sweep 1024` or `--no-sweep` for a faster inner loop.
+- A single page takes about 4–10 seconds at three viewports with the sweep and stress passes. A site is faster per page: pages are checked side by side, and pages that render identically (an SPA's fallback route, duplicate URLs) share their checks. Use `--sweep 1024` or `--no-sweep` for a faster inner loop.
 
 ## Development
 
