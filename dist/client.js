@@ -2275,6 +2275,9 @@ function firstLinePaints(n) {
   return v;
 }
 
+// Parent in the flat tree: slotted content paints inside the shadow tree's wrappers.
+const flatParent = (n) => n.assignedSlot || RL.parentOf(n);
+
 // Why the last candidate went to pixels (reported in RENDERLINT_CONTRAST_CHECK runs).
 let why = '';
 const no = (reason) => { why = reason; return null; };
@@ -2308,9 +2311,11 @@ function solidBackground(c, index, W) {
   const chain = new Set();
   const layers = []; // translucent backgrounds above the base, nearest the text first
   let base = null;
-  for (let n = el; n; n = RL.parentOf(n)) {
+  for (let n = el; n; n = flatParent(n)) {
     const s = RL.cs(n);
     if (effectsOf(s)) return no('effects');
+    // a defined custom element without an open shadow root may render through a closed one we can't see
+    if (n.localName.includes('-') && !n.shadowRoot && window.customElements && customElements.get(n.localName)) return no('closed-shadow');
     if (n.namespaceURI === SVG_NS && !isSvgRoot(n)) {
       // inside an <svg>: no box of its own to paint (the shapes are in the paint index)
       if (!plainTransform(s.transform)) return no('transform');
