@@ -449,6 +449,9 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (focus) {
       const f = await page.evaluate(() => window.__renderlint.focusCheck(30));
       issues.push(...f);
+      // Focusing and blurring can open things that close on a timer (a search box's
+      // results closing 120ms after blur): let them close before the next checks.
+      await page.evaluate(() => window.__rlWaitQuiet && window.__rlWaitQuiet(500, 2));
     }
     lap('focus');
 
