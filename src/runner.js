@@ -52,6 +52,110 @@ const SETTLE_SCRIPT = async ({ autoScroll }) => {
 // Hash-based routes (Angular withHashLocation, Vue/React hash routers: /#/accounts) are pages of their own.
 const hashRoute = (u) => (/^#!?\//.test(u.hash) ? u.hash : '');
 
+// Installed in every frame before the page's own scripts: tracks pending setTimeout
+// timers, so a wait can end once nothing is scheduled, and provides __rlWaitQuiet(),
+// which resolves after `frames` frames in a row with no DOM mutation, no font loading and
+// no timer due before the deadline, or at the deadline (maxMs) whatever happens.
+const READY_INIT = () => {
+  if (window.__rlWaitQuiet) return;
+  const set = window.setTimeout, clear = window.clearTimeout, clearI = window.clearInterval;
+  const pending = new Map(); // timer id -> due time
+  const same = (f, native) => { try { Object.defineProperty(f, 'toString', { value: () => native.toString(), configurable: true, writable: true }); } catch (e) { /* ignore */ } return f; };
+  window.setTimeout = same(function setTimeout(fn, ms, ...args) {
+    if (typeof fn !== 'function') return set.apply(window, arguments);
+    const id = set.call(window, function () { pending.delete(id); return fn.apply(this, arguments); }, ms, ...args);
+    pending.set(id, performance.now() + (Number(ms) || 0));
+    return id;
+  }, set);
+  window.clearTimeout = same(function clearTimeout(id) { pending.delete(id); return clear.call(window, id); }, clear);
+  window.clearInterval = same(function clearInterval(id) { pending.delete(id); return clearI.call(window, id); }, clearI);
+  window.__rlWaitQuiet = (maxMs, frames) => new Promise((resolve) => {
+    const t0 = performance.now(), deadline = t0 + maxMs;
+    let quiet = 0, done = false;
+    const mo = new MutationObserver(() => { quiet = -1; });
+    mo.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+    const finish = () => { if (done) return; done = true; mo.disconnect(); resolve(Math.round(performance.now() - t0)); };
+    set.call(window, finish, maxMs);
+    const tick = () => {
+      if (done) return;
+      quiet++;
+      let busy = document.fonts && document.fonts.status === 'loading';
+      if (!busy) for (const due of pending.values()) if (due <= deadline) { busy = true; break; }
+      if (quiet >= frames && !busy) finish(); else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+};
+
+// Waits until the page is ready, instead of networkidle's fixed 500ms: no request in
+// flight (one open for over 2s is a long-poll or a stream and doesn't count) and none for
+// 100ms, then __rlWaitQuiet() in the page (timers due within 500ms, DOM changes, fonts);
+// again if the page made requests meanwhile. At most maxMs.
+async function waitReady(page, net, maxMs) {
+  const end = Date.now() + maxMs;
+  const busy = () => { const now = Date.now(); for (const t of net.inflight.values()) if (now - t < 2000) return true; return now - net.last < 100; };
+  while (Date.now() < end) {
+    while (busy() && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
+    const mark = net.count, left = end - Date.now();
+    if (left <= 0) return;
+    const ok = await page.evaluate((ms) => (window.__rlWaitQuiet ? window.__rlWaitQuiet(ms, 3) : null), Math.min(left, 500)).catch(() => null);
+    if (ok === null) { await page.waitForLoadState('networkidle', { timeout: Math.max(1, end - Date.now()) }).catch(() => {}); return; }
+    if (net.count === mark && !busy()) return;
+  }
+}
+
+function trackNetwork(page) {
+  const net = { inflight: new Map(), last: Date.now(), count: 0 };
+  page.on('request', (r) => { if (/^(eventsource|websocket)$/.test(r.resourceType())) return; net.inflight.set(r, Date.now()); net.count++; net.last = Date.now(); });
+  const done = (r) => { if (net.inflight.delete(r)) net.last = Date.now(); };
+  page.on('requestfinished', done); page.on('requestfailed', done);
+  return net;
+}
+
+// Writes a PNG screenshot of clip (page coordinates, beyond the viewport if needed) through
+// CDP with optimizeForSpeed: about a third cheaper to encode than Playwright's screenshot().
+// Prepares the page as screenshot({ animations: 'disabled', caret: 'hide' }) does.
+async function writeShot(page, path, clip) {
+  let cdp;
+  try {
+    cdp = await page.context().newCDPSession(page);
+    const touch = await page.evaluate(() => {
+      // as Playwright does: finish finite animations, cancel infinite ones (played again after),
+      // also those that start during the capture
+      const resume = new Set();
+      const handle = () => {
+        for (const a of document.getAnimations ? document.getAnimations() : []) {
+          if (!a.effect || a.playbackRate === 0 || resume.has(a)) continue;
+          try { if (Number.isFinite(a.effect.getComputedTiming().endTime)) a.finish(); else { a.cancel(); resume.add(a); } } catch (e) { /* ignore */ }
+        }
+      };
+      handle();
+      document.addEventListener('transitionrun', handle); document.addEventListener('animationstart', handle);
+      const st = document.createElement('style');
+      st.textContent = '*:not(#__renderlint_overlay){caret-color:transparent !important}';
+      document.documentElement.appendChild(st);
+      window.__rlShotCleanup = () => {
+        document.removeEventListener('transitionrun', handle); document.removeEventListener('animationstart', handle);
+        st.remove();
+        for (const a of resume) { try { a.play(); } catch (e) { /* ignore */ } }
+      };
+      return navigator.maxTouchPoints > 0;
+    });
+    try {
+      const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', clip: { ...clip, scale: 1 }, captureBeyondViewport: true, optimizeForSpeed: true });
+      writeFileSync(path, Buffer.from(data, 'base64'));
+    } finally {
+      // capturing beyond the viewport resets touch emulation (Playwright re-enables it too)
+      if (touch) await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true }).catch(() => {});
+      await page.evaluate(() => window.__rlShotCleanup && window.__rlShotCleanup()).catch(() => {});
+    }
+  } catch {
+    await page.screenshot({ path, clip, fullPage: true, animations: 'disabled', caret: 'hide' });
+  } finally {
+    if (cdp) await cdp.detach().catch(() => {});
+  }
+}
+
 function slugFor(url) {
   const u = new URL(url);
   const s = (u.pathname.replace(/\/+$/, '') || '/index').replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'index';
@@ -109,6 +213,9 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   const pages = [];
 
   let darkSeen = false;
+  // Findings already marked on a written screenshot. The report points each finding to its
+  // first screenshot, so a later one is written only when it marks something new.
+  const marked = new Set();
   const states = (config.states || []).map((st) => ({ ...st, url: st.page ? new URL(st.page, urls[0]).href : urls[0] }));
   while ((queue.length && pages.length < config.maxPages) || states.length) {
     const state = queue.length && pages.length < config.maxPages ? null : states.shift();
@@ -122,13 +229,14 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
       const sweepFor = sweepAssignment(state || si > 0 ? [] : config.sweep, viewports);
       const results = await mapLimit(viewports, config.concurrency || 3, async (vp, vi) => {
         const t0 = Date.now();
-        const res = await checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, session, crawled: !state && !listed.has(normalizeUrl(url)) });
+        const res = await checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked, sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, session, crawled: !state && !listed.has(normalizeUrl(url)) });
         log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms`);
         return { vp, res, ms: Date.now() - t0 };
       });
       for (const { vp, res, ms } of results) {
         pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error });
         for (const is of res.issues) allIssues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
+        for (const is of res.issues) if (is.marker) marked.add(groupKey(is));
         if (res.error) allIssues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
         // Without "auth", the sign-in page we were sent to is a page of its own: check it under its real name.
         if (res.landed && !config.auth && !state && si === 0) {
@@ -174,6 +282,9 @@ function sweepAssignment(widths, viewports) {
   }
   return out;
 }
+
+// Findings that mergeIssues() groups together share this key.
+export const groupKey = (i) => [i.rule, i.selector || i.message, i.related ? i.related.selector : '', i.file || '', i.line || ''].join('|');
 
 const STRESSED_RULES = ['text-overflow', 'text-crowding', 'text-clipped', 'content-overflow', 'viewport-overflow', 'text-overlap', 'element-overlap'];
 
@@ -253,15 +364,17 @@ export function globMatch(pattern, str) {
   return re.test(str);
 }
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths = [], focus, log, session, crawled }) {
+async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweepWidths = [], focus, log, session, crawled }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
     hasTouch: vp.width < 1024, isMobile: false, ...(config.contextOptions || {}),
     ...(session ? { storageState: session.storageState } : {}),
   });
+  await context.addInitScript(READY_INIT);
   if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
+  const net = trackNetwork(page);
   const issues = [];
   const origin = new URL(url).origin;
   // Console errors and failed requests count only in the main pass, not while data is stressed.
@@ -317,7 +430,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       issues.push({ rule: 'page-error', severity: 'error', message: `Page responded with HTTP ${resp.status()}.` });
     }
     lap('goto');
-    await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+    await waitReady(page, net, 4000);
     lap('networkidle');
     if (config.waitFor) await page.waitForSelector(config.waitFor, { timeout: config.timeout }).catch(() => {});
     if (config.delay) await page.waitForTimeout(config.delay);
@@ -371,6 +484,9 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (focus) {
       const f = await page.evaluate(() => window.__renderlint.focusCheck(30));
       issues.push(...f);
+      // Focusing and blurring can open things that close on a timer (a search box's
+      // results closing 120ms after blur): let them close before the next checks.
+      await page.evaluate(() => window.__rlWaitQuiet && window.__rlWaitQuiet(500, 2));
     }
     lap('focus');
 
@@ -379,13 +495,16 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       const visible = issues.filter((i) => i.rect && effectiveSeverity(i, config) !== 'off');
       const errs = visible.filter((i) => effectiveSeverity(i, config) === 'error');
       const shown = errs.length ? errs : visible;
-      screenshot = join(outDir, 'screens', `${slugFor(url)}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
-      shown.forEach((i, n) => { i.marker = n + 1; });
-      await annotate(page, shown, config);
-      const h = Math.min(config.maxScreenshotHeight, meta.height);
-      await page.screenshot({ path: screenshot, clip: { x: 0, y: 0, width: meta.width, height: h }, fullPage: true, animations: 'disabled', caret: 'hide' });
-      await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+      if (shown.some((i) => !marked.has(groupKey(i)))) {
+        screenshot = join(outDir, 'screens', `${slugFor(url)}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
+        shown.forEach((i, n) => { i.marker = n + 1; });
+        await annotate(page, shown, config);
+        const clip = { x: 0, y: 0, width: meta.width, height: Math.min(config.maxScreenshotHeight, meta.height) };
+        await writeShot(page, screenshot, clip);
+        await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+      }
     }
+    const markedHere = new Set(issues.filter((i) => i.marker).map(groupKey));
     lap('screenshot');
 
     if (config.stress) {
@@ -425,23 +544,25 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       const sweepOpts = { ...analyzeOpts, rules: sweepRules, contrastCandidates: false };
       for (const w of sweepWidths) {
         await page.setViewportSize({ width: w, height: vp.height });
-        await page.waitForTimeout(150); // resize listeners, container queries, JS breakpoints
+        // resize listeners, container queries, JS breakpoints (debounced ones too)
+        // (at most the 150ms this used to wait; ends once nothing is due or changing)
+        if (await page.evaluate(() => (window.__rlWaitQuiet ? window.__rlWaitQuiet(150, 2) : null)) === null) await page.waitForTimeout(150);
         await page.evaluate(() => { window.__renderlint.finishAnimations(); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
         const r = await page.evaluate((o) => window.__renderlint.analyze(o), sweepOpts);
         const found = r.issues.map((i) => ({ ...i, sweepWidth: w, details: { ...(i.details || {}), sweep: true } }));
         const shown = found.filter((i) => i.rect && effectiveSeverity(i, config) === 'error');
-        if (config.screenshots && shown.length) {
+        if (config.screenshots && shown.length && shown.some((i) => !marked.has(groupKey(i)) && !markedHere.has(groupKey(i)))) {
           const shot = join(outDir, 'screens', `${slugFor(url)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
-          shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; });
+          shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; markedHere.add(groupKey(i)); });
           await annotate(page, shown, config);
           const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
-          await page.screenshot({ path: shot, clip: { x: 0, y: 0, width: w, height: Math.min(config.maxScreenshotHeight, h) }, fullPage: true, animations: 'disabled', caret: 'hide' });
+          const clip = { x: 0, y: 0, width: w, height: Math.min(config.maxScreenshotHeight, h) };
+          await writeShot(page, shot, clip);
           await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
         }
         issues.push(...found);
       }
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.waitForTimeout(100);
       lap('sweep');
     }
 
@@ -465,7 +586,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
         try {
           await ensureRoutes();
           await page.reload({ waitUntil: 'load', timeout: config.timeout });
-          await page.waitForLoadState('networkidle', { timeout: 4000 }).catch(() => {});
+          await waitReady(page, net, 4000);
           if (config.waitFor) await page.waitForSelector(config.waitFor, { timeout: config.timeout }).catch(() => {});
           if (config.delay) await page.waitForTimeout(config.delay);
           await page.evaluate(SETTLE_SCRIPT, { autoScroll: config.autoScroll });

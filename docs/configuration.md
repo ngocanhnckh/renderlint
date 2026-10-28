@@ -28,7 +28,7 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `minTapTarget` | `24` | Minimum target size in px (WCAG 2.5.8). |
 | `minFontSize` | `12` | Minimum font size in px. |
 | `maxLineLength` | `120` | Max average characters per line for paragraphs. |
-| `screenshots` | `true` | Write annotated screenshots to `.renderlint/screens/`. |
+| `screenshots` | `true` | Write annotated screenshots to `.renderlint/screens/`. Each finding links to the first screenshot that marks it, so a viewport, sweep width or dark-mode run whose marked findings all appear on an earlier screenshot writes none. |
 | `outputDir` | `".renderlint"` | Where reports and screenshots go (CLI: `--out <dir>`). |
 | `concurrency` | `3` | Viewports checked in parallel. |
 | `autoScroll` | `true` | Scroll through the page first (lazy content, reveal animations). |
