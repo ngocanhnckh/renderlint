@@ -1,0 +1,21 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Home</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:sans-serif;margin:0;padding:16px;color:#18181b;background:#fff}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{border:1px solid #d4d4d8;border-radius:16px;padding:20px;overflow:hidden}
+.kpi .v{font-size:48px;font-weight:700;line-height:1.1;white-space:nowrap}
+.contact{width:240px;border:1px solid #d4d4d8;padding:8px}
+</style></head><body>
+<!-- /a and /b are served this same file (SPA fallback): they render exactly like this page. -->
+<nav><a href="/a">Page A</a> <a href="/b">Page B</a> <a href="/post-1.html">First post</a></nav>
+<!-- Fits at 1280px; at 1024px the 4-column grid squeezes the cards (sweep). -->
+<div class="kpis">
+  <div class="kpi"><div class="v">$4,939.27</div><div>Spend</div></div>
+  <div class="kpi"><div class="v">288/289</div><div>Jobs done</div></div>
+  <div class="kpi"><div class="v">43.3M</div><div>Tokens</div></div>
+  <div class="kpi"><div class="v">0.88/h</div><div>Throughput</div></div>
+</div>
+<p class="contact">Mail <span class="email">ops@acme.io</span></p>
+</body></html>

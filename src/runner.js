@@ -1,6 +1,6 @@
 // Drives a headless browser over pages × viewports × color schemes and
 // collects issues from the in-page analyzer plus screenshot-based checks.
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
@@ -156,6 +156,48 @@ async function writeShot(page, path, clip) {
   }
 }
 
+
+// What a page renders, as a hash: the DOM with its text and form values (open shadow roots too), every
+// element's box, the canvases' pixels and the resources it loaded (relative URLs resolve per page, so they are
+// part of it). Two pages with the same fingerprint lay out the same at every width. null: not comparable.
+// With `template`, also the page's skeleton: tags and classes, without text, runs of alike siblings counted once.
+const FINGERPRINT_SCRIPT = ({ template }) => {
+  const parts = [innerWidth, innerHeight, scrollX, scrollY, document.documentElement.scrollWidth, document.documentElement.scrollHeight, document.documentElement.outerHTML];
+  const res = performance.getEntriesByType('resource');
+  if (res.length >= 5000) return null; // the buffer filled up: the list is incomplete
+  // (the browser fetches /favicon.ico on its own, sometimes after the check started)
+  parts.push(Array.from(new Set(res.map((e) => e.name).filter((n) => !/\/favicon\.ico(\?|$)/.test(n)))).sort().join(' '));
+  let canvases = 0;
+  const walk = (root) => {
+    for (const el of root.querySelectorAll('*')) {
+      const r = el.getBoundingClientRect();
+      parts.push(`${r.x},${r.y},${r.width},${r.height}`);
+      if ('value' in el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) parts.push(el.value, el.checked);
+      if (el.tagName === 'CANVAS') {
+        if (++canvases > 20) throw new Error('too many canvases');
+        parts.push(el.toDataURL()); // throws when tainted: not comparable
+      }
+      if (el.shadowRoot) { parts.push(el.shadowRoot.innerHTML); walk(el.shadowRoot); }
+    }
+  };
+  const hash = (all, seed) => {
+    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for (let i = 0; i < all.length; i++) { const c = all.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36);
+  };
+  const id = (s) => s.length + ':' + hash(s, 1) + hash(s, 2);
+  const shape = (el) => {
+    const kids = [];
+    for (const c of el.children) { const k = shape(c); if (kids[kids.length - 1] !== k) kids.push(k); }
+    return el.tagName + (el.classList.length ? '.' + Array.from(el.classList).sort().join('.') : '') + (kids.length ? '[' + kids.join(',') + ']' : '');
+  };
+  let fp = null;
+  try { walk(document); fp = id(parts.join('\n')); } catch { /* not comparable */ }
+  return { fp, skeleton: template && document.body ? id(shape(document.body)) : null };
+};
+
 function slugFor(url) {
   const u = new URL(url);
   const s = (u.pathname.replace(/\/+$/, '') || '/index').replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'index';
@@ -209,63 +251,119 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   const visited = new Set(queue.map(normalizeUrl));
   const groups = new Map(); // WordPress: crawled pages per template kind
   const origin = new URL(urls[0]).origin;
-  const allIssues = [];
   const pages = [];
 
+  // Every page × color scheme × viewport is one browser context; `concurrency` of them run at once, across
+  // pages: the next page starts as soon as its URL is known, while earlier pages are still in their slower passes.
+  // Links are taken from each page's first analysis, in the same order as a page-by-page crawl, so the same pages are checked.
+  const slot = limiter(config.concurrency || 3);
+  const reps = config.dedupe === false ? null : new Map(); // rendering fingerprint → the run whose later passes are shared
+  // dedupe: "template": per viewport, each page's skeleton hash (in crawl order), so the representative is always the first page
+  const skeletons = config.dedupe === 'template' ? viewports.map(() => []) : null;
   let darkSeen = false;
   // Findings already marked on a written screenshot. The report points each finding to its
   // first screenshot, so a later one is written only when it marks something new.
   const marked = new Set();
-  const states = (config.states || []).map((st) => ({ ...st, url: st.page ? new URL(st.page, urls[0]).href : urls[0] }));
-  while ((queue.length && pages.length < config.maxPages) || states.length) {
-    const state = queue.length && pages.length < config.maxPages ? null : states.shift();
-    const url = state ? state.url : queue.shift();
+  const startPage = (url, state) => {
     const pageInfo = { url, path: pathOf(url, origin) + (state ? ` [state: ${state.name}]` : ''), runs: [] };
+    const k = pages.length;
     pages.push(pageInfo);
-    let schemes = config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
-    for (let si = 0; si < schemes.length; si++) {
+    const decisions = viewports.map(() => deferred());
+    if (skeletons && !state) skeletons.forEach((list) => { list[k] = deferred(); });
+    const template = (vi, si) => (!skeletons || state ? null : si > 0 ? { decision: decisions[vi] } : {
+      decision: decisions[vi], publish: skeletons[vi][k].resolve,
+      decide: async (h) => { for (let j = 0; j < k; j++) if (skeletons[vi][j] && await skeletons[vi][j].promise === h) return pages[j].path; return null; },
+    });
+    const schemes = config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
+    const metas = viewports.map(() => deferred()); // first scheme's analysis meta per viewport (null on error)
+    const runs = [];
+    const startScheme = (si) => {
       const scheme = schemes[si];
-      // viewports run concurrently in separate browser contexts
       const sweepFor = sweepAssignment(state || si > 0 ? [] : config.sweep, viewports);
-      const results = await mapLimit(viewports, config.concurrency || 3, async (vp, vi) => {
+      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log,
+        reps: dedupe && reps && !state ? reps : null, template: template(vi, si),
+        onMeta: si === 0 ? (m) => {
+          metas[vi].resolve(m);
+          // dark mode starts as soon as the first light run has seen dark-mode CSS
+          if (config.colorSchemes === 'auto' && m.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; startScheme(schemes.length - 1); }
+        } : null });
+      runs[si] = viewports.map((vp, vi) => slot(async () => {
         const t0 = Date.now();
-        const res = await checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked, sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, session, crawled: !state && !listed.has(normalizeUrl(url)) });
-        log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms`);
-        return { vp, res, ms: Date.now() - t0 };
-      });
-      for (const { vp, res, ms } of results) {
-        pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error });
-        for (const is of res.issues) allIssues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
-        for (const is of res.issues) if (is.marker) marked.add(groupKey(is));
-        if (res.error) allIssues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
-        // Without "auth", the sign-in page we were sent to is a page of its own: check it under its real name.
-        if (res.landed && !config.auth && !state && si === 0) {
-          const key = normalizeUrl(res.landed);
-          if (!visited.has(key)) { visited.add(key); queue.unshift(res.landed); }
-        }
-        if (config.colorSchemes === 'auto' && scheme === 'light' && res.meta && res.meta.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; }
-        if (config.crawl && !state && res.meta && si === 0) {
-          for (const link of res.meta.links) {
-            let u;
-            try { u = new URL(link); } catch { continue; }
-            if (u.origin !== origin || NAV_SKIP.test(u.pathname) || LOGOUT.test(u.pathname + u.hash)) continue;
-            if (config.auth && LOGIN_PATH.test(u.pathname + hashRoute(u))) continue; // signed in: the login page only redirects
-            u.hash = hashRoute(u);
-            const key = normalizeUrl(u.href);
-            if (visited.has(key)) continue;
-            if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
-            if (res.meta.platform && res.meta.platform.wordpress) {
-              if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
-              const g = wpGroup(u);
-              if (g && (groups.set(g, (groups.get(g) || 0) + 1).get(g)) > 2) continue;
-            }
-            visited.add(key);
-            queue.push(u.href);
+        const res = await checkOne(browser, url, opts(vp, vi, true)).then((r) => {
+          // Without "auth", the sign-in page we were sent to is a page of its own: check it under its real name.
+          if (r.landed && !config.auth && !state && si === 0) {
+            const key = normalizeUrl(r.landed);
+            if (!visited.has(key)) { visited.add(key); queue.push(r.landed); }
           }
+          return r;
+        }).finally(() => {
+          // never leave the crawl or later pages waiting on a run that failed outright
+          if (si > 0) return;
+          metas[vi].resolve(null);
+          if (skeletons && !state) { skeletons[vi][k].resolve(null); decisions[vi].resolve(null); }
+        });
+        log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms${res.reuse ? ' (renders like ' + res.reuse.path + ': later passes shared)' : res.templateOf ? ' (same template as ' + res.templateOf + ': base checks only)' : ''}`);
+        return { vp, res, ms: Date.now() - t0 };
+      }).then(async (r) => {
+        if (!r.res.reuse) return r;
+        // The stress, sweep and data passes of an identical rendering found what they would find here.
+        const shared = await r.res.reuse.rest;
+        if (!shared || shared.error) return slot(async () => ({ vp, res: await checkOne(browser, url, opts(vp, vi, false)), ms: r.ms }));
+        r.res.issues.push(...shared.issues.map(cloneIssue));
+        return r;
+      }));
+      for (const r of runs[si]) r.catch(() => {}); // rethrown by pageInfo.done
+    };
+    for (let si = 0; si < schemes.length; si++) startScheme(si);
+    pageInfo.done = (async () => {
+      const results = [];
+      for (let si = 0; si < schemes.length; si++) results.push(await Promise.all(runs[si])); // a scheme added meanwhile has started already
+      const issues = [];
+      for (let si = 0; si < schemes.length; si++) {
+        const scheme = schemes[si];
+        for (const { vp, res, ms } of results[si]) {
+          pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}) });
+          for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
+          if (res.error) issues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
         }
       }
+      return issues;
+    })();
+    pageInfo.done.catch(() => {});
+    return metas;
+  };
+
+  const metasOf = [];
+  for (let k = 0; ; k++) {
+    while (queue.length && pages.length < config.maxPages) metasOf.push(startPage(queue.shift(), null));
+    if (k >= metasOf.length) break;
+    for (const d of metasOf[k]) {
+      const meta = await d.promise;
+      if (!config.crawl || !meta) continue;
+      for (const link of meta.links) {
+        let u;
+        try { u = new URL(link); } catch { continue; }
+        if (u.origin !== origin || NAV_SKIP.test(u.pathname) || LOGOUT.test(u.pathname + u.hash)) continue;
+        if (config.auth && LOGIN_PATH.test(u.pathname + hashRoute(u))) continue; // signed in: the login page only redirects
+        u.hash = hashRoute(u);
+        const key = normalizeUrl(u.href);
+        if (visited.has(key)) continue;
+        if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
+        if (meta.platform && meta.platform.wordpress) {
+          if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
+          const g = wpGroup(u);
+          if (g && (groups.set(g, (groups.get(g) || 0) + 1).get(g)) > 2) continue;
+        }
+        visited.add(key);
+        queue.push(u.href);
+      }
+      if (queue.length && pages.length < config.maxPages) metasOf.push(startPage(queue.shift(), null));
     }
   }
+  // UI states: once every page's light-mode analysis is in (it decides whether they get dark mode too).
+  for (const st of config.states || []) startPage(st.page ? new URL(st.page, urls[0]).href : urls[0], st);
+  const allIssues = [];
+  for (const p of pages) { allIssues.push(...await p.done); delete p.done; }
   return { issues: allIssues, pages };
 }
 
@@ -347,14 +445,27 @@ function ignoreSelectorsFor(sel) {
   return out;
 }
 
-async function mapLimit(items, limit, fn) {
-  const out = new Array(items.length);
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) { const i = next++; out[i] = await fn(items[i], i); }
-  }));
-  return out;
+// Runs at most n tasks at once, in the order they were queued.
+function limiter(n) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    if (active >= n || !queue.length) return;
+    active++;
+    const [fn, resolve, reject] = queue.shift();
+    Promise.resolve().then(fn).then(resolve, reject).finally(() => { active--; next(); });
+  };
+  return (fn) => new Promise((resolve, reject) => { queue.push([fn, resolve, reject]); next(); });
 }
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => { resolve = r; });
+  return { promise, resolve };
+}
+
+// Copies a finding for another run; its screenshot marker belongs to the run that found it.
+const cloneIssue = (i) => { const c = JSON.parse(JSON.stringify(i)); if (!c.sweepWidth) delete c.marker; return c; };
 
 // /about/, /about and /about/index.html are the same page.
 function normalizeUrl(u) { try { const x = new URL(u); x.hash = hashRoute(x).replace(/\/$/, ''); x.pathname = x.pathname.replace(/\/index\.html?$/, '/'); return x.href.replace(/\/$/, ''); } catch { return u; } }
@@ -364,7 +475,7 @@ export function globMatch(pattern, str) {
   return re.test(str);
 }
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweepWidths = [], focus, log, session, crawled }) {
+async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweepWidths = [], focus, log, session, crawled, reps, onMeta, template }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -375,6 +486,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
   const net = trackNetwork(page);
+  if (reps) await page.addInitScript(() => { try { performance.setResourceTimingBufferSize(5000); } catch { /* old browser */ } });
   const issues = [];
   const origin = new URL(url).origin;
   // Console errors and failed requests count only in the main pass, not while data is stressed.
@@ -416,6 +528,8 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   });
 
   let meta, screenshot, error;
+  let mine = null, dupOf = null; // this run shares its later passes (mine), or uses those of an identical rendering (dupOf)
+  let templateOf = null; // dedupe: "template": the earlier page with the same skeleton, whose stress and sweep stand for this one
   const T = { t: Date.now() };
   const lap = (name) => { if (process.env.RENDERLINT_DEBUG) { const n = Date.now(); log(`    [${vp.width}] ${name}: ${n - T.t}ms`); T.t = n; } };
   try {
@@ -455,6 +569,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     await page.evaluate(source);
     const res = await page.evaluate((o) => window.__renderlint.analyze(o), { ...analyzeOpts, contrastCandidates: false });
     meta = res.meta;
+    if (onMeta) onMeta(meta);
     for (const e of res.errors) log('  analyzer error: ' + e);
     lap('analyze');
     issues.push(...res.issues);
@@ -464,22 +579,43 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (dead.length) await confirmDeadLinks(page, dead, issues);
     lap('deadlinks');
 
-    if (analyzeOpts.contrastCandidates) {
+    if (analyzeOpts.contrastCandidates || reps) {
       // the occlusion rules scroll the page, which can start reveal animations: settle again first
       await page.evaluate(() => { window.scrollTo({ top: 0, behavior: 'instant' }); window.__renderlint.finishAnimations(); });
       await page.waitForTimeout(50);
       await page.evaluate(() => { window.__renderlint.finishAnimations(); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
+    }
+    // A page that renders exactly like one checked before (same DOM, text, boxes and resources: SPA fallbacks,
+    // duplicate URLs) gets the same contrast, stress, sweep and data findings: they are computed once.
+    const { fp, skeleton } = reps ? await page.evaluate(FINGERPRINT_SCRIPT, { template: !!template }).catch(() => ({})) : {};
+    if (template) {
+      // Opt-in (dedupe: "template"): a page built like an earlier one runs only the base checks.
+      if (template.publish) { template.publish(skeleton || null); templateOf = skeleton ? await template.decide(skeleton) : null; template.decision.resolve(templateOf); }
+      else templateOf = await template.decision.promise;
+      if (templateOf) lap('template of ' + templateOf);
+    }
+    if (fp) {
+      const key = [vp.width, vp.height, scheme, focus ? 'f' : '', sweepWidths.join(), fp].join('|');
+      const other = reps.get(key);
+      if (!other) reps.set(key, (mine = { path: new URL(url).pathname + new URL(url).search, base: deferred(), rest: deferred() }));
+      else if ((dupOf = await other.base.promise)) { dupOf.path = other.path; dupOf.rest = other.rest.promise; issues.push(...dupOf.extra.map(cloneIssue)); }
+      lap('fingerprint' + (dupOf ? ' (renders like ' + dupOf.path + ')' : ''));
+    }
+    const iExtra = issues.length;
+
+    if (analyzeOpts.contrastCandidates && !dupOf) {
       const candidates = await page.evaluate(() => window.__renderlint.collectContrast(true));
       const c = await measureContrast(page, candidates, { maxHeight: config.maxScreenshotHeight, level: config.contrastLevel, check: process.env.RENDERLINT_CONTRAST_CHECK });
       issues.push(...c);
     }
     lap('contrast');
 
-    if (config.rules['dropdown-arrow'] !== 'off') {
+    if (config.rules['dropdown-arrow'] !== 'off' && !dupOf) {
       const cands = await page.evaluate(() => window.__renderlint.dropdownCandidates());
       if (cands.length) issues.push(...await measureDropdowns(page, cands));
     }
     lap('dropdowns');
+    const extra = issues.slice(iExtra);
 
     if (focus) {
       const f = await page.evaluate(() => window.__renderlint.focusCheck(30));
@@ -498,16 +634,25 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       if (shown.some((i) => !marked.has(groupKey(i)))) {
         screenshot = join(outDir, 'screens', `${slugFor(url)}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
         shown.forEach((i, n) => { i.marker = n + 1; });
-        await annotate(page, shown, config);
-        const clip = { x: 0, y: 0, width: meta.width, height: Math.min(config.maxScreenshotHeight, meta.height) };
-        await writeShot(page, screenshot, clip);
-        await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+        const shownSig = JSON.stringify(shown.map((i) => [i.rule, i.selector, i.message, i.rect, i.related && i.related.rect]));
+        if (dupOf && dupOf.screenshot && dupOf.shownSig === shownSig) copyFileSync(dupOf.screenshot, screenshot);
+        else {
+          await annotate(page, shown, config);
+          const clip = { x: 0, y: 0, width: meta.width, height: Math.min(config.maxScreenshotHeight, meta.height) };
+          await writeShot(page, screenshot, clip);
+          await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+        }
+        for (const i of shown) marked.add(groupKey(i));
+        if (mine) mine.base.resolve({ extra: extra.map(cloneIssue), shownSig, screenshot });
       }
     }
+    if (mine) mine.base.resolve({ extra: extra.map(cloneIssue) });
     const markedHere = new Set(issues.filter((i) => i.marker).map(groupKey));
     lap('screenshot');
+    const iRest = issues.length;
+    if (dupOf) return { issues, meta, screenshot, reuse: { path: dupOf.path, rest: dupOf.rest } };
 
-    if (config.stress) {
+    if (config.stress && !templateOf) {
       const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
       const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
       const known = new Set(issues.map((i) => i.rule + '|' + i.selector));
@@ -539,7 +684,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
 
     // Responsive sweep: layouts often fit at the tested widths and break in between
     // (1100px, 1366px…). Resize in place and re-run the layout rules at each width.
-    if (sweepWidths.length) {
+    if (sweepWidths.length && !templateOf) {
       const sweepRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) && config.rules[k] !== 'off' ? (config.rules[k] || RULES[k].severity) : 'off']));
       const sweepOpts = { ...analyzeOpts, rules: sweepRules, contrastCandidates: false };
       for (const w of sweepWidths) {
@@ -553,7 +698,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
         const shown = found.filter((i) => i.rect && effectiveSeverity(i, config) === 'error');
         if (config.screenshots && shown.length && shown.some((i) => !marked.has(groupKey(i)) && !markedHere.has(groupKey(i)))) {
           const shot = join(outDir, 'screens', `${slugFor(url)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
-          shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; markedHere.add(groupKey(i)); });
+          shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; markedHere.add(groupKey(i)); marked.add(groupKey(i)); });
           await annotate(page, shown, config);
           const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
           const clip = { x: 0, y: 0, width: w, height: Math.min(config.maxScreenshotHeight, h) };
@@ -566,7 +711,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       lap('sweep');
     }
 
-    if (config.stress) {
+    if (config.stress && !templateOf) {
       const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
       const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
       const known = new Set(issues.filter((i) => !i.sweepWidth).map((i) => i.rule + '|' + i.selector));
@@ -601,12 +746,15 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
         lap('data-stress');
       }
     }
+    if (mine) mine.rest.resolve({ issues: issues.slice(iRest).map(cloneIssue) });
   } catch (e) {
     error = String(e && e.message || e).split('\n')[0];
   } finally {
+    if (mine) { mine.base.resolve(null); mine.rest.resolve({ error: error || 'failed' }); }
+    if (template && template.publish) { template.publish(null); template.decision.resolve(null); }
     await context.close().catch(() => {});
   }
-  return { issues, meta, screenshot, error };
+  return { issues, meta, screenshot, error, templateOf };
 }
 
 async function confirmDeadLinks(page, dead, issues) {

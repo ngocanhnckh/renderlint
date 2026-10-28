@@ -30,6 +30,8 @@ Options
   --stress [factor]      longer-text stress factor (default 1.5); --no-stress to disable
   --sweep 1024,1366      extra widths to check between the viewports (default: 13 widths, 320–1920); --no-sweep to disable
   --no-stress-data       don't reload pages with longer API data
+  --concurrency <n>      browser contexts (page × viewport × color scheme) checked at once
+  --dedupe template|off  share checks between pages that render alike (default: identical renderings only)
   --fail-on error|warn|never
   --format pretty|json|md|github
   --no-screenshots       skip annotated screenshots
@@ -67,7 +69,7 @@ export async function main(argv) {
       rules: { type: 'string' }, stress: { type: 'string' }, 'fail-on': { type: 'string' }, format: { type: 'string' }, json: { type: 'boolean' },
       'no-screenshots': { type: 'boolean' }, 'no-stress': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' }, out: { type: 'string' },
-      sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' },
+      sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' },
   };
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options });
   const unknown = Object.keys(values).filter((k) => !(k in options));
@@ -90,6 +92,7 @@ export async function main(argv) {
     colorSchemes: values.dark && values.light ? ['light', 'dark'] : values.dark ? ['light', 'dark'] : values.light ? ['light'] : undefined,
     failOn: values['fail-on'], screenshots: values['no-screenshots'] ? false : undefined, outputDir: values.out,
     sweep: values['no-sweep'] ? false : values.sweep, stressData: values['no-stress-data'] ? false : undefined,
+    concurrency: values.concurrency ? +values.concurrency : undefined, dedupe: values.dedupe,
   };
   const format = values.json ? 'json' : values.format || 'pretty';
   const quiet = values.quiet || format !== 'pretty';

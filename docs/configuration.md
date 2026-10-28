@@ -30,7 +30,8 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `maxLineLength` | `120` | Max average characters per line for paragraphs. |
 | `screenshots` | `true` | Write annotated screenshots to `.renderlint/screens/`. Each finding links to the first screenshot that marks it, so a viewport, sweep width or dark-mode run whose marked findings all appear on an earlier screenshot writes none. |
 | `outputDir` | `".renderlint"` | Where reports and screenshots go (CLI: `--out <dir>`). |
-| `concurrency` | `3` | Viewports checked in parallel. |
+| `concurrency` | 3–6 | Browser contexts checked in parallel: each page × viewport × color scheme is one. Default: half the CPU cores, at least 3 and at most 6. Pages overlap: the next page starts while earlier ones are still in their stress and sweep passes. CLI: `--concurrency`. |
+| `dedupe` | `true` | A page that renders exactly like one checked before (same DOM, text, form values, element boxes, canvas pixels and loaded resources, at the same viewport and color scheme: SPA fallbacks, `/` and `/index.html`, duplicate URLs) gets the first page's contrast, dropdown, stress, sweep and data-stress findings instead of running those checks again; its own load, analysis, focus check and screenshot still run. `"template"` also checks pages that share an earlier page's skeleton (tags and classes, ignoring text and the number of repeated siblings: blog posts, product pages) with the base checks only, without stress, sweep or data stress: faster on large sites, but a per-page defect that only shows at a sweep width or with stressed content is then missed. `false` checks every page fully. CLI: `--dedupe template`, `--dedupe off`. |
 | `autoScroll` | `true` | Scroll through the page first (lazy content, reveal animations). |
 | `reducedMotion` | `true` | Emulate `prefers-reduced-motion: reduce`. |
 | `waitFor` | — | CSS selector to wait for before checking. |
