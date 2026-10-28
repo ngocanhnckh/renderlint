@@ -2333,6 +2333,13 @@ function solidBackground(c, index, W) {
         const box = RL.docRect(n.getBoundingClientRect());
         if (px(s.outlineOffset) < 0 || rects.some((r) => !inside(r, box) && overlaps(r, grow(box, px(s.outlineWidth) + px(s.outlineOffset) + 1)))) return no('outline-above');
       }
+      // an ancestor that clips its content cuts the background off at its padding box (rounded
+      // by its radius): beyond it, its own border or what's behind shows
+      const toViewport = isRoot || (n === body && htmlStyle.overflowX === 'visible' && htmlStyle.overflowY === 'visible');
+      if (!toViewport && (s.overflowX !== 'visible' || s.overflowY !== 'visible')) {
+        const box = RL.docRect(n.getBoundingClientRect());
+        if (rects.some((r) => !insideRounded(r, paddingBoxOf(box, s), s, box))) return no('clipped-above');
+      }
       continue;
     }
     chain.add(n);
