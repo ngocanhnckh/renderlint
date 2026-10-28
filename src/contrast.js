@@ -218,7 +218,7 @@ export async function measureContrast(page, candidates, { maxHeight, level = 'AA
     for (const c of candidates) {
       const k = c.proven ? null : c.bg ? 'layers-not-clear-pass' : c.why || (c.complex ? 'complex' : 'other');
       if (k) why[k] = (why[k] || 0) + 1;
-      if (k && process.env.RENDERLINT_CONTRAST_WHY) log.push(JSON.stringify({ fallback: k, sel: c.base.selector, w: width }));
+      if (k) log.push(JSON.stringify({ fallback: k, sel: c.base.selector, w: width }));
     }
     appendFileSync(check, log.map((l) => l + '\n').join('') + JSON.stringify({ page: page.url(), w: width, total: candidates.length, solid: candidates.filter((c) => c.proven).length, why }) + '\n');
   }

@@ -1971,8 +1971,12 @@ RL.dropdownCandidates = function () {
 // directly and only captures the page for the rest. Anything that cannot be proven goes to
 // the screenshot path: this classifier must never say "solid" when pixels would disagree.
 //
-// RL.solidBackgrounds(cands) sets cand.bg = {r, g, b} (the colour a capture of the page
-// without text would show under every sample point) on the candidates it can prove.
+// RL.solidBackgrounds(cands) sets cand.bg = {r, g, b, slack} (the colour a capture of the
+// page without text would show under every sample point) on the candidates it can prove.
+// slack > 0: the colour composites translucent layers, which the compositor rounds its own
+// way (up to ±slack per channel): it only proves that text passes, never a finding.
+// Translucent text and opacity on the text's ancestors below the background are fine: the
+// pixel path also computes the text colour from styles. Otherwise cand.why says what failed.
 
 const RGB_RE = /^rgba?\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?), (\d+(?:\.\d+)?)(?:, (\d*\.?\d+))?\)$/;
 // Only plain sRGB computed colours: oklch(), color-mix(), color() etc. go through a gamut
@@ -1985,6 +1989,15 @@ const px = (v) => parseFloat(v) || 0;
 const CONTROL_TAGS = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'METER', 'PROGRESS']);
 const REPLACED_TAGS = new Set(['IMG', 'VIDEO', 'CANVAS', 'IFRAME', 'EMBED', 'OBJECT', 'PICTURE', 'svg', 'SVG', 'AUDIO', 'MATH', 'math']);
 const BIG = 1e7;
+const SVG_SHAPES = new Set(['rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'path', 'image', 'use']);
+const SVG_TEXT = new Set(['text', 'tspan', 'textPath']);
+// The outermost <svg> (in an HTML document: the one whose parent isn't SVG).
+const isSvgRoot = (el) => el.tagName.toLowerCase() === 'svg' && !(el.parentNode && el.parentNode.namespaceURI === SVG_NS);
+function outerSvg(el) {
+  let n = el;
+  while (n && !(n.namespaceURI === SVG_NS && isSvgRoot(n))) n = n.parentNode;
+  return n;
+}
 
 function hasBorder(s) {
   for (const side of ['Top', 'Right', 'Bottom', 'Left']) {
@@ -2170,7 +2183,26 @@ function paintIndex() {
     if (s.display === 'none') continue;
     if (s.opacity === '0' || unseen.has(RL.parentOf(el))) { unseen.add(el); continue; }
     const isSvg = el.namespaceURI === SVG_NS;
-    if (isSvg && el.tagName.toLowerCase() !== 'svg') continue; // covered by the outer <svg>
+    if (isSvg && !isSvgRoot(el)) {
+      // shapes inside an <svg> (its text is hidden in the text-free capture, so isn't one)
+      if (!SVG_SHAPES.has(el.tagName) || s.visibility !== 'visible' || (s.fill === 'none' && s.stroke === 'none')) continue;
+      const box = RL.docRect(el.getBoundingClientRect());
+      if (box.w + box.h <= 0) continue; // in <defs>, <clipPath>...
+      const marker = [s.markerStart, s.markerMid, s.markerEnd].some((m) => m && m !== 'none');
+      let r = marker ? EVERYWHERE : grow(box, (s.stroke !== 'none' ? 4 * px(s.strokeWidth) : 0) + lengthsExtent(s.filter) * 3 + 1);
+      // clipped to the outer <svg> (overflow: hidden is the default for inline svg)
+      const root = el.ownerSVGElement && outerSvg(el);
+      if (root) {
+        const rs = RL.cs(root);
+        if (rs.overflow !== 'visible') {
+          const rb = RL.docRect(root.getBoundingClientRect());
+          r = { x: Math.max(r.x, rb.x - 1), y: Math.max(r.y, rb.y - 1), right: Math.min(r.right, rb.right + 1), bottom: Math.min(r.bottom, rb.bottom + 1) };
+          if (r.right <= r.x || r.bottom <= r.y) continue;
+        }
+      }
+      add(el, r, false);
+      continue;
+    }
     const box = RL.docRect(el.getBoundingClientRect());
     if (s.display !== 'contents') {
       const visible = s.visibility === 'visible';
@@ -2251,7 +2283,7 @@ const no = (reason) => { why = reason; return null; };
 function solidBackground(c, index, W) {
   const el = c.el;
   if (c.complex || !c.color) return no('complex');
-  if (el.namespaceURI === SVG_NS) return no('svg');
+  if (el.namespaceURI === SVG_NS && !SVG_TEXT.has(el.tagName)) return no('svg');
   if (CONTROL_TAGS.has(el.tagName)) {
     // native controls paint their own field/arrow; only a styled-away select is plain
     if (el.tagName === 'SELECT' && RL.cs(el).appearance !== 'none') return no('select');
@@ -2275,11 +2307,17 @@ function solidBackground(c, index, W) {
 
   const chain = new Set();
   const layers = []; // translucent backgrounds above the base, nearest the text first
-  let base = null, faded = false;
+  let base = null;
   for (let n = el; n; n = RL.parentOf(n)) {
     const s = RL.cs(n);
-    if (n.namespaceURI === SVG_NS) return no('svg-ancestor');
     if (effectsOf(s)) return no('effects');
+    if (n.namespaceURI === SVG_NS && !isSvgRoot(n)) {
+      // inside an <svg>: no box of its own to paint (the shapes are in the paint index)
+      if (!plainTransform(s.transform)) return no('transform');
+      if (s.opacity !== '' && px(s.opacity) < 1 && layers.length) return no('faded-bg');
+      chain.add(n);
+      continue;
+    }
     if (s.zIndex && s.zIndex[0] === '-') return no('z-negative');
     if (!plainTransform(s.transform)) return no('transform');
     if (/text/.test(s.backgroundClip || '') || /text/.test(s.webkitBackgroundClip || '')) return no('bg-clip-text');
@@ -2295,14 +2333,15 @@ function solidBackground(c, index, W) {
     }
     chain.add(n);
     if (!RL.isInline(n) && firstLinePaints(n)) return no('first-line');
-    if (s.opacity !== '' && px(s.opacity) < 1) faded = true; // fades what this element paints, and what's inside it
+    // opacity fades what this element paints and what's inside it: fine for the text alone
+    const faded = s.opacity !== '' && px(s.opacity) < 1;
     const bg = s.backgroundColor === 'rgba(0, 0, 0, 0)' ? { r: 0, g: 0, b: 0, a: 0 } : rgbOf(s.backgroundColor);
     if (!bg) return no('bg-format');
     if (s.backgroundImage !== 'none') return no('bg-image');
     if (s.visibility !== 'visible' && bg.a > 0) return no('bg-hidden');
     if (isCanvas) {
       // the root background paints the whole canvas, over the default (white) one
-      if (bg.a > 0 && faded) return no('canvas-faded');
+      if (faded) return no('canvas-faded');
       if (n === body && (hasBorder(s) || hasOutline(s) || s.boxShadow !== 'none')) return no('body-border');
       if (n === body && bg.a === 0) continue; // transparent <html> comes next
       if (bg.a >= 1) { base = bg; continue; }
@@ -2312,6 +2351,7 @@ function solidBackground(c, index, W) {
     }
     const border = hasBorder(s), shadow = s.boxShadow !== 'none', outline = hasOutline(s);
     const scrolls = (s.overflowX !== 'visible' || s.overflowY !== 'visible') && s.display !== 'inline';
+    if (faded && (bg.a > 0 || layers.length)) return no('faded-bg');
     if (bg.a === 0 && !border && !shadow && !outline && !scrolls) continue;
     if (/inset/.test(s.boxShadow)) return no('inset-shadow');
     if (CONTROL_TAGS.has(n.tagName) && n.tagName !== 'INPUT' && n.tagName !== 'TEXTAREA' && n.tagName !== 'BUTTON' && s.appearance !== 'none') return no('control-chain');
@@ -2344,7 +2384,6 @@ function solidBackground(c, index, W) {
       if ((shadow || outline) && !boxes.some((b) => inside(r, b)) && boxes.some((b) => overlaps(r, grow(b, extent)))) return no('shadow-near');
     }
     if (bg.a === 0) continue;
-    if (faded) return no('faded-bg');
     if (bg.a >= 1) base = bg;
     else layers.push(bg);
   }
