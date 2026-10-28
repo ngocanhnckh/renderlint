@@ -55,17 +55,18 @@ npx renderlint                              # check: exits 1 if any error is fou
 - [How it compares](#how-it-compares)
 - [Does it work?](#does-it-work)
 - [See it](#see-it)
+- [Pages behind a login](#pages-behind-a-login)
 - [WordPress and Elementor](#wordpress-and-elementor)
 - [Make it impossible to ship defects](#make-it-impossible-to-ship-defects)
 - [Intentional? Say so.](#intentional-say-so)
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
 - [Limitations](#limitations)
-- Docs: [rules](docs/rules.md) · [configuration](docs/configuration.md) · [integrations](docs/integrations.md) · [WordPress](docs/wordpress.md) · [gallery](docs/gallery.md) · [results](docs/results.md)
+- Docs: [rules](docs/rules.md) · [configuration](docs/configuration.md) · [integrations](docs/integrations.md) · [authentication](docs/authentication.md) · [WordPress](docs/wordpress.md) · [gallery](docs/gallery.md) · [results](docs/results.md)
 
 ## What it catches
 
-36 rules, tuned so that a finding is almost always a real defect.
+37 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -83,7 +84,7 @@ npx renderlint                              # check: exits 1 if any error is fou
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No viewport meta, a pointless 3px scrollbar, `href="#"` links | `missing-viewport-meta`, `accidental-scrollbar`, `dead-link` |
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
-| Hydration errors, crashes, 404s | `page-error`, `console-error`, `broken-resource` |
+| Hydration errors, crashes, 404s, pages that only showed the login form | `page-error`, `console-error`, `broken-resource`, `auth-required` |
 
 All rules, their defaults and fix guidance: [docs/rules.md](docs/rules.md). `npx renderlint explain <rule>` prints the same in the terminal.
 
@@ -171,6 +172,20 @@ npx renderlint explain contrast                 # what a rule means and how to f
 The output is plain text that agents can read. `--json`, `--format md` and `--format github` (PR annotations) are also available. Every run writes `.renderlint/report.json`, `.renderlint/report.md` and annotated screenshots to `.renderlint/screens/` (`--out <dir>` to change).
 
 It doesn't care which framework you use. If it renders in a browser, renderlint can lint it: React, Next.js, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, Solid, Qwik, Remix, WordPress, plain HTML, and anything else.
+
+## Pages behind a login
+
+Without a session, an SPA sends every inner route to `/login`. renderlint reports those pages as `auth-required` instead of quietly checking the login form in their place. To check them, give it the token your route guard reads and mock the API: the inner pages render with nothing but the dev server running, and no credentials are involved.
+
+```json
+{
+  "pages": ["/dashboard", "/accounts"],
+  "auth": { "storage": { "sessionStorage": { "acme.token": "test-token" } } },
+  "mock": { "**/api/me": { "name": "Dana" }, "**/api/accounts": "fixtures/accounts.json" }
+}
+```
+
+It can also log in through your form once (`"auth": { "login": "/login", "user": "${RENDERLINT_USER}", "password": "${RENDERLINT_PASSWORD}" }`) or run a script for SSO. Hash routes (`/#/accounts`) are crawled as pages of their own, and log-out links are never followed. See [docs/authentication.md](docs/authentication.md).
 
 ## WordPress and Elementor
 
@@ -279,7 +294,7 @@ process.exit(result.ok ? 0 : 1);
 ## Limitations
 
 - `<canvas>` charts (Chart.js, ECharts in canvas mode) are pixels, so their labels can't be inspected. Use an SVG renderer, or rely on your chart library's own label-collision handling.
-- Pages are checked as they load. Menus, dialogs, tabs and empty or error states are only checked when you list them in `states`, and pages behind login need `contextOptions.storageState` or `beforeCheck`.
+- Pages are checked as they load. Menus, dialogs, tabs and empty or error states are only checked when you list them in `states`, and pages behind a login need [`auth`](docs/authentication.md).
 - Contrast follows WCAG 2 AA math. It doesn't model font weight beyond the large-text rule, and doesn't apply APCA.
 - Every sweep width and stress pass adds time: a typical page takes 5–15 seconds, of which the sweep is 1.5–2 seconds. Use `--sweep 1024` or `--no-sweep` for a faster inner loop.
 

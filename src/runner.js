@@ -7,6 +7,7 @@ import { measureContrast } from './contrast.js';
 import { measureDropdowns } from './controls.js';
 import { RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
+import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
 
 const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -48,16 +49,22 @@ const SETTLE_SCRIPT = async ({ autoScroll }) => {
   return T.slice(1);
 };
 
+// Hash-based routes (Angular withHashLocation, Vue/React hash routers: /#/accounts) are pages of their own.
+const hashRoute = (u) => (/^#!?\//.test(u.hash) ? u.hash : '');
+
 function slugFor(url) {
   const u = new URL(url);
   const s = (u.pathname.replace(/\/+$/, '') || '/index').replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'index';
-  const name = (s + (u.search ? '-' + u.search.replace(/[^a-z0-9]+/gi, '-') : '')).slice(0, 60);
+  const extra = u.search + hashRoute(u);
+  const name = (s + (extra ? '-' + extra.replace(/[^a-z0-9]+/gi, '-') : '')).slice(0, 60);
   let h = 0;
-  for (const ch of u.pathname + u.search) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  for (const ch of u.pathname + extra) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return name + '-' + h.toString(36).slice(0, 5);
 }
 
 const NAV_SKIP = /\.(pdf|zip|png|jpe?g|gif|svg|webp|avif|mp4|webm|mp3|xml|txt|json|css|js|ico|woff2?)(\?|#|$)/i;
+// Following a log-out link would end the session every other page is checked with.
+const LOGOUT = /(^|[/#_-])(log-?out|sign-?out|signoff|logoff|end-?session)([/?#._-]|$)/i;
 // WordPress: admin, login, feeds, REST and links with side effects (log out, add to cart) are never crawled.
 const WP_SKIP = /^\/(wp-admin|wp-login\.php|wp-json|wp-content|wp-includes|xmlrpc\.php|wp-cron\.php|wp-signup\.php|wp-activate\.php)\b|\/(feed|trackback|embed)\/?$|\/comments\/feed|\/customer-logout\b/;
 const WP_SKIP_QUERY = /[?&](replytocom|feed|rest_route|add-to-cart|add_to_wishlist|remove_item|undo_item|action|share|preview|_wpnonce|wc-ajax|elementor-preview|ver)=/;
@@ -87,6 +94,13 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     minTapTarget: config.minTapTarget, minFontSize: config.minFontSize, maxLineLength: config.maxLineLength,
   };
 
+  // Signed-in pages: log in (or set the storage the app's guards read) once, reuse the session everywhere.
+  let session = null;
+  if (config.auth) {
+    const mock = config.mock || {};
+    session = await authenticate(browser, urls[0], config, { log, routePage: Object.keys(mock).length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock, stressData: false })) : null });
+  }
+  const listed = new Set(urls.map(normalizeUrl)); // pages asked for, as opposed to found by crawling
   const queue = urls.slice();
   const visited = new Set(queue.map(normalizeUrl));
   const groups = new Map(); // WordPress: crawled pages per template kind
@@ -108,7 +122,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
       const sweepFor = sweepAssignment(state || si > 0 ? [] : config.sweep, viewports);
       const results = await mapLimit(viewports, config.concurrency || 3, async (vp, vi) => {
         const t0 = Date.now();
-        const res = await checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log });
+        const res = await checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths: sweepFor.get(vp.width) || [], focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, session, crawled: !state && !listed.has(normalizeUrl(url)) });
         log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms`);
         return { vp, res, ms: Date.now() - t0 };
       });
@@ -116,13 +130,19 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
         pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error });
         for (const is of res.issues) allIssues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
         if (res.error) allIssues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
+        // Without "auth", the sign-in page we were sent to is a page of its own: check it under its real name.
+        if (res.landed && !config.auth && !state && si === 0) {
+          const key = normalizeUrl(res.landed);
+          if (!visited.has(key)) { visited.add(key); queue.unshift(res.landed); }
+        }
         if (config.colorSchemes === 'auto' && scheme === 'light' && res.meta && res.meta.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; }
         if (config.crawl && !state && res.meta && si === 0) {
           for (const link of res.meta.links) {
             let u;
             try { u = new URL(link); } catch { continue; }
-            if (u.origin !== origin || NAV_SKIP.test(u.pathname)) continue;
-            u.hash = '';
+            if (u.origin !== origin || NAV_SKIP.test(u.pathname) || LOGOUT.test(u.pathname + u.hash)) continue;
+            if (config.auth && LOGIN_PATH.test(u.pathname + hashRoute(u))) continue; // signed in: the login page only redirects
+            u.hash = hashRoute(u);
             const key = normalizeUrl(u.href);
             if (visited.has(key)) continue;
             if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
@@ -226,19 +246,21 @@ async function mapLimit(items, limit, fn) {
 }
 
 // /about/, /about and /about/index.html are the same page.
-function normalizeUrl(u) { try { const x = new URL(u); x.hash = ''; x.pathname = x.pathname.replace(/\/index\.html?$/, '/'); return x.href.replace(/\/$/, ''); } catch { return u; } }
-function pathOf(url, origin) { const u = new URL(url); return u.origin === origin ? (u.pathname + u.search) : url; }
+function normalizeUrl(u) { try { const x = new URL(u); x.hash = hashRoute(x).replace(/\/$/, ''); x.pathname = x.pathname.replace(/\/index\.html?$/, '/'); return x.href.replace(/\/$/, ''); } catch { return u; } }
+function pathOf(url, origin) { const u = new URL(url); return u.origin === origin ? (u.pathname + u.search + hashRoute(u)) : url; }
 export function globMatch(pattern, str) {
   const re = new RegExp('^' + pattern.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
   return re.test(str);
 }
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths = [], focus, log }) {
+async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, sweepWidths = [], focus, log, session, crawled }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
     hasTouch: vp.width < 1024, isMobile: false, ...(config.contextOptions || {}),
+    ...(session ? { storageState: session.storageState } : {}),
   });
+  if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
   const issues = [];
   const origin = new URL(url).origin;
@@ -302,6 +324,19 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     const st = await page.evaluate(SETTLE_SCRIPT, { autoScroll: config.autoScroll });
     if (process.env.RENDERLINT_DEBUG) log('    settle marks: ' + st.join(', '));
     lap('settle');
+    // Sent to a login page or identity provider: the page itself was never rendered, so don't lint the login form in its name.
+    const redirect = loginRedirect(url, page.url(), await page.evaluate(() => Array.from(document.querySelectorAll('input[type=password]')).some((i) => i.getClientRects().length)).catch(() => false));
+    if (redirect && config.rules['auth-required'] !== 'off') {
+      const what = new URL(url), asked = what.pathname + what.search + hashRoute(what);
+      issues.length = 0;
+      // A page found by crawling, or a site whose home page is the sign-in page, is a warning; a page you listed is an error.
+      const home = !config.auth && (what.pathname === '/' || what.pathname === '') && !hashRoute(what);
+      issues.push({ rule: 'auth-required', severity: crawled || home ? 'warn' : 'error',
+        message: `${asked} was not checked: the app sent renderlint to ${redirect.external ? 'the sign-in page at ' + redirect.to : redirect.to} instead. ` +
+          (config.auth ? 'The session from "auth" was not accepted here (expired, wrong role, or a token the guard doesn\'t read).' : 'Pages behind a login need "auth" in renderlint.config (log in once, or set the token your route guard reads and mock the API: no backend needed).'),
+        details: { redirectedTo: redirect.to, external: redirect.external } });
+      return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url() };
+    }
     if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
     if (state) await applyState(page, state, { viewport: vp, scheme });
     await page.evaluate(source);

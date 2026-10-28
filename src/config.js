@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { RULES } from './rules-meta.js';
+import { normalizeAuth } from './auth.js';
 
 export const DEFAULTS = {
   url: undefined,          // base URL of a running app
@@ -25,6 +26,7 @@ export const DEFAULTS = {
   sweep: true,             // also check these widths between the main viewports (layout rules only); false to disable
   stressData: true,        // also reload pages that fetch JSON with longer API data; false to disable
   states: [],              // extra UI states to check: [{ name, page, click, hover, fill, press, waitFor, mock, run }]
+  auth: null,              // signed-in pages: { login: '/login', user: '${RENDERLINT_USER}', password: '${RENDERLINT_PASSWORD}' } or { storage: { sessionStorage: { token: 'test' } } }
   mock: {},                // API responses to serve instead: { "**/api/orders*": "fixtures/orders.json" | { status, json } | data }
   scan: true,              // static source scan (emoji, placeholder copy) in addition to rendering
   scanDirs: undefined,
@@ -92,6 +94,7 @@ export function normalize(c, cwd = process.cwd()) {
   out.sweep = out.sweep === false ? [] : out.sweep === true || out.sweep === undefined ? SWEEP_WIDTHS.slice() : (Array.isArray(out.sweep) ? out.sweep : String(out.sweep).split(',')).map(Number);
   if (out.sweep.some((w) => !(w >= 200 && w <= 4000))) throw new Error(`renderlint: "sweep" must be true, false or a list of widths (got ${JSON.stringify(c.sweep)})`);
   out.mock = resolveMocks(c.mock, cwd, 'mock');
+  out.auth = normalizeAuth(c.auth);
   if (!Array.isArray(out.states)) throw new Error('renderlint: "states" must be an array of { name, page, click, … }');
   out.states = out.states.map((st, i) => {
     if (!st || typeof st !== 'object' || !st.name) throw new Error(`renderlint: states[${i}] needs a "name"`);

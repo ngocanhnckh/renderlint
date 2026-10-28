@@ -47,4 +47,11 @@ const crawl = await run(['/'], { crawl: true, maxPages: 20, sweep: false, stress
 const paths = crawl.pages.map((p) => p.path);
 assert.ok(!paths.some((p) => /wp-admin|wp-login|feed|replytocom|wp-json/.test(p)), paths.join(', '));
 
+// Logged-in pages: wp-admin sends anonymous visitors to wp-login.php; the default login selectors fit its form.
+const anon = await run(['/wp-admin/profile.php'], { sweep: false, stress: false });
+assert.ok(anon.issues.some((i) => i.rule === 'auth-required' && /wp-login\.php/.test(i.message)), dump(anon));
+const signedIn = await run(['/studio/', '/wp-admin/profile.php'], { sweep: false, stress: false, rules: { 'console-error': 'off' }, auth: { login: '/wp-login.php', user: 'admin', password: 'admin' } });
+assert.ok(!signedIn.issues.some((i) => i.rule === 'auth-required'), dump(signedIn));
+assert.equal(signedIn.issues.filter((i) => i.pages.includes('/studio/') && i.severity === 'error').length, 0, 'admin toolbar is ignored:\n' + dump(signedIn));
+
 console.log(`WordPress e2e passed: /studio/ clean, /beratung/ ${broken.stats.errors} errors, crawled ${paths.join(' ')}`);

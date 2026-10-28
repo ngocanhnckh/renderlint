@@ -207,6 +207,12 @@ export const RULES = {
     summary: 'The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx).',
     fix: 'Make sure the page exists and the server is running (check the URL, routes and `serve` command), then fix any server error.',
   },
+  'auth-required': {
+    severity: 'error',
+    category: 'runtime',
+    summary: 'A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself).',
+    fix: 'Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. See docs/authentication.md.',
+  },
   'console-error': {
     severity: 'error',
     category: 'runtime',

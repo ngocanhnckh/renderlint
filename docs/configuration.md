@@ -39,7 +39,8 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `serverTimeout` | `120000` | How long to wait for `serve` to come up (ms). |
 | `maxScreenshotHeight` | `12000` | Pages taller than this are only contrast-checked down to this height. |
 | `beforeCheck` | — | JS config only: `async (page, { viewport, scheme }) => {}` — log in, open a menu, set state. `page` is a Playwright page. |
-| `contextOptions` | — | Extra Playwright browser-context options (e.g. `storageState` for authenticated pages, `locale`). |
+| `auth` | — | Pages behind a login. `{ storage: { sessionStorage, localStorage, cookies } }` sets the token the route guard reads (frontend only, with `mock` for the API); `{ login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }` logs in once; `{ run: async (page) => {} }` (JS config) for SSO. See [authentication](authentication.md). |
+| `contextOptions` | — | Extra Playwright browser-context options (e.g. `locale`, `storageState`). |
 
 ## Content you didn't render
 
@@ -85,14 +86,15 @@ A state without `page` uses the first entry page. `run: async (page) => {}` (JS 
 
 ## Example: authenticated dashboard
 
-```js
-// renderlint.config.mjs
-export default {
-  serve: 'npm run dev',
-  pages: ['/dashboard', '/settings'],
-  contextOptions: { storageState: '.auth/state.json' },
-  rules: { 'dead-link': 'off' },
-};
+Frontend only: the token the route guard reads, and the API served from fixtures. No backend or credentials needed. More options in [authentication](authentication.md).
+
+```json
+{
+  "serve": "npm start",
+  "pages": ["/dashboard", "/settings"],
+  "auth": { "storage": { "sessionStorage": { "auth.token": "test-token" } } },
+  "mock": { "**/api/me": "fixtures/me.json", "**/api/projects*": "fixtures/projects.json" }
+}
 ```
 
 ## Example: strict

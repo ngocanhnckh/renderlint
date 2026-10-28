@@ -83,18 +83,16 @@ Every finding in Elementor content carries the editor link, so you can open the 
 
 ### Logged-in pages, WooCommerce account and checkout
 
-Save a logged-in session once, then point `contextOptions.storageState` at it:
-
-```bash
-npx playwright codegen --save-storage=.auth/wp.json http://localhost:8888/wp-login.php
-# log in in the window that opens, then close it
-```
+renderlint can log in through `wp-login.php` once and check the pages as that user:
 
 ```json
-{ "contextOptions": { "storageState": ".auth/wp.json" }, "pages": ["/my-account/", "/cart/", "/checkout/"] }
+{
+  "auth": { "login": "/wp-login.php", "user": "${RENDERLINT_USER}", "password": "${RENDERLINT_PASSWORD}" },
+  "pages": ["/my-account/", "/cart/", "/checkout/"]
+}
 ```
 
-Add `.auth/` to `.gitignore`. The admin toolbar that appears for logged-in users is ignored. Put something in the cart first with a `states` entry (see [configuration](configuration.md#states-and-mocks)), for example `{ "name": "cart with a product", "page": "/shop/", "click": ".add_to_cart_button", "waitFor": ".added_to_cart" }`.
+Use a customer test account rather than an administrator (wp-env's default is `admin` / `password`), and keep the password in an environment variable. See [authentication](authentication.md) for other ways in. The admin toolbar that appears for logged-in users is ignored. Put something in the cart first with a `states` entry (see [configuration](configuration.md#states-and-mocks)), for example `{ "name": "cart with a product", "page": "/shop/", "click": ".add_to_cart_button", "waitFor": ".added_to_cart" }`.
 
 ## Fixing what it finds in Elementor
 
