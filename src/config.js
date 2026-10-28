@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { RULES } from './rules-meta.js';
@@ -32,7 +33,8 @@ export const DEFAULTS = {
   minTapTarget: 24,
   minFontSize: 12,
   maxLineLength: 120,
-  concurrency: 3,          // viewports checked in parallel
+  concurrency: Math.min(6, Math.max(3, availableParallelism() >> 1)), // browser contexts (page × viewport × color scheme) checked in parallel
+  dedupe: true,            // pages that render identically share the contrast/stress/sweep results; 'template' also skips stress/sweep on pages built like an earlier one; false: off
   timeout: 30000,
   serverTimeout: 120000,
   maxScreenshotHeight: 12000,
@@ -97,6 +99,9 @@ export function normalize(c, cwd = process.cwd()) {
     if (!st || typeof st !== 'object' || !st.name) throw new Error(`renderlint: states[${i}] needs a "name"`);
     return { ...st, mock: resolveMocks(st.mock, cwd, `states[${i}].mock`) };
   });
+  if (out.dedupe === 'true' || out.dedupe === 'identical' || out.dedupe === undefined) out.dedupe = true;
+  if (out.dedupe === 'false' || out.dedupe === 'off') out.dedupe = false;
+  if (![true, false, 'template'].includes(out.dedupe)) throw new Error(`renderlint: "dedupe" must be true, false or "template" (got ${JSON.stringify(c.dedupe)})`);
   if (!['error', 'warn', 'never'].includes(out.failOn)) throw new Error(`renderlint: "failOn" must be error | warn | never`);
   return out;
 }
