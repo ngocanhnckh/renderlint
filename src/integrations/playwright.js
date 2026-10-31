@@ -118,6 +118,10 @@ export function withRenderlint(base, defaults = {}) {
       await use(page);
       if (!opts.auto || page.isClosed()) return;
       if (testInfo.status !== testInfo.expectedStatus && !opts.checkFailed) return;
+      // Only the app under test: not a payment provider or identity provider the test ended on.
+      const base = testInfo.project.use && testInfo.project.use.baseURL;
+      const appOrigin = base ? new URL(base).origin : null;
+      if (appOrigin && new URL(page.url()).origin !== appOrigin) return;
       const role = opts.role || testInfo.project.name || undefined;
       testInfo.setTimeout(testInfo.timeout + 120000);
       const issues = await renderlint(page, testInfo.title, { ...opts, role, test: testInfo.titlePath.slice(1).join(' › ') });
@@ -132,6 +136,7 @@ export function withRenderlint(base, defaults = {}) {
         const origin = new URL(page.url()).origin;
         const ident = opts.role ? 'role:' + opts.role : 'state:' + hash(JSON.stringify([storageState && storageState.cookies.map((c) => c.name + '=' + c.value), storageState && storageState.origins, session]));
         for (const v of visits) {
+          if (appOrigin && new URL(v.url).origin !== appOrigin) continue;
           if (!claim(dir, ['visit', testInfo.project.name, ident, v.key].join('|'))) continue;
           _renderlintReplays.push({ url: v.url, role, opts, storageState, sessionStorage: Object.keys(session).length ? { [origin]: session } : {}, mocks: Object.fromEntries(responses) });
         }

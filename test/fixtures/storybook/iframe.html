@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>storybook</title>
+<!-- What renderlint relies on in Storybook's preview iframe (checked against Storybook 9.1): the story in
+     #storybook-root, body classes for the layout (sb-main-padded / -centered / -fullscreen) and for
+     errors (sb-show-errordisplay, #error-message), and __STORYBOOK_PREVIEW__.currentRender.phase,
+     "finished" once the play function is done. -->
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,sans-serif;color:#1f2933;background:#fff}
+.sb-main-padded{padding:1rem}
+.sb-errordisplay,.sb-preparing-story{display:none}
+.sb-show-errordisplay .sb-errordisplay{display:block}
+.sb-show-errordisplay #storybook-root{display:none}
+.badge{display:inline-block;width:72px;white-space:nowrap;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#14532d;font-size:13px}
+table{width:640px;border-collapse:collapse}td{padding:8px;border-bottom:1px solid #d9e2ec}
+.plans{display:grid;grid-template-columns:repeat(3,280px);gap:16px;padding:16px}
+.plan{border:1px solid #d9e2ec;border-radius:8px;padding:16px}
+.btn{background:#e4e7eb;color:#1f2933;border:0;border-radius:6px;padding:10px 16px;font:inherit;min-height:40px}
+.menu{margin-top:8px;border:1px solid #d9e2ec;border-radius:8px;padding:8px;max-width:240px}
+</style></head><body>
+<div class="sb-preparing-story"></div>
+<div class="sb-errordisplay"><h1 id="error-message"></h1></div>
+<div id="storybook-root"></div>
+<div id="storybook-docs" hidden></div>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+const root = document.getElementById('storybook-root');
+const render = { phase: 'preparing' };
+window.__STORYBOOK_PREVIEW__ = { currentRender: render };
+const stories = {
+  'badge--short': ['padded', '<span class="badge">Active</span>'],
+  'badge--long': ['padded', '<span class="badge">Awaiting approval</span>'],
+  // a component built for desktop, alone on the canvas: not a page, so wider than a phone is not a defect here
+  'table--wide': ['padded', '<table><tr><td>Invoice 2041</td><td>Paid</td><td>$1,200.00</td></tr></table>'],
+  'pages--pricing': ['fullscreen', '<main class="plans"><section class="plan">Starter</section><section class="plan">Team</section><section class="plan">Business</section></main>'],
+  'menu--open': ['padded', '<button class="btn">Account</button>'],
+};
+setTimeout(() => {
+  if (id === 'list--broken' || !stories[id]) {
+    document.querySelector('#error-message').textContent = "Cannot read properties of undefined (reading 'map')";
+    document.body.className = 'sb-show-errordisplay';
+    render.phase = 'errored';
+    return;
+  }
+  const [layout, html] = stories[id];
+  document.body.className = 'sb-main-' + layout + ' sb-show-main';
+  root.innerHTML = html;
+  render.phase = 'playing';
+  // the play function opens the menu, a while after the story is shown
+  setTimeout(() => {
+    if (id === 'menu--open') root.insertAdjacentHTML('beforeend', '<div class="menu" role="menu"><div role="menuitem">Sign out <span style="color:#c8ccd2;font-size:13px">ends every session</span></div></div>');
+    render.phase = 'finished';
+  }, id === 'menu--open' ? 900 : 0);
+}, 100);
+</script>
+</body></html>

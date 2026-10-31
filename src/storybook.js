@@ -14,6 +14,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { serveStatic, probe } from './server.js';
+import { globMatch } from './runner.js';
 
 const PAGE_RULES = 'viewport-overflow accidental-scrollbar missing-viewport-meta';
 
@@ -56,11 +57,12 @@ export async function resolveStorybook(target, cwd, log = () => {}) {
 }
 
 // Config for checking stories: one page per story × globals variant, named after the story.
-export function storybookConfig(config, stories, base, { globals = [''] } = {}) {
+export function storybookConfig(config, stories, base, { globals = [''], include } = {}) {
   const names = new Map();
   const urls = [];
+  const pick = include && include.length ? stories.filter((s) => include.some((p) => globMatch(p, s.id) || globMatch(p, `${s.title} / ${s.name}`))) : stories;
   for (const g of globals) {
-    for (const s of stories) {
+    for (const s of pick) {
       const url = storyUrl(base, s.id, g);
       urls.push(url);
       names.set(url, `story: ${s.title} / ${s.name}${g ? ` [${g}]` : ''}`);
@@ -95,6 +97,16 @@ export function storybookConfig(config, stories, base, { globals = [''] } = {}) 
           return { fullscreen };
         }, PAGE_RULES);
         if (st.error) throw new Error('the story failed to render: ' + st.error);
+        // The play function (a state reached by clicking, typing…) runs after the story shows: wait for it.
+        const phase = await page.waitForFunction(() => {
+          const r = window.__STORYBOOK_PREVIEW__ && window.__STORYBOOK_PREVIEW__.currentRender;
+          return !r || !r.phase || /^(finished|completed|played|errored|aborted)$/.test(r.phase) ? (r && r.phase) || 'none' : false;
+        }, null, { timeout: 15000, polling: 50 }).then((h) => h.jsonValue()).catch(() => 'timeout');
+        if (phase === 'errored') {
+          const msg = await page.evaluate(() => ((document.querySelector('#error-message') || {}).textContent || '').trim().split('\n')[0].slice(0, 300)).catch(() => '');
+          throw new Error('the story\'s play function failed' + (msg ? ': ' + msg : ''));
+        }
+        if (phase !== 'none') await page.evaluate(() => window.__rlWaitQuiet && window.__rlWaitQuiet(500, 3));
         if (user) await user(page, info);
       },
     },

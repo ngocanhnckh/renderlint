@@ -39,6 +39,7 @@ Options
   --no-scan              skip the static source scan
   --out <dir>            where to write reports and screenshots (default .renderlint)
   --globals theme:dark   storybook: also check every story with these globals (repeatable)
+  --stories "button--*"  storybook: only these stories (story ids or "Title / Name", * wildcards)
   --config <file>        config file path
   -q, --quiet            only print the report
   -h, --help
@@ -71,7 +72,7 @@ export async function main(argv) {
       rules: { type: 'string' }, stress: { type: 'string' }, 'fail-on': { type: 'string' }, format: { type: 'string' }, json: { type: 'boolean' },
       'no-screenshots': { type: 'boolean' }, 'no-stress': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' }, out: { type: 'string' },
-      globals: { type: 'string', multiple: true },
+      globals: { type: 'string', multiple: true }, stories: { type: 'string' },
       sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' },
   };
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options });
@@ -103,7 +104,7 @@ export async function main(argv) {
   const { check, formatPretty, formatMarkdown, formatGithub } = await import('./index.js');
   let result;
   try {
-    result = await check({ targets: cmd === 'storybook' ? [] : positionals, storybook: cmd === 'storybook' ? { target: positionals[0], globals: values.globals } : undefined, config, configFile: values.config, scan: values['no-scan'] ? false : undefined, log: values.verbose || !quiet ? log : () => {} });
+    result = await check({ targets: cmd === 'storybook' ? [] : positionals, storybook: cmd === 'storybook' ? { target: positionals[0], globals: values.globals, stories: values.stories ? values.stories.split(',') : undefined } : undefined, config, configFile: values.config, scan: values['no-scan'] ? false : undefined, log: values.verbose || !quiet ? log : () => {} });
   } catch (e) {
     process.stderr.write('\n' + (e && e.message || e) + '\n');
     return 2;

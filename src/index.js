@@ -184,7 +184,8 @@ export async function check(options = {}) {
       const stories = await storyIndex(sb.base);
       const variants = ['', ...((options.storybook.globals || config.storybook && config.storybook.globals) || [])];
       log(`Storybook at ${sb.base}: ${stories.length} stor${stories.length === 1 ? 'y' : 'ies'}${variants.length > 1 ? ' × ' + variants.length + ' globals variants' : ''}`);
-      const r = storybookConfig(config, stories, sb.base, { globals: variants });
+      const r = storybookConfig(config, stories, sb.base, { globals: variants, include: options.storybook.stories || (config.storybook && config.storybook.stories) });
+      if (!r.urls.length) throw new Error('renderlint: no story matches ' + JSON.stringify(options.storybook.stories || config.storybook.stories));
       urls = r.urls;
       Object.assign(config, r.config);
     } catch (e) { for (const fn of cleanup) await Promise.resolve(fn()).catch(() => {}); throw e; }
