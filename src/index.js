@@ -12,6 +12,7 @@ import { scanSources } from './scan.js';
 import { serverPlan } from './server-plan.js';
 import { detectProject, detectWordPress, looksLikeWordPress, COMMON_PORTS } from './detect.js';
 import { resolveStorybook, storyIndex, storybookConfig } from './storybook.js';
+import { startCoverage, finishCoverage } from './routes/index.js';
 
 export { RULES, RULE_IDS } from './rules-meta.js';
 export { analyzerSource } from './analyzer/bundle.js';
@@ -74,7 +75,7 @@ export async function resolveTargets(targets, config, cwd, log, { env } = {}) {
 
 async function resolveTargetsInner(targets, config, cwd, log, cleanup, env) {
   const pages = [];
-  let base, started = false;
+  let base, started = false, staticFiles = false; // staticFiles: served by renderlint, no routes to discover
   const urls = targets.filter((t) => /^https?:\/\//.test(t));
   const paths = targets.filter((t) => !/^https?:\/\//.test(t));
 
@@ -87,10 +88,10 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup, env) {
     const isDir = statSync(p).isDirectory();
     const root = isDir ? p : dirname(p);
     const srv = await serveStatic(root, { spa: isDir && existsSync(join(root, 'index.html')), base: config.base });
-    cleanup.push(srv.close);
+    cleanup.push(srv.close); staticFiles = true;
     base = srv.url;
     if (isDir) {
-      const files = htmlFilesIn(root, config.maxPages);
+      const files = htmlFilesIn(root, config.maxPages || 12);
       const idx = files.find((f) => f === join(root, 'index.html'));
       const ordered = idx ? [idx, ...files.filter((f) => f !== idx)] : files;
       if (!ordered.length) throw new Error(`renderlint: no .html files found in ${paths[0]}`);
@@ -117,7 +118,7 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup, env) {
     log(`Server ready at ${base}`);
   } else if (config.dir) {
     const srv = await serveStatic(resolve(cwd, config.dir), { base: config.base });
-    cleanup.push(srv.close);
+    cleanup.push(srv.close); staticFiles = true;
     base = srv.url;
   } else {
     // Zero-config: running dev server → dev script → static build → index.html
@@ -151,15 +152,15 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup, env) {
     }
     if (!base && proj.staticDirs.length) {
       const srv = await serveStatic(join(cwd, proj.staticDirs[0]), { base: config.base });
-      cleanup.push(srv.close);
+      cleanup.push(srv.close); staticFiles = true;
       base = srv.url;
       log(`Serving static build ${proj.staticDirs[0]}/ at ${base}`);
     }
     if (!base && proj.hasIndexHtml) {
       const srv = await serveStatic(cwd);
-      cleanup.push(srv.close);
+      cleanup.push(srv.close); staticFiles = true;
       base = srv.url;
-      const files = htmlFilesIn(cwd, config.maxPages).filter((f) => !/[\\/](dist|build|out)[\\/]/.test(f));
+      const files = htmlFilesIn(cwd, config.maxPages || 12).filter((f) => !/[\\/](dist|build|out)[\\/]/.test(f));
       for (const f of files) pages.push(base + '/' + relative(cwd, f).split('\\').join('/'));
       log(`Serving ${basename(cwd)}/ at ${base}`);
     }
@@ -169,7 +170,7 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup, env) {
     }
   }
   if (!pages.length) for (const p of config.pages) pages.push(/^https?:/.test(p) ? p : base + (p.startsWith('/') ? p : '/' + p));
-  return { base, pages: Array.from(new Set(pages)), cleanup, started };
+  return { base, pages: Array.from(new Set(pages)), cleanup, started, staticFiles };
 }
 
 export async function check(options = {}) {
@@ -181,7 +182,7 @@ export async function check(options = {}) {
   const targets = options.targets || (options.url ? [options.url] : []);
   // SSR apps fetch on the server: a server renderlint starts gets the preload that serves "mock" there too.
   const plan = options.storybook ? null : serverPlan(config);
-  let urls, cleanup, base, startedServer = false;
+  let urls, cleanup, base, startedServer = false, staticFiles = false;
   if (options.storybook) {
     // Every story of a Storybook, each in its own iframe page (src/storybook.js).
     const sb = await resolveStorybook(options.storybook.target, cwd, log);
@@ -196,7 +197,7 @@ export async function check(options = {}) {
       base = sb.base;
       Object.assign(config, r.config);
     } catch (e) { for (const fn of cleanup) await Promise.resolve(fn()).catch(() => {}); throw e; }
-  } else ({ pages: urls, cleanup, base, started: startedServer } = await resolveTargets(targets, config, cwd, log, { env: plan ? plan.env : undefined }));
+  } else ({ pages: urls, cleanup, base, started: startedServer, staticFiles } = await resolveTargets(targets, config, cwd, log, { env: plan ? plan.env : undefined }));
   if (plan) {
     plan.setSelf(base || urls[0]);
     if (startedServer) log('Server-side mocks: the server renderlint started answers its own requests from "mock" too.');
@@ -209,7 +210,9 @@ export async function check(options = {}) {
   try {
     browser = options.browser || await launchBrowser({ log });
     log(`Checking ${urls.length} page(s)${config.crawl ? ' (+ crawling links)' : ''} at ${config.viewports.map((v) => v.width).join('/')}px…`);
-    const { issues: raw, pages } = config.roles ? await checkRoles(browser, { urls, base, config, log, plan }) : await runChecks(browser, { urls, config, log, serverLog: plan && plan.reader });
+    // Route coverage: every route of the app (source, sitemap, build output), a few instances per dynamic route.
+    const coverage = staticFiles || options.storybook ? null : await startCoverage({ cwd, base, config, log, pagesGiven: false });
+    const { issues: raw, pages } = config.roles ? await checkRoles(browser, { urls, base, config, log, plan, coverage }) : await runChecks(browser, { urls, config, log, serverLog: plan && plan.reader, coverage });
     let scanned = [];
     const doScan = options.scan !== undefined ? options.scan : config.scan && !options.storybook && !targets.some((t) => /^https?:/.test(t));
     if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
@@ -223,9 +226,12 @@ export async function check(options = {}) {
       schemes: schemes.length ? schemes : ['light'],
       suppressed: 0,
     };
-    const result = { ok: config.failOn === 'never' ? true : config.failOn === 'warn' ? stats.errors + stats.warnings === 0 : stats.errors === 0, issues, pages, stats, config };
+    const cov = coverage ? finishCoverage(coverage, { pages, issues, config }) : null;
+    if (cov) stats.coverage = { urls: cov.urls, routes: cov.routes, percent: cov.percent, counts: cov.counts };
+    const result = { ok: config.failOn === 'never' ? true : config.failOn === 'warn' ? stats.errors + stats.warnings === 0 : stats.errors === 0, issues, pages, stats, config, coverage: cov };
+    if (cov && cov.gate.length) result.ok = false;
     mkdirSync(config.outputDir, { recursive: true });
-    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues }, null, 2));
+    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues, ...(cov ? { coverage: cov } : {}) }, null, 2));
     writeFileSync(join(config.outputDir, 'report.md'), formatMarkdown(result));
     return result;
   } finally {

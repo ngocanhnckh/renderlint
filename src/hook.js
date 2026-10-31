@@ -29,6 +29,39 @@ function fingerprint(cwd) {
   return h.digest('hex');
 }
 
+// { result, scope } for a run limited to the affected routes; { skip } when the edit renders nowhere;
+// null for a full run (no page map yet, or the edit can affect every route).
+async function incremental(cwd, check) {
+  if (process.env.RENDERLINT_HOOK_FULL) return null;
+  const { loadConfig } = await import('./config.js');
+  const { config } = await loadConfig(cwd);
+  const { readPageMap, planIncremental, updatePageMap } = await import('./routes/incremental.js');
+  const map = readPageMap(config.outputDir);
+  if (!map) return null;
+  const plan = planIncremental(cwd, map);
+  if (plan.mode === 'all') return null;
+  if (plan.mode === 'none' && !plan.failing.length) {
+    updatePageMap(config.outputDir, map, plan, { issues: [] });
+    return { skip: true };
+  }
+  // routes that still had errors are checked again too (only their instances), so the agent sees those errors
+  const affected = plan.routes.length;
+  const extra = plan.failing.filter((r) => !plan.routes.includes(r.pattern));
+  plan.paths = Array.from(new Set([...plan.paths, ...extra.flatMap((r) => r.checked)]));
+  plan.routes = [...plan.routes, ...extra.map((r) => r.pattern)];
+  const result = await check({ cwd, log: () => {}, config: { pages: plan.paths, crawl: false, routes: false } });
+  const stale = updatePageMap(config.outputDir, map, plan, result);
+  // routes not checked again that still had errors in the last run keep the hook blocking, as a full run would
+  if (stale.length) {
+    result.ok = false;
+    result.stats.errors += stale.reduce((n, r) => n + r.errors, 0);
+  }
+  const scope = ` (re-checked ${affected} of ${map.routes.length} route(s) affected by ${plan.changed.length} changed file(s)` +
+    (extra.length ? `, and ${extra.map((r) => r.pattern).join(', ')}, which had errors in the last run` : '') +
+    (stale.length ? `; ${stale.map((r) => r.pattern).join(', ')} still had errors in the last run` : '') + ')';
+  return { result, scope };
+}
+
 async function readStdin() {
   if (process.stdin.isTTY) return {};
   let data = '';
@@ -63,9 +96,12 @@ async function runHook() {
   writeFileSync(statePath, JSON.stringify(state)); // saved before checking, so a crash doesn't re-run every turn
 
   const { check, formatPretty } = await import('./index.js');
-  let result;
+  let result, scope = '';
   try {
-    result = await check({ cwd, log: () => {} });
+    // After a full run (page-map.json), re-check only the routes the changed files render in.
+    const inc = await incremental(cwd, check);
+    if (inc && inc.skip) { state = { cleanFingerprint: fp, lastSeen: fp, blocks: 0 }; writeFileSync(statePath, JSON.stringify(state)); return 0; }
+    if (inc) { result = inc.result; scope = inc.scope; } else result = await check({ cwd, log: () => {} });
   } catch (e) {
     // Can't check (no server, etc.): never trap the agent, just tell it.
     process.stderr.write(`renderlint could not run: ${String(e.message || e).split('\n')[0]}\n`);
@@ -83,7 +119,7 @@ async function runHook() {
     return 0;
   }
   process.stderr.write(
-    `renderlint found ${result.stats.errors} UI defect(s) in the rendered app. You are not done: fix every error below (in the source code), ` +
+    `renderlint found ${result.stats.errors} UI defect(s) in the rendered app${scope}. You are not done: fix every error below (in the source code), ` +
     'then finish. If one is genuinely intentional, mark that element with data-renderlint-ignore="<rule>" and data-renderlint-reason="…".\n\n' +
     formatPretty(result, { maxPerRule: 8, cwd }) + '\n');
   return 2;

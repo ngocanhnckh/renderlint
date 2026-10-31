@@ -12,6 +12,7 @@ Usage
   renderlint explain [rule]             Describe rules and how to fix them
   renderlint watch [url]                Re-check whenever source files change
   renderlint hook                       Claude Code Stop-hook mode (blocks finishing while errors remain)
+  renderlint routes                     List the routes found in the source (and which files each renders)
 
 Targets
   http://localhost:5173                 a running app (dev or preview server)
@@ -24,7 +25,11 @@ Options
   --base /repo/          public base path of a static build (Vite \`base\`, GitHub Pages)
   --pages /,/pricing     entry pages (default /)
   --no-crawl             do not follow links
-  --max-pages <n>        page limit when crawling (default 12)
+  --max-pages <n>        page limit when crawling (default 12; with routes found in the source, every route)
+  --no-routes            don't read routes from the source, sitemap and build output
+  --per-route <n>        instances checked per dynamic route (default 2)
+  --min-coverage <pct>   fail when fewer routes than this were checked (e.g. 100)
+  --coverage-baseline <file>  fail when a route checked in this earlier coverage.json is no longer checked
   --viewports 375,768,1280   widths (or WxH) to test
   --dark | --light       force color schemes (default: auto-detect dark-mode CSS)
   --rules a=off,b=warn   override rule severities
@@ -48,7 +53,7 @@ Options
 export async function main(argv) {
   // `--stress` may be used without a value: don't let it swallow the next argument.
   argv = argv.flatMap((a, i) => (a === '--stress' && !/^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? ['--stress', '1.5'] : [a]));
-  const cmd = ['init', 'scan', 'explain', 'watch', 'hook', 'check', 'storybook'].includes(argv[0]) ? argv.shift() : 'check';
+  const cmd = ['init', 'scan', 'explain', 'watch', 'hook', 'check', 'storybook', 'routes'].includes(argv[0]) ? argv.shift() : 'check';
   if (argv.includes('-h') || argv.includes('--help')) { process.stdout.write(HELP); return 0; }
   if (argv.includes('-v') || argv.includes('--version')) {
     process.stdout.write(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version + '\n');
@@ -58,6 +63,7 @@ export async function main(argv) {
   if (cmd === 'init') return (await import('./init.js')).init(argv);
   if (cmd === 'hook') return (await import('./hook.js')).hook(argv);
   if (cmd === 'watch') return watch(argv);
+  if (cmd === 'routes') return listRoutes(argv);
   if (cmd === 'scan') {
     const { scanSources } = await import('./scan.js');
     const issues = scanSources({ dirs: argv.filter((a) => !a.startsWith('-')) });
@@ -74,6 +80,7 @@ export async function main(argv) {
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' }, out: { type: 'string' },
       globals: { type: 'string', multiple: true }, stories: { type: 'string' },
       sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' },
+      'no-routes': { type: 'boolean' }, 'per-route': { type: 'string' }, 'min-coverage': { type: 'string' }, 'coverage-baseline': { type: 'string' },
   };
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options });
   const unknown = Object.keys(values).filter((k) => !(k in options));
@@ -97,6 +104,8 @@ export async function main(argv) {
     failOn: values['fail-on'], screenshots: values['no-screenshots'] ? false : undefined, outputDir: values.out,
     sweep: values['no-sweep'] ? false : values.sweep, stressData: values['no-stress-data'] ? false : undefined,
     concurrency: values.concurrency ? +values.concurrency : undefined, dedupe: values.dedupe,
+    routes: values['no-routes'] ? false : undefined,
+    ...(values['per-route'] || values['min-coverage'] || values['coverage-baseline'] ? { coverage: { perRoute: values['per-route'] ? +values['per-route'] : undefined, min: values['min-coverage'] ? +values['min-coverage'] : undefined, baseline: values['coverage-baseline'] } } : {}),
   };
   const format = values.json ? 'json' : values.format || 'pretty';
   const quiet = values.quiet || format !== 'pretty';
@@ -114,6 +123,24 @@ export async function main(argv) {
   else if (format === 'github') process.stdout.write(formatGithub(result) + '\n');
   else process.stdout.write('\n' + formatPretty(result, { maxPerRule: values['max-per-rule'] ? +values['max-per-rule'] : 12 }) + '\n');
   return result.ok ? 0 : 1;
+}
+
+async function listRoutes(argv) {
+  const { discoverRoutes } = await import('./routes/discover.js');
+  const { buildGraph, routeClosures, shellEntries } = await import('./routes/graph.js');
+  const cwd = argv.find((a) => !a.startsWith('-')) || process.cwd();
+  const t0 = Date.now();
+  const d = discoverRoutes(cwd);
+  if (!d.framework) { console.log('No supported router found (Next.js, Nuxt, SvelteKit, Astro, React Router, TanStack Router, Angular, Vue Router).'); return 1; }
+  const g = argv.includes('--files') ? buildGraph(cwd, { framework: d.framework, routes: d.routes, entries: shellEntries(cwd, d.framework) }) : null;
+  const cl = g && routeClosures(g);
+  console.log(`${d.routes.length} route(s) (${d.framework}) in ${Date.now() - t0}ms${d.notes.length ? ' · ' + d.notes.join(' · ') : ''}`);
+  d.routes.forEach((r, i) => {
+    console.log(`  ${r.pattern.padEnd(36)} ${r.file || ''}${r.values ? '  values: ' + r.values.length : ''}${r.guards ? '  guards: ' + r.guards.join('; ') : ''}`);
+    if (cl) console.log('      ' + Array.from(cl.per[i], (f) => f.replace(cwd + '/', '')).join(', '));
+  });
+  if (d.prerendered.length) console.log(`  + ${d.prerendered.length} prerendered URL(s) in the build output`);
+  return 0;
 }
 
 function explain(rule) {
