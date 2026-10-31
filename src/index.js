@@ -10,6 +10,7 @@ import { runChecks } from './runner.js';
 import { mergeIssues, formatPretty, formatMarkdown, formatGithub } from './report.js';
 import { scanSources } from './scan.js';
 import { detectProject, detectWordPress, looksLikeWordPress, COMMON_PORTS } from './detect.js';
+import { startCoverage, finishCoverage } from './routes/index.js';
 
 export { RULES, RULE_IDS } from './rules-meta.js';
 export { analyzerSource } from './analyzer/bundle.js';
@@ -72,7 +73,7 @@ export async function resolveTargets(targets, config, cwd, log) {
 
 async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
   const pages = [];
-  let base;
+  let base, staticFiles = false; // static files served by renderlint: no routes to discover
   const urls = targets.filter((t) => /^https?:\/\//.test(t));
   const paths = targets.filter((t) => !/^https?:\/\//.test(t));
 
@@ -85,10 +86,10 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
     const isDir = statSync(p).isDirectory();
     const root = isDir ? p : dirname(p);
     const srv = await serveStatic(root, { spa: isDir && existsSync(join(root, 'index.html')), base: config.base });
-    cleanup.push(srv.close);
+    cleanup.push(srv.close); staticFiles = true;
     base = srv.url;
     if (isDir) {
-      const files = htmlFilesIn(root, config.maxPages);
+      const files = htmlFilesIn(root, config.maxPages || 12);
       const idx = files.find((f) => f === join(root, 'index.html'));
       const ordered = idx ? [idx, ...files.filter((f) => f !== idx)] : files;
       if (!ordered.length) throw new Error(`renderlint: no .html files found in ${paths[0]}`);
@@ -113,7 +114,7 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
     log(`Server ready at ${base}`);
   } else if (config.dir) {
     const srv = await serveStatic(resolve(cwd, config.dir), { base: config.base });
-    cleanup.push(srv.close);
+    cleanup.push(srv.close); staticFiles = true;
     base = srv.url;
   } else {
     // Zero-config: running dev server → dev script → static build → index.html
@@ -146,15 +147,15 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
     }
     if (!base && proj.staticDirs.length) {
       const srv = await serveStatic(join(cwd, proj.staticDirs[0]), { base: config.base });
-      cleanup.push(srv.close);
+      cleanup.push(srv.close); staticFiles = true;
       base = srv.url;
       log(`Serving static build ${proj.staticDirs[0]}/ at ${base}`);
     }
     if (!base && proj.hasIndexHtml) {
       const srv = await serveStatic(cwd);
-      cleanup.push(srv.close);
+      cleanup.push(srv.close); staticFiles = true;
       base = srv.url;
-      const files = htmlFilesIn(cwd, config.maxPages).filter((f) => !/[\\/](dist|build|out)[\\/]/.test(f));
+      const files = htmlFilesIn(cwd, config.maxPages || 12).filter((f) => !/[\\/](dist|build|out)[\\/]/.test(f));
       for (const f of files) pages.push(base + '/' + relative(cwd, f).split('\\').join('/'));
       log(`Serving ${basename(cwd)}/ at ${base}`);
     }
@@ -164,7 +165,7 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
     }
   }
   if (!pages.length) for (const p of config.pages) pages.push(/^https?:/.test(p) ? p : base + (p.startsWith('/') ? p : '/' + p));
-  return { base, pages: Array.from(new Set(pages)), cleanup };
+  return { base, pages: Array.from(new Set(pages)), cleanup, staticFiles };
 }
 
 export async function check(options = {}) {
@@ -174,7 +175,7 @@ export async function check(options = {}) {
   const config = normalize({ ...fileConfig, ...stripUndefined(options.config || {}), rules: { ...fileConfig.rules, ...((options.config || {}).rules || {}) } }, cwd);
   const started = Date.now();
   const targets = options.targets || (options.url ? [options.url] : []);
-  const { pages: urls, cleanup } = await resolveTargets(targets, config, cwd, log);
+  const { pages: urls, cleanup, base, staticFiles } = await resolveTargets(targets, config, cwd, log);
   // Make sure dev servers we started die with us (Ctrl+C, hook timeout, SIGTERM).
   const onSignal = (sig) => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } process.exit(sig === 'SIGINT' ? 130 : 143); };
   const onExit = () => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } };
@@ -183,7 +184,9 @@ export async function check(options = {}) {
   try {
     browser = options.browser || await launchBrowser({ log });
     log(`Checking ${urls.length} page(s)${config.crawl ? ' (+ crawling links)' : ''} at ${config.viewports.map((v) => v.width).join('/')}px…`);
-    const { issues: raw, pages } = await runChecks(browser, { urls, config, log });
+    // Route coverage: every route of the app (source, sitemap, build output), a few instances per dynamic route.
+    const coverage = staticFiles ? null : await startCoverage({ cwd, base, config, log, pagesGiven: false });
+    const { issues: raw, pages } = await runChecks(browser, { urls, config, log, coverage });
     let scanned = [];
     const doScan = options.scan !== undefined ? options.scan : config.scan && !targets.some((t) => /^https?:/.test(t));
     if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
@@ -197,9 +200,12 @@ export async function check(options = {}) {
       schemes: schemes.length ? schemes : ['light'],
       suppressed: 0,
     };
-    const result = { ok: config.failOn === 'never' ? true : config.failOn === 'warn' ? stats.errors + stats.warnings === 0 : stats.errors === 0, issues, pages, stats, config };
+    const cov = coverage ? finishCoverage(coverage, { pages, issues, config }) : null;
+    if (cov) stats.coverage = { urls: cov.urls, routes: cov.routes, percent: cov.percent, counts: cov.counts };
+    const result = { ok: config.failOn === 'never' ? true : config.failOn === 'warn' ? stats.errors + stats.warnings === 0 : stats.errors === 0, issues, pages, stats, config, coverage: cov };
+    if (cov && cov.gate.length) result.ok = false;
     mkdirSync(config.outputDir, { recursive: true });
-    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues }, null, 2));
+    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues, ...(cov ? { coverage: cov } : {}) }, null, 2));
     writeFileSync(join(config.outputDir, 'report.md'), formatMarkdown(result));
     return result;
   } finally {

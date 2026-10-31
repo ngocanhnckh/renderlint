@@ -224,7 +224,7 @@ function wpGroup(u) {
   return null;
 }
 
-export async function runChecks(browser, { urls, config, log = () => {} }) {
+export async function runChecks(browser, { urls, config, log = () => {}, coverage = null }) {
   const viewports = config.viewports;
   const outDir = config.outputDir;
   if (config.screenshots) mkdirSync(join(outDir, 'screens'), { recursive: true });
@@ -247,8 +247,14 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     session = await authenticate(browser, urls[0], config, { log, routePage: Object.keys(mock).length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock, stressData: false })) : null });
   }
   const listed = new Set(urls.map(normalizeUrl)); // pages asked for, as opposed to found by crawling
-  const queue = urls.slice();
+  // Route coverage: the app's routes (from its source, sitemap and build output) seed the queue, and
+  // crawled links and API lists add instances of dynamic routes, a few per route.
+  const seeds = coverage ? coverage.seeds() : [];
+  const queue = Array.from(new Set([...urls, ...seeds]));
   const visited = new Set(queue.map(normalizeUrl));
+  const maxPages = config.maxPages || (coverage && coverage.routes.length ? Math.max(12, queue.length + coverage.routes.length + 20) : 12);
+  const enqueue = (href) => { const key = normalizeUrl(href); if (visited.has(key)) return; visited.add(key); queue.push(href); };
+  const onJson = coverage ? (apiUrl, body) => { for (const u of coverage.onJson(apiUrl, body)) enqueue(u); } : null;
   const groups = new Map(); // WordPress: crawled pages per template kind
   const origin = new URL(urls[0]).origin;
   const pages = [];
@@ -282,6 +288,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     const startScheme = (si) => {
       const scheme = schemes[si];
       const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
+        onJson: !state && si === 0 && vi === 0 ? onJson : null, probe: !state && si === 0 && vi === 0 && !!coverage,
         // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
         wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
         onSig: si === 0 ? sigs[vi].resolve : null, refSig: si > 0 ? sigs[vi].promise : null,
@@ -323,6 +330,12 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     pageInfo.done = (async () => {
       const results = [];
       for (let si = 0; si < schemes.length; si++) results.push(await Promise.all(runs[si])); // a scheme added meanwhile has started already
+      if (coverage && !state) {
+        const first = results[0][0].res;
+        pageInfo.status = { httpStatus: first.httpStatus, finalUrl: first.finalUrl, authRequired: first.landed || (first.issues.some((i) => i.rule === 'auth-required') ? 'sign-in page' : null), denied: first.denied, error: first.error };
+        if (first.resources) pageInfo.resources = first.resources;
+        coverage.onResult(url, pageInfo.status);
+      }
       const issues = [];
       for (let si = 0; si < schemes.length; si++) {
         const scheme = schemes[si];
@@ -342,7 +355,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
 
   const metasOf = [];
   for (let k = 0; ; k++) {
-    while (queue.length && pages.length < config.maxPages) metasOf.push(startPage(queue.shift(), null));
+    while (queue.length && pages.length < maxPages) metasOf.push(startPage(queue.shift(), null));
     if (k >= metasOf.length) break;
     for (const d of metasOf[k]) {
       const meta = await d.promise;
@@ -356,6 +369,10 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
         const key = normalizeUrl(u.href);
         if (visited.has(key)) continue;
         if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
+        if (coverage) {
+          // a few instances per route; the others are counted as instances, not checked
+          if (coverage.onLink(u.href) !== 'check') { visited.add(key); continue; }
+        }
         if (meta.platform && meta.platform.wordpress) {
           if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
           const g = wpGroup(u);
@@ -364,13 +381,14 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
         visited.add(key);
         queue.push(u.href);
       }
-      if (queue.length && pages.length < config.maxPages) metasOf.push(startPage(queue.shift(), null));
+      if (queue.length && pages.length < maxPages) metasOf.push(startPage(queue.shift(), null));
     }
   }
   // UI states: once every page's light-mode analysis is in (it decides whether they get dark mode too).
   for (const st of config.states || []) startPage(st.page ? new URL(st.page, urls[0]).href : urls[0], st);
   const allIssues = [];
   for (const p of pages) { allIssues.push(...await p.done); delete p.done; }
+  if (coverage) coverage.unvisited = queue.slice(); // over the page limit
   return { issues: allIssues, pages };
 }
 
@@ -499,7 +517,7 @@ const MQ_RECORDER = () => {
   window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
 };
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
+async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig, onJson, probe }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -541,9 +559,14 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     issues.push({ rule: 'console-error', severity: /hydrat/i.test(text) ? 'error' : 'warn', message: 'console.error: ' + msg });
   });
   const failed = new Set();
+  const jsonReads = [];
   page.on('response', (r) => {
     if (phase !== 'main') return;
-    if (/^(fetch|xhr)$/.test(r.request().resourceType()) && /json/.test(r.headers()['content-type'] || '')) sawJson = true;
+    if (/^(fetch|xhr)$/.test(r.request().resourceType()) && /json/.test(r.headers()['content-type'] || '')) {
+      sawJson = true;
+      // route coverage: ids and slugs in the app's API lists are instances of its dynamic routes
+      if (onJson && r.status() < 300 && +(r.headers()['content-length'] || 0) < 2e6) jsonReads.push(r.json().then((b) => onJson(r.url(), b)).catch(() => {}));
+    }
     const u = r.url();
     if (r.status() < 400 || !u.startsWith(origin) || /favicon|apple-touch-icon|\.map(\?|$)|__nextjs|_next\/webpack-hmr|\/@vite\//.test(u)) return;
     const type = r.request().resourceType();
@@ -553,7 +576,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     issues.push({ rule: 'broken-resource', severity: 'error', message: `${type} failed to load (${r.status()}): ${u.replace(origin, '')}`, details: { url: u, status: r.status(), type } });
   });
 
-  let meta, screenshot, error, sig, stressReused = false;
+  let meta, screenshot, error, sig, stressReused = false, httpStatus = null, finalUrl = null, denied = null, resources = null;
   let mine = null, dupOf = null; // this run shares its later passes (mine), or uses those of an identical rendering (dupOf)
   let templateOf = null; // dedupe: "template": the earlier page with the same skeleton, whose stress and sweep stand for this one
   const T = { t: Date.now() };
@@ -569,6 +592,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (resp && resp.status() >= 400) {
       issues.push({ rule: 'page-error', severity: 'error', message: `Page responded with HTTP ${resp.status()}.` });
     }
+    httpStatus = resp ? resp.status() : null;
     lap('goto');
     await waitReady(page, net, 4000);
     lap('networkidle');
@@ -578,6 +602,12 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (process.env.RENDERLINT_DEBUG) log('    settle marks: ' + st.join(', '));
     lap('settle');
     // Sent to a login page or identity provider: the page itself was never rendered, so don't lint the login form in its name.
+    if (jsonReads.length) await Promise.all(jsonReads);
+    finalUrl = page.url();
+    if (probe) {
+      // for the coverage report: a page that renders "access denied" in place of its content, and the files it loaded
+      ({ denied, resources } = await page.evaluate(PROBE_SCRIPT).catch(() => ({})));
+    }
     const redirect = loginRedirect(url, page.url(), await page.evaluate(() => Array.from(document.querySelectorAll('input[type=password]')).some((i) => i.getClientRects().length)).catch(() => false));
     if (redirect && config.rules['auth-required'] !== 'off') {
       const what = new URL(url), asked = what.pathname + what.search + hashRoute(what);
@@ -588,7 +618,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
         message: `${asked} was not checked: the app sent renderlint to ${redirect.external ? 'the sign-in page at ' + redirect.to : redirect.to} instead. ` +
           (config.auth ? 'The session from "auth" was not accepted here (expired, wrong role, or a token the guard doesn\'t read).' : 'Pages behind a login need "auth" in renderlint.config (log in once, or set the token your route guard reads and mock the API: no backend needed).'),
         details: { redirectedTo: redirect.to, external: redirect.external } });
-      return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url() };
+      return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url(), httpStatus, finalUrl, denied, resources };
     }
     if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
     if (state) await applyState(page, state, { viewport: vp, scheme });
@@ -676,7 +706,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     const markedHere = new Set(issues.filter((i) => i.marker).map(groupKey));
     lap('screenshot');
     const iRest = issues.length;
-    if (dupOf) return { issues, meta, screenshot, reuse: { path: dupOf.path, rest: dupOf.rest } };
+    if (dupOf) return { issues, meta, screenshot, reuse: { path: dupOf.path, rest: dupOf.rest }, httpStatus, finalUrl, denied, resources };
 
     // Taken just before the stress passes, in the state they start from (after contrast, focus, screenshot).
     const ref = config.stress && refSig ? await refSig : null;
@@ -796,8 +826,21 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (template && template.publish) { template.publish(null); template.decision.resolve(null); }
     await context.close().catch(() => {});
   }
-  return { issues, meta, screenshot, error, templateOf, stressReused };
+  return { issues, meta, screenshot, error, templateOf, stressReused, httpStatus, finalUrl, denied, resources };
 }
+
+// What a page says when the session lacks the role (headings and alerts only, short text), and the
+// same-origin files it loaded (Vite serves each source module at its own path; public/ assets).
+const PROBE_SCRIPT = () => {
+  const DENIED = /\b(access denied|permission denied|forbidden|not authori[sz]ed|unauthori[sz]ed|insufficient (permissions|privileges)|you (do not|don't|don’t) have (access|permission)|admins? only|403)\b/i;
+  let denied = null;
+  for (const el of document.querySelectorAll('h1, h2, h3, [role="alert"]')) {
+    const t = (el.textContent || '').trim().replace(/\s+/g, ' ');
+    if (t && t.length <= 80 && DENIED.test(t) && el.getClientRects().length) { denied = t; break; }
+  }
+  const resources = Array.from(new Set(performance.getEntriesByType('resource').map((e) => e.name).filter((n) => n.startsWith(location.origin)).map((n) => new URL(n).pathname))).slice(0, 2000);
+  return { denied, resources };
+};
 
 // Stylesheets the page can't read (cross-origin): fetch them. Any color-scheme condition,
 // @import or var() in them could change layout per scheme, so it counts as "not paint-only".

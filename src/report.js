@@ -77,11 +77,25 @@ function sourceStr(src) {
   return [src.component, file && (file + (src.line ? ':' + src.line : '')), !src.component && !file && block].filter(Boolean).join(' — ');
 }
 
+// Route coverage: one line, then every route that was not checked, with the reason.
+export function formatCoverage(cov, { max = 30 } = {}) {
+  if (!cov) return [];
+  const lines = [];
+  const bad = cov.list.filter((r) => r.status !== 'checked' && r.status !== 'excluded');
+  lines.push((bad.length ? yellow('◐ ') : green('✔ ')) + bold('Coverage') + ' ' + cov.line + dim(` (${cov.percent}% of routes; up to ${cov.perRoute} instance(s) per route)`));
+  const label = { 'needs-auth': 'needs sign-in', 'needs-role': 'needs a role', 'needs-params': 'needs param values', redirected: 'redirects', unreachable: 'not reachable', error: 'failed', 'not-checked': 'not checked' };
+  for (const r of bad.slice(0, max)) lines.push(`  ${yellow(label[r.status] || r.status)} ${r.pattern}${r.file ? dim('  ' + r.file) : r.inferred ? dim('  (seen, no route in the source)') : ''}${r.reason ? dim(' — ' + r.reason) : ''}`);
+  if (bad.length > max) lines.push(dim(`  … ${bad.length - max} more in .renderlint/coverage.json`));
+  for (const g of cov.gate || []) lines.push(red('  ✖ ' + g));
+  return lines;
+}
+
 export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = {}) {
   const { issues, pages, config, stats } = result;
   const lines = [];
   const vps = config.viewports.map((v) => v.width + 'px').join(', ');
   lines.push(bold('renderlint') + dim(` — ${pages.length} page(s) × viewports ${vps}${stats.schemes.length > 1 ? ' × ' + stats.schemes.join('/') : ''}${stats.scanned ? ` + source scan (${stats.scanned} findings)` : ''}`));
+  if (result.coverage) lines.push(...formatCoverage(result.coverage));
   if (!issues.length) {
     lines.push(green('✔ No UI defects found.'));
     return lines.join('\n');
@@ -136,6 +150,13 @@ export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = 
 export function formatMarkdown(result) {
   const { issues, stats } = result;
   const out = ['# renderlint report', '', `**${stats.errors} error(s), ${stats.warnings} warning(s)** across ${result.pages.length} page(s).`, ''];
+  if (result.coverage) {
+    const cov = result.coverage;
+    out.push(`**Coverage:** ${cov.line} (${cov.percent}% of routes).`, '', '| Route | Status | Instances | Checked | File |', '|---|---|---|---|---|');
+    for (const r of cov.list) out.push(`| \`${r.pattern}\` | ${r.status}${r.reason ? ': ' + r.reason.replace(/\|/g, '\\|') : ''} | ${r.instances} | ${(r.checked || []).length} | ${r.file ? '`' + r.file + '`' : ''} |`);
+    for (const g of cov.gate || []) out.push('', `**Coverage gate failed:** ${g}`);
+    out.push('');
+  }
   for (const i of issues) {
     out.push(`- **${i.severity}** \`${i.rule}\` — ${i.message}`);
     if (i.file) out.push(`  - at \`${i.file}:${i.line}\``);
