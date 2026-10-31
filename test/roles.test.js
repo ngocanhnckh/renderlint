@@ -208,6 +208,7 @@ test('notShownFindings: who saw what', () => {
     o('/old', { admin: redirect('/new'), viewer: redirect('/new') }, { page: false, source: 'link' }),
     o('/dashboard', { admin: shown, viewer: shown }),
     o('/reports', { admin: redirect('/dashboard'), viewer: redirect('/dashboard') }), // a rendered route nobody sees
+    o('/home', { admin: shown, viewer: { kind: 'unstable' } }), // the viewer's render differed by viewport (a flaky dev server): no evidence
   ], { roles: ['admin', 'viewer'], deny: { viewer: ['/billing'] }, multi: true });
   assert.deepEqual(f.map((x) => `${x.details.route} ${x.role} ${x.severity}`), ['/admin viewer warn', '/reports admin warn', '/reports viewer warn']);
 });

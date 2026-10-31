@@ -328,11 +328,12 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
             if (r.landed && !config.auth && !state && si === 0) enqueue(r.landed, 'landed');
             // Sent elsewhere (a role guard, an ordinary redirect): the page we landed on is checked under its own name.
             if (r.notShown && r.landed && !state && si === 0 && !LOGIN_PATH.test(routeOf(r.landed)) && !LOGOUT.test(routeOf(r.landed))) enqueue(r.landed, 'landed');
-            if (!state && si === 0 && vi === 0 && (detect || r.notShown)) {
-              const o = outcomes.get(key) || { url, route: routeOf(url), source: sourceOf.get(key) || 'link', page: false, roles: {} };
-              if (!r.error) o.roles[roleName || ''] = r.notShown || null;
+            // What each viewport was shown. A role's outcome counts only when every viewport agrees: a flaky render is not a finding.
+            if (!state && si === 0 && (detect || r.notShown)) {
+              const o = outcomes.get(key) || { url, route: routeOf(url), source: sourceOf.get(key) || 'link', page: false, roles: {}, seen: {} };
+              if (!r.error) (o.seen[roleName || ''] = o.seen[roleName || ''] || []).push(r.notShown || null);
               outcomes.set(key, o);
-              pageInfo.notShown = r.notShown || undefined;
+              if (vi === 0) pageInfo.notShown = r.notShown || undefined;
             }
             return r;
           }).finally(() => {
@@ -445,12 +446,17 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   // Pages the app didn't show (a guard's redirect, "Access denied" or "Page not found" in place), per role.
   if (detect) {
     const deny = Object.fromEntries(roles.map((r) => [r.name || '', (r.auth && r.auth.deny) || []]));
-    const list = Array.from(outcomes.entries()).map(([key, o]) => Object.assign(o, { page: routeKeys.has(key) }));
+    const same = (a, b) => (a === null || b === null ? a === b : a.kind === b.kind && a.to === b.to && a.text === b.text);
+    const list = Array.from(outcomes.entries()).map(([key, o]) => {
+      for (const [r, seen] of Object.entries(o.seen)) o.roles[r] = seen.every((x) => same(x, seen[0])) ? seen[0] : { kind: 'unstable' };
+      delete o.seen;
+      return Object.assign(o, { page: routeKeys.has(key) });
+    });
     for (const f of notShownFindings(list, { roles: roles.map((r) => r.name || ''), deny, multi })) {
       const p = pages.find((x) => normalizeUrl(x.url) === normalizeUrl(f.url) && (x.role || null) === (f.role || null) && !/\[state:/.test(x.path));
       for (const vp of viewports) allIssues.push({ ...f, page: p ? p.path : pathOf(f.url, origin), viewport: vp.width, scheme: 'light' });
     }
-    coverage.pages = list.map((o) => ({ route: o.route, url: o.url, source: o.source, roles: Object.fromEntries(Object.entries(o.roles).map(([r, why]) => [r || 'default', why === null ? 'checked' : o.expected && o.expected[r] ? 'denied (expected)' : (why.kind === 'login' ? 'sent to ' + why.to : why.kind === 'redirect' ? '→ ' + why.to : why.text) + (o.reported && o.reported[r] ? '' : ' (ordinary redirect)')])) }));
+    coverage.pages = list.map((o) => ({ route: o.route, url: o.url, source: o.source, roles: Object.fromEntries(Object.entries(o.roles).map(([r, why]) => [r || 'default', why === null ? 'checked' : why.kind === 'unstable' ? 'differs by viewport' : o.expected && o.expected[r] ? 'denied (expected)' : (why.kind === 'login' ? 'sent to ' + why.to : why.kind === 'redirect' ? '→ ' + why.to : why.text) + (o.reported && o.reported[r] ? '' : ' (ordinary redirect)')])) }));
   }
   return { issues: allIssues, pages, coverage };
 }

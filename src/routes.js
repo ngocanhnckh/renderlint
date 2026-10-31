@@ -301,7 +301,7 @@ export function notShownFindings(outcomes, { roles, deny = {}, multi }) {
   const findings = [];
   for (const o of outcomes) {
     const shownBy = roles.filter((r) => o.roles[r] === null);
-    const missed = roles.filter((r) => o.roles[r]);
+    const missed = roles.filter((r) => o.roles[r] && o.roles[r].kind !== 'unstable'); // unstable: shown at some viewports only (a flaky render): no evidence either way
     if (!missed.length) continue;
     const alias = !shownBy.length && missed.every((r) => o.roles[r].kind === 'redirect' && o.roles[r].to === o.roles[missed[0]].to);
     for (const r of missed) {
