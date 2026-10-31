@@ -23,7 +23,7 @@ export function paramsOf(pattern) {
 function mkRoute(cwd, pattern, file, layouts, source, extra = {}) {
   pattern = normPattern(pattern);
   const params = paramsOf(pattern);
-  return { pattern, file: file && rel(cwd, file), files: [file, ...layouts].filter(Boolean).map((f) => rel(cwd, f)), params, dynamic: params.length > 0, source, ...extra };
+  return { pattern, file: file && rel(cwd, file), files: [...new Set([file, ...layouts].filter(Boolean).map((f) => rel(cwd, f)))], params, dynamic: params.length > 0, source, ...extra };
 }
 
 export function normPattern(p) {

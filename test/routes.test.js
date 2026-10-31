@@ -240,10 +240,14 @@ export default function Declarative() {
 function Login() { return null; }
 class Settings extends Object {}
 export function Users() { return null; }
-const router = createBrowserRouter([{ path: '/login', element: <Login /> }, { path: '/settings', Component: Settings }, { path: '/users', element: <Users /> }]);
+function Layout() { return null; }
+function Billing() { return null; }
+const router = createBrowserRouter([{ path: '/login', element: <Login /> }, { path: '/settings', Component: Settings }, { path: '/users', element: <Users /> },
+  { path: '/', element: <Layout />, children: [{ path: 'billing', element: <Billing /> }] }]);
 `,
   }));
-  assert.deepEqual(patterns(inline), ['/login', '/settings', '/users'], 'components declared as functions or classes in the router file');
+  assert.deepEqual(patterns(inline), ['/', '/billing', '/login', '/settings', '/users'], 'components declared as functions or classes in the router file');
+  assert.ok(inline.routes.every((r) => new Set(r.files).size === r.files.length), `a layout in the same file is listed once: ${JSON.stringify(inline.routes.map((r) => r.files))}`);
 });
 
 test('coverage: the reason a found route was not checked is the real one', () => {
