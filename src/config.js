@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { RULES } from './rules-meta.js';
-import { normalizeAuth } from './auth.js';
+import { normalizeAuth, forgeJwt } from './auth.js';
 
 export const DEFAULTS = {
   url: undefined,          // base URL of a running app
@@ -12,9 +12,9 @@ export const DEFAULTS = {
   base: undefined,         // public base path the build expects, e.g. "/my-repo/" (Vite `base`)
   pages: ['/'],            // entry pages (paths or absolute URLs)
   crawl: true,             // follow same-origin links from entry pages
-  maxPages: undefined,     // page limit; default 12 when crawling without routes, every planned instance with routes
-  routes: undefined,       // route coverage: read the app's routes from its source (Next, Nuxt, SvelteKit, Astro, React Router, TanStack, Angular, Vue Router), sitemap and build output; false: off
-  params: {},              // values for dynamic routes: { "/products/:id": ["a1", "b2"] }
+  maxPages: undefined,     // page limit per role; default 12 when crawling without routes, every planned instance with routes
+  routes: undefined,       // route coverage: read the app's routes from its source (Next, Nuxt, SvelteKit, Astro, React Router, TanStack, Angular, Vue Router), sitemap and build output, else from its router at runtime; false: off
+  params: {},              // values for dynamic routes: { "/products/:id": ["a1", "b2"], "slug": "hello" } (default: from links, the build and the API data)
   coverage: {},            // { perRoute: 2, min: 100, ignore: ["/admin/*"], baseline: ".renderlint/coverage-baseline.json" }
   exclude: [],             // path globs to skip while crawling, e.g. "/blog/*"
   viewports: [375, 768, 1280],
@@ -34,7 +34,7 @@ export const DEFAULTS = {
   auth: null,              // signed-in pages: { login: '/login', user: '${RENDERLINT_USER}', password: '${RENDERLINT_PASSWORD}' } or { storage: { sessionStorage: { token: 'test' } } }
   mock: {},                // API responses to serve instead: { "**/api/orders*": "fixtures/orders.json" | { status, json } | data }
   mockFrom: [],            // API responses from the project's MSW handlers ("src/mocks/handlers.ts") or a HAR recording ("recordings/app.har")
-  roles: null,             // check the app as each role: { admin: { auth, mock, pages }, viewer: { … } }
+  roles: null,             // check the app as each role, all at once: { admin: { storage | login …, mock, pages, deny }, viewer: { … } }
   serverMock: true,        // when renderlint starts the server ("serve"), "mock" answers the server's own requests too (SSR)
   scan: true,              // static source scan (emoji, placeholder copy) in addition to rendering
   scanDirs: undefined,
@@ -71,7 +71,40 @@ export async function loadConfig(cwd = process.cwd(), explicit) {
   } else if (existsSync(join(cwd, 'package.json'))) {
     try { user = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8')).renderlint || {}; } catch { /* ignore */ }
   }
+  const from = file || join(cwd, 'package.json');
+  if (user && typeof user === 'object' && (user.auth || user.roles)) {
+    // a value a JS config reads from process.env is not in its source: only what is written out counts
+    let text = null;
+    try { text = readFileSync(from, 'utf8'); } catch { /* ignore */ }
+    for (const where of literalSecrets(user, text)) console.warn(`renderlint: ${where} is written out in ${basename(from)}. Keep it out of the repository: write "\${SOME_ENV_VAR}" and set the variable where renderlint runs.`);
+  }
   return { config: normalize({ ...DEFAULTS, ...user }, cwd), file };
+}
+
+// Passwords and real-looking tokens written in the config file's auth settings, as "auth.password",
+// "roles.admin.storage.localStorage.token". Placeholder tokens ("test") and { "$jwt": … } are not secrets.
+const PASSWORD_KEY = /pass(word|wd)?\b|passphrase|secret/i;
+const TOKEN_KEY = /token|jwt|api[-_]?key|bearer|authorization|session|sid$|credential|cookie/i;
+export function literalSecrets(c, source = null) {
+  const found = [];
+  const realToken = (v) => /^(Bearer\s+)?eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(v) || (v.length >= 20 && /\d/.test(v) && /[a-z]/i.test(v) && !/\s/.test(v));
+  const walk = (v, path, key) => {
+    if (typeof v === 'string') {
+      if (!v || /\$\{\w+\}/.test(v) || (source !== null && !source.includes(v))) return;
+      if (PASSWORD_KEY.test(key) || (TOKEN_KEY.test(key) && realToken(v))) found.push(path);
+      return;
+    }
+    if (!v || typeof v !== 'object' || v.$jwt) return;
+    // cookies: [{ name: "session", value: "…" }]
+    const named = typeof v.name === 'string' && 'value' in v ? v.name : null;
+    for (const [k, x] of Object.entries(v)) walk(x, `${path}.${k}`, k === 'value' && named ? named : k);
+  };
+  const scan = (auth, path) => { if (auth && typeof auth === 'object') { const { mock, pages, deny, roles, ...rest } = auth; walk(rest, path, ''); if (roles) for (const [n, r] of Object.entries(roles)) scan(r, `${path}.roles.${n}`); } };
+  if (c && typeof c === 'object') {
+    scan(c.auth, 'auth');
+    if (c.roles && typeof c.roles === 'object') for (const [n, r] of Object.entries(c.roles)) scan(r, `roles.${n}`);
+  }
+  return found;
 }
 
 export function normalize(c, cwd = process.cwd()) {
@@ -107,8 +140,13 @@ export function normalize(c, cwd = process.cwd()) {
   if (out.sweep.some((w) => !(w >= 200 && w <= 4000))) throw new Error(`renderlint: "sweep" must be true, false or a list of widths (got ${JSON.stringify(c.sweep)})`);
   out.mock = resolveMocks(c.mock, cwd, 'mock');
   out.mockFrom = (c.mockFrom === undefined || c.mockFrom === null ? [] : Array.isArray(c.mockFrom) ? c.mockFrom : [c.mockFrom]).map((f) => resolve(cwd, String(f)));
-  out.auth = normalizeAuth(c.auth);
-  out.roles = normalizeRoles(c.roles, cwd);
+  // roles, or the older form auth: { roles, …settings shared by every role }
+  const authRoles = c.auth && typeof c.auth === 'object' && c.auth.roles !== undefined;
+  if (authRoles && c.roles) throw new Error('renderlint: set "roles" or "auth.roles", not both');
+  const { roles: aliased, ...sharedAuth } = authRoles ? c.auth : {};
+  out.auth = normalizeAuth(authRoles ? null : c.auth);
+  out.roles = authRoles ? normalizeRoles(aliased, sharedAuth, null, cwd, 'auth.roles') : normalizeRoles(c.roles, c.auth, out.auth, cwd, 'roles');
+  if (out.params !== undefined && (typeof out.params !== 'object' || out.params === null || Array.isArray(out.params))) throw new Error('renderlint: "params" must map a route or parameter to values: { "/users/:id": ["7"], "slug": "hello-world" }');
   if (!Array.isArray(out.states)) throw new Error('renderlint: "states" must be an array of { name, page, click, … }');
   out.states = out.states.map((st, i) => {
     if (!st || typeof st !== 'object' || !st.name) throw new Error(`renderlint: states[${i}] needs a "name"`);
@@ -121,18 +159,24 @@ export function normalize(c, cwd = process.cwd()) {
   return out;
 }
 
-// roles: { admin: { auth?, mock?, pages? } }. A role without "auth" uses the top-level one ("auth": null: signed out);
-// its mocks go over the top-level ones, in the browser and on the server.
-function normalizeRoles(roles, cwd) {
+// roles: { admin: { …auth settings, mock, pages, deny } }. A role's sign-in: its own "auth" (null: signed out),
+// the auth settings on the role over the top-level "auth", or (none on the role) the top-level "auth" itself.
+// Its mocks go over the top-level ones, in the browser and on the server.
+function normalizeRoles(roles, shared, fallback, cwd, where) {
   if (roles === undefined || roles === null || roles === false) return null;
-  if (typeof roles !== 'object' || Array.isArray(roles) || !Object.keys(roles).length) throw new Error('renderlint: "roles" must map role names to { auth, mock, pages }, e.g. { "admin": { "pages": ["/admin"] } }');
+  if (typeof roles !== 'object' || Array.isArray(roles) || !Object.keys(roles).length) throw new Error(`renderlint: "${where}" must map role names to their settings, e.g. { "admin": { "storage": …, "pages": ["/admin"] }, "viewer": { … } }`);
   const out = {};
   for (const [name, r] of Object.entries(roles)) {
-    if (!/^[A-Za-z0-9_.-]+$/.test(name)) throw new Error(`renderlint: role name "${name}" may only use letters, digits, ".", "_" and "-"`);
-    if (!r || typeof r !== 'object') throw new Error(`renderlint: roles.${name} must be an object: { auth, mock, pages }`);
-    const pages = r.pages === undefined ? [] : typeof r.pages === 'string' ? r.pages.split(',') : r.pages;
-    if (!Array.isArray(pages)) throw new Error(`renderlint: roles.${name}.pages must be a list of paths`);
-    out[name] = { ...r, pages, mock: resolveMocks(r.mock, cwd, `roles.${name}.mock`), ...('auth' in r ? { auth: normalizeAuth(r.auth) } : {}) };
+    if (!/^[\w.-]+$/.test(name)) throw new Error(`renderlint: role name "${name}" may only use letters, digits, "_", "-" and "."`);
+    if (!r || typeof r !== 'object' || Array.isArray(r)) throw new Error(`renderlint: ${where}.${name} must be an object: { storage | login, mock, pages, deny }`);
+    const { auth, mock, pages: p, deny, ...fields } = r;
+    const pages = p === undefined ? [] : typeof p === 'string' ? p.split(',') : p;
+    if (!Array.isArray(pages)) throw new Error(`renderlint: ${where}.${name}.pages must be a list of paths`);
+    if (deny !== undefined && !(Array.isArray(deny) && deny.every((d) => typeof d === 'string'))) throw new Error(`renderlint: ${where}.${name}.deny must be a list of paths such as "/admin/**"`);
+    const own = 'auth' in r ? normalizeAuth(auth, `${where}.${name}.auth`)
+      : Object.keys(fields).length || where === 'auth.roles' ? normalizeAuth({ ...(shared && typeof shared === 'object' ? shared : {}), ...fields }, `${where}.${name}`)
+        : fallback;
+    out[name] = { auth: own, mock: resolveMocks(mock, cwd, `${where}.${name}.mock`), pages, deny: deny || [] };
   }
   return out;
 }
@@ -142,8 +186,16 @@ function resolveMocks(mock, cwd, where) {
   if (mock === undefined || mock === null) return {};
   if (typeof mock !== 'object' || Array.isArray(mock)) throw new Error(`renderlint: "${where}" must map URL patterns to responses`);
   const out = {};
-  for (const [pattern, v] of Object.entries(mock)) out[pattern] = typeof v === 'string' && /\.json$/i.test(v) ? { file: resolve(cwd, v) } : v && typeof v === 'object' && typeof v.file === 'string' ? { ...v, file: resolve(cwd, v.file) } : v;
+  for (const [pattern, v] of Object.entries(mock)) out[pattern] = typeof v === 'string' && /\.json$/i.test(v) ? { file: resolve(cwd, v) } : v && typeof v === 'object' && typeof v.file === 'string' ? { ...v, file: resolve(cwd, v.file) } : withJwts(v);
   return out;
+}
+
+// { "$jwt": claims } anywhere in inline mock data becomes an unsigned token (a mocked login API that returns one).
+function withJwts(v) {
+  if (Array.isArray(v)) return v.map(withJwts);
+  if (!v || typeof v !== 'object') return v;
+  if (v.$jwt && Object.keys(v).length === 1) return forgeJwt(v.$jwt);
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withJwts(x)]));
 }
 
 function defaultHeight(w) { return w <= 480 ? 812 : w <= 900 ? 1024 : 800; }

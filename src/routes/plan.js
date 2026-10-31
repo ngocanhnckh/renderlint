@@ -37,6 +37,11 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
   }
   // values from config: params: { '/products/:id': ['a1', 'b2'] | [{ id: 'a1' }] }
   for (const [pattern, list] of Object.entries(opts.params || {})) {
+    if (!pattern.startsWith('/')) {
+      // by parameter name ({ "slug": "hello" }): every route that takes only that parameter
+      for (const r of routes) if (r.dynamic && r.params.length === 1 && r.params[0] === pattern) for (const v of Array.isArray(list) ? list : [list]) { const u = fillPattern(r.pattern, { [pattern]: v }); if (u) add(r, u, 'config'); }
+      continue;
+    }
     const r = routes.find((x) => x.pattern === normPattern(pattern)) || (() => { const n = { pattern: normPattern(pattern), file: null, files: [], params: [], dynamic: true, source: 'config', candidates: new Map(), checked: [], results: [] }; n.params = Array.from(n.pattern.matchAll(/:(\w+)/g), (m) => m[1]); routes.push(n); return n; })();
     for (const v of Array.isArray(list) ? list : [list]) {
       const vals = v && typeof v === 'object' && !Array.isArray(v) ? v : { [r.params[0]]: v };

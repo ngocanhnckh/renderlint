@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { check } from '../src/index.js';
 import { launchBrowser } from '../src/browser.js';
 import { serveStatic } from '../src/server.js';
-import { loginRedirect, normalizeAuth, resolveEnv, roleGuard } from '../src/auth.js';
+import { loginRedirect, normalizeAuth, resolveEnv } from '../src/auth.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 let browser, srv;
@@ -92,19 +92,4 @@ test('normalizeAuth and resolveEnv', () => {
   process.env.RL_TEST_PW = 's3cret';
   assert.equal(resolveEnv('${RL_TEST_PW}', 'auth.password'), 's3cret');
   assert.throws(() => resolveEnv('${RL_TEST_MISSING}', 'auth.password'), /RL_TEST_MISSING is not set/);
-});
-
-test('roleGuard: a role page the app refused to show, and pages it did show', () => {
-  const g = (to, status = 200, texts = ['Acme']) => roleGuard('https://app.test/admin', 'https://app.test' + to, status, texts);
-  assert.equal(g('/403').redirectedTo, '/403');
-  assert.equal(g('/dashboard').redirectedTo, '/dashboard');
-  assert.equal(g('/admin', 403).status, 403);
-  assert.ok(g('/admin', 200, ['Acme', 'Access denied']));
-  assert.ok(g('/admin', 200, ['403 Forbidden | Acme']));
-  assert.ok(g('/admin', 200, ['Acme', 'Settings', "You don't have permission to see this page."]));
-  // shown: a sub-page, the same page, headings that merely mention access
-  assert.equal(g('/admin/users'), null);
-  assert.equal(g('/admin/'), null);
-  assert.equal(g('/admin', 200, ['Admin', 'Unauthorized access attempts', 'Forbidden words filter']), null);
-  assert.equal(roleGuard('https://app.test/', 'https://app.test/dashboard', 200, []), null, 'home redirecting into the app');
 });

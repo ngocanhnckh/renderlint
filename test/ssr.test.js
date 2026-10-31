@@ -50,9 +50,10 @@ test('every role, every page: role-only pages render on the server from mocks an
 
 test('a role that is sent elsewhere from a page it must see is reported, not checked in its place', async () => {
   const res = await run({ roles: { admin: { ...ROLES.admin, pages: ['/admin'] }, viewer: { ...ROLES.viewer, pages: ['/admin'] } } });
-  const hit = res.issues.find((i) => i.rule === 'auth-required');
+  const hit = res.issues.find((i) => i.rule === 'page-not-shown');
   assert.ok(hit && hit.severity === 'error' && hit.pages.join() === '/admin [role: viewer]', dump(res));
-  assert.match(hit.message, /as role "viewer": the app sent renderlint to \/403/);
+  assert.match(hit.message, /for role "viewer": the app redirected to \/403 \(role "admin" sees it\)\. It is in roles\.viewer\.pages/);
+  assert.ok(!res.issues.some((i) => i.rule === 'auth-required'), dump(res));
   assert.ok(on(res, 'plan', '/admin [role: admin]'), dump(res));
 });
 

@@ -46,8 +46,22 @@ function install() {
     const m = new RegExp('(?:^|;\\s*)' + name + '=([^;]*)').exec(header || '');
     return m ? decodeURIComponent(m[1]) : undefined;
   };
+  // Only requests renderlint's browser makes to this machine are answered from mocks: one from another
+  // host, or addressed to a non-loopback host name, goes to the real network (a server reachable from
+  // outside, or a preload left in a deployed environment, never serves test data to real visitors).
+  const LOOPBACK = /^(localhost|127(?:\.\d{1,3}){3}|\[?::1\]?|0\.0\.0\.0|::ffff:127(?:\.\d{1,3}){3}|[\w-]+\.localhost)$/i;
+  const fromLoopback = (req) => {
+    const remote = String((req.socket && req.socket.remoteAddress) || '');
+    const host = String((req.headers && req.headers.host) || '').replace(/:\d+$/, '');
+    return (!remote || LOOPBACK.test(remote)) && (!host || LOOPBACK.test(host));
+  };
+  let warned = false;
   const contextOf = (req) => {
     const h = req.headers || {};
+    if (!fromLoopback(req)) {
+      if (!warned) { warned = true; process.stderr.write('[renderlint server-mock] a request from or to a non-loopback host: not mocked\n'); }
+      return { off: true, page: req.url };
+    }
     return {
       role: h['x-renderlint-role'] || cookie(h.cookie, 'renderlint-role'),
       state: h['x-renderlint-state'] || cookie(h.cookie, 'renderlint-state'),
@@ -63,7 +77,7 @@ function install() {
       if (event === 'request' && req && req.headers && !req.headers['x-renderlint-mock-url']) {
         const ctx = contextOf(req);
         // an untagged request the server makes to itself while rendering keeps the outer context
-        if (ctx.role || ctx.state || ctx.run || ctx.stress || !als.getStore()) return als.run(ctx, () => emit.apply(this, arguments));
+        if (ctx.off || ctx.role || ctx.state || ctx.run || ctx.stress || !als.getStore()) return als.run(ctx, () => emit.apply(this, arguments));
       }
       return emit.apply(this, arguments);
     };
@@ -78,6 +92,7 @@ function install() {
     let u;
     try { u = new URL(url); } catch { return null; }
     const p = current();
+    if (ctx && ctx.off) return null;
     if (isSelf(u, p)) return null;
     const tables = [ctx && ctx.state && p.states && p.states[ctx.state], ctx && ctx.role && p.roles && p.roles[ctx.role], p.mock].filter(Boolean);
     for (const table of tables) {

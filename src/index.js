@@ -212,7 +212,11 @@ export async function check(options = {}) {
     log(`Checking ${urls.length} page(s)${config.crawl ? ' (+ crawling links)' : ''} at ${config.viewports.map((v) => v.width).join('/')}px…`);
     // Route coverage: every route of the app (source, sitemap, build output), a few instances per dynamic route.
     const coverage = staticFiles || options.storybook ? null : await startCoverage({ cwd, base, config, log, pagesGiven: false });
-    const { issues: raw, pages } = config.roles ? await checkRoles(browser, { urls, base, config, log, plan, coverage }) : await runChecks(browser, { urls, config, log, serverLog: plan && plan.reader, coverage });
+    // Roles: every role checks the entry pages plus its own pages (relative to the base, like "pages").
+    const root = (base || new URL(urls[0]).origin).replace(/\/$/, '');
+    const abs = (p) => (/^https?:/.test(p) ? p : root + (p.startsWith('/') ? p : '/' + p));
+    const runConfig = config.roles ? { ...config, roles: Object.fromEntries(Object.entries(config.roles).map(([n, r]) => [n, { ...r, pages: r.pages.map(abs) }])) } : config;
+    const { issues: raw, pages, roleCoverage } = await runChecks(browser, { urls, config: runConfig, log, serverLog: plan && plan.reader, coverage });
     let scanned = [];
     const doScan = options.scan !== undefined ? options.scan : config.scan && !options.storybook && !targets.some((t) => /^https?:/.test(t));
     if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
@@ -229,9 +233,11 @@ export async function check(options = {}) {
     const cov = coverage ? finishCoverage(coverage, { pages, issues, config }) : null;
     if (cov) stats.coverage = { urls: cov.urls, routes: cov.routes, percent: cov.percent, counts: cov.counts };
     const result = { ok: config.failOn === 'never' ? true : config.failOn === 'warn' ? stats.errors + stats.warnings === 0 : stats.errors === 0, issues, pages, stats, config, coverage: cov };
+    // what each role was shown, page by page (and what the runtime route discovery skipped)
+    if (roleCoverage && (roleCoverage.pages || roleCoverage.framework || roleCoverage.skipped.length || roleCoverage.overLimit)) result.roleCoverage = roleCoverage;
     if (cov && cov.gate.length) result.ok = false;
     mkdirSync(config.outputDir, { recursive: true });
-    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues, ...(cov ? { coverage: cov } : {}) }, null, 2));
+    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues, ...(cov ? { coverage: cov } : {}), ...(result.roleCoverage ? { roleCoverage: result.roleCoverage } : {}) }, null, 2));
     writeFileSync(join(config.outputDir, 'report.md'), formatMarkdown(result));
     return result;
   } finally {
@@ -239,23 +245,6 @@ export async function check(options = {}) {
     if (browser && !options.browser) await browser.close().catch(() => {});
     for (const fn of cleanup.reverse()) await Promise.resolve(fn()).catch(() => {});
   }
-}
-
-// Every role is a run of its own: its own session ("auth"), its mocks over the top-level ones (in the
-// browser and, through the preload, on the server: a "renderlint-role" cookie tells it which role a
-// request is for), the entry pages plus the role's own pages, and its page names labelled "[role: name]".
-async function checkRoles(browser, { urls, base, config, log, plan }) {
-  const all = { issues: [], pages: [] };
-  for (const [name, role] of Object.entries(config.roles)) {
-    log(`Role ${name}:`);
-    const root = base || new URL(urls[0]).origin;
-    const own = role.pages.map((p) => (/^https?:/.test(p) ? p : root + (p.startsWith('/') ? p : '/' + p)));
-    const roleConfig = { ...config, auth: 'auth' in role ? role.auth : config.auth, mock: { ...config.mock, ...role.mock }, role: { name, pages: own } };
-    const r = await runChecks(browser, { urls: Array.from(new Set([...urls, ...own])), config: roleConfig, log, serverLog: plan && plan.reader });
-    all.issues.push(...r.issues);
-    all.pages.push(...r.pages);
-  }
-  return all;
 }
 
 function stripUndefined(o) { return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)); }

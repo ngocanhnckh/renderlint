@@ -210,8 +210,14 @@ export const RULES = {
   'auth-required': {
     severity: 'error',
     category: 'runtime',
-    summary: 'A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). With `roles`, also a page listed for a role that the app didn\'t show it (sent elsewhere, HTTP 401/403, or only an "Access denied" heading).',
-    fix: 'Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. For a role: give it a session and mocks that grant the page (`roles.<name>.auth`, `roles.<name>.mock`, e.g. `/api/me` answering with that role). See docs/authentication.md.',
+    summary: 'A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). Any other page the app didn\'t show is `page-not-shown`.',
+    fix: 'Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. For a role: give it a session the app accepts (its storage or login under `roles.<name>`). See docs/authentication.md.',
+  },
+  'page-not-shown': {
+    severity: 'warn',
+    category: 'runtime',
+    summary: 'Signed in, the app did not show a page renderlint was asked to check or found (in a link or the app\'s routes), so it was not checked: a guard redirected elsewhere, the server answered HTTP 401/403, or "Access denied" / "Page not found" was rendered in its place. With several roles, a page one role sees and another does not. An error for a page you listed that no role could see, and for a page in a role\'s own `pages`. Not flagged: the home page forwarding, a section\'s default child, trailing slashes, locale prefixes, and a redirect every role takes the same way.',
+    fix: 'If the role is not meant to see the page, list it in `roles.<role>.deny` (e.g. ["/admin/**"]) and it is recorded as denied as expected. Otherwise give that role what the guard checks (its storage, a forged token `{ "$jwt": { "role": "admin" } }`, or `roles.<role>.mock`, e.g. `/api/me` answering with that role), or for a dynamic route set `params` to a value that exists. See docs/authentication.md#roles.',
   },
   'console-error': {
     severity: 'error',

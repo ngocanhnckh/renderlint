@@ -25,18 +25,40 @@ export function resolveEnv(value, where) {
   });
 }
 
-export function normalizeAuth(auth) {
+export function normalizeAuth(auth, where = 'auth') {
   if (auth === undefined || auth === null || auth === false) return null;
-  if (typeof auth !== 'object') throw new Error('renderlint: "auth" must be an object: { login, user, password } or { storage } (see docs/authentication.md)');
+  if (typeof auth !== 'object') throw new Error(`renderlint: "${where}" must be an object: { login, user, password } or { storage } (see docs/authentication.md)`);
+  return normalizeOne(auth, where);
+}
+
+function normalizeOne(auth, where) {
   const out = { ...auth };
   if (typeof out.login === 'string') out.login = { page: out.login };
   if (out.login) {
-    if (typeof out.login !== 'object' || !out.login.page) throw new Error('renderlint: "auth.login" must be a path such as "/login" or { page, fill, submit, waitFor }');
-    if (!out.login.fill && !(out.user && out.password)) throw new Error('renderlint: "auth.login" needs "user" and "password" (e.g. "${RENDERLINT_USER}"), or "fill": { selector: value }');
+    if (typeof out.login !== 'object' || !out.login.page) throw new Error(`renderlint: "${where}.login" must be a path such as "/login" or { page, fill, submit, waitFor }`);
+    if (!out.login.fill && !(out.user && out.password)) throw new Error(`renderlint: "${where}.login" needs "user" and "password" (e.g. "\${RENDERLINT_USER}"), or "fill": { selector: value }`);
   }
-  if (out.storage && typeof out.storage !== 'object') throw new Error('renderlint: "auth.storage" must be { localStorage, sessionStorage, cookies }');
-  if (!out.login && !out.storage && typeof out.run !== 'function') throw new Error('renderlint: "auth" needs "login", "storage" or (JS config) "run"');
+  if (out.storage && typeof out.storage !== 'object') throw new Error(`renderlint: "${where}.storage" must be { localStorage, sessionStorage, cookies }`);
+  if (!out.login && !out.storage && typeof out.run !== 'function') throw new Error(`renderlint: "${where}" needs "login", "storage" or (JS config) "run"`);
   return out;
+}
+
+// An unsigned JWT for guards that decode the token in the frontend (jwt-decode, @auth0/angular-jwt):
+// { "$jwt": { "role": "admin" } } as an auth value. It expires in 2100 unless the claims say otherwise.
+export function forgeJwt(claims = {}) {
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  return b64({ alg: 'none', typ: 'JWT' }) + '.' + b64({ sub: 'renderlint', iat: Math.floor(Date.now() / 1000), exp: 4102444800, ...claims }) + '.';
+}
+
+// A storage value: a string (with ${ENV}), { "$jwt": claims }, or any JSON value (a persisted store's
+// state, which may hold { "$jwt": … } itself).
+export function storageValue(v, where) {
+  const walk = (x) => (x && typeof x === 'object' && !Array.isArray(x) && x.$jwt && Object.keys(x).length === 1 ? forgeJwt(walk(x.$jwt))
+    : Array.isArray(x) ? x.map(walk)
+      : x && typeof x === 'object' ? Object.fromEntries(Object.entries(x).map(([k, y]) => [k, walk(y)]))
+        : typeof x === 'string' ? resolveEnv(x, where) : x);
+  const w = walk(v);
+  return typeof w === 'string' ? w : JSON.stringify(w);
 }
 
 // Sets sessionStorage before the app's scripts run (Playwright's storageState has no sessionStorage).
@@ -60,10 +82,10 @@ export async function authenticate(browser, baseUrl, config, { log = () => {}, r
     // A role's session is made with the role's server-side mocks (the mocked login API answers as that role).
     if (config.role) await context.addCookies([{ name: ROLE_COOKIE, value: encodeURIComponent(config.role.name), url: origin }]);
     const storage = auth.storage || {};
-    const cookies = (storage.cookies || []).map((c) => ({ path: '/', ...c, value: resolveEnv(String(c.value), 'auth.storage.cookies'), ...(c.domain ? {} : { url: origin }) }));
+    const cookies = (storage.cookies || []).map((c) => ({ path: '/', ...c, value: storageValue(c.value && typeof c.value === 'object' ? c.value : String(c.value), 'auth.storage.cookies'), ...(c.domain ? {} : { url: origin }) }));
     if (cookies.length) await context.addCookies(cookies.map((c) => (c.url ? (({ path, ...rest }) => rest)(c) : c)));
-    const local = Object.fromEntries(Object.entries(storage.localStorage || {}).map(([k, v]) => [k, resolveEnv(typeof v === 'string' ? v : JSON.stringify(v), 'auth.storage.localStorage')]));
-    const session = Object.fromEntries(Object.entries(storage.sessionStorage || {}).map(([k, v]) => [k, resolveEnv(typeof v === 'string' ? v : JSON.stringify(v), 'auth.storage.sessionStorage')]));
+    const local = Object.fromEntries(Object.entries(storage.localStorage || {}).map(([k, v]) => [k, storageValue(v, 'auth.storage.localStorage')]));
+    const session = Object.fromEntries(Object.entries(storage.sessionStorage || {}).map(([k, v]) => [k, storageValue(v, 'auth.storage.sessionStorage')]));
     if (Object.keys(local).length || Object.keys(session).length) {
       await context.addInitScript(({ local, session }) => {
         try {
@@ -155,23 +177,5 @@ export function loginRedirect(requested, landed, hasPasswordField) {
   }
   if (route(a).replace(/\/$/, '') === route(b).replace(/\/$/, '')) return null;
   if (LOGIN_PATH.test(route(b)) || hasPasswordField) return { to: route(b) + (b.search && !/[?&](returnUrl|redirect|next|returnTo)=/.test(b.search) ? b.search : ''), external: false };
-  return null;
-}
-
-// A page a role must be able to see, which the app didn't show it: sent elsewhere (not to a sub-page of it),
-// HTTP 401/403, or a heading that is only an "access denied" message. null when the page was shown.
-const DENIED = /^(error )?(40[13]\b ?[-:]? ?)?(access denied|access forbidden|forbidden|not authori[sz]ed|unauthori[sz]ed|permission denied|no access)?$/i;
-const NO_PERMISSION = /\byou (do not|don't|dont) have (the )?(required )?(permission|access|rights)\b/i;
-export function roleGuard(requested, landed, status, texts = []) {
-  if (status === 401 || status === 403) return { reason: `the server answered HTTP ${status}`, status };
-  let a, b;
-  try { a = new URL(requested); b = new URL(landed); } catch { return null; }
-  const route = (u) => (u.pathname + (u.hash.startsWith('#/') || u.hash.startsWith('#!/') ? u.hash : '')).replace(/\/$/, '') || '/';
-  if (a.origin === b.origin && route(a) !== route(b) && !route(b).startsWith(route(a) === '/' ? '/' : route(a) + '/')) return { reason: `the app sent renderlint to ${route(b)} instead`, redirectedTo: route(b) };
-  for (const [i, raw] of texts.entries()) {
-    const t = raw.replace(/\s+/g, ' ').trim();
-    const parts = i === 0 ? t.split(/\s+[|–—·:-]\s+/) : [t.replace(/[.!]+$/, '')];
-    if (parts.some((x) => /\S/.test(x) && DENIED.test(x.replace(/[.!]+$/, ''))) || (i > 0 && t.length < 160 && NO_PERMISSION.test(t))) return { reason: `the page says "${t.slice(0, 80)}"`, text: t };
-  }
   return null;
 }
