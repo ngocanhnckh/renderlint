@@ -54,4 +54,4 @@ Commit `renderlint.config.json`, your fixtures, `.claude/skills/` and the `AGENT
 
 ## Reporting a problem
 
-If you find a way renderlint could change data, leak a credential, or reach beyond the app under test, please open an issue at [github.com/ngocanhnckh/renderlint](https://github.com/ngocanhnckh/renderlint/issues). Mark it as security-related, or contact the maintainer privately first.
+If you find a way renderlint could change data, leak a credential, or reach beyond the app under test, please open an issue at [gitlab.com/anhnn.a05/renderlint](https://gitlab.com/anhnn.a05/renderlint/-/issues). Mark it as security-related, or contact the maintainer privately first.

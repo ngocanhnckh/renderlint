@@ -67,4 +67,4 @@ npx renderlint storybook --globals theme:dark --stories "Forms/*"
 - **Explicit `mock` entries win** over both.
 - **Uncovered requests:** with `mockFrom`, a request none of them answers that then fails is a `broken-resource` warning. Add it to the handlers rather than ignoring it.
 
-Details: [docs/playwright.md](https://github.com/ngocanhnckh/renderlint/blob/master/docs/playwright.md), [docs/storybook.md](https://github.com/ngocanhnckh/renderlint/blob/master/docs/storybook.md).
+Details: [docs/playwright.md](https://gitlab.com/anhnn.a05/renderlint/-/blob/master/docs/playwright.md), [docs/storybook.md](https://gitlab.com/anhnn.a05/renderlint/-/blob/master/docs/storybook.md).

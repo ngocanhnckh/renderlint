@@ -71,6 +71,6 @@ renderlint later gained a width sweep (13 widths from 320 to 1920px), more stres
 ## Reproduce
 
 ```bash
-claude -p "<your app prompt> Also: set up renderlint by running \`npx -y github:ngocanhnckh/renderlint init\`, then follow the 'UI quality gate: renderlint' section it adds to AGENTS.md." --dangerously-skip-permissions
+claude -p "<your app prompt> Also: set up renderlint by running \`npx -y @ngocanhnckh/renderlint init\`, then follow the 'UI quality gate: renderlint' section it adds to AGENTS.md." --dangerously-skip-permissions
 npx renderlint --json   # score the result
 ```

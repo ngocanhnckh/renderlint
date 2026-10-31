@@ -3,7 +3,7 @@
 <p align="center"><b>A linter for the rendered UI.</b> It opens your app in a real browser, finds the visual defects coding agents ship, and fails the build until they're fixed.</p>
 
 <p align="center">
-  <a href="https://github.com/ngocanhnckh/renderlint/actions/workflows/ci.yml"><img src="https://github.com/ngocanhnckh/renderlint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://gitlab.com/anhnn.a05/renderlint/-/pipelines"><img src="https://gitlab.com/anhnn.a05/renderlint/badges/master/pipeline.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/node-%3E%3D18.17-brightgreen.svg" alt="Node >= 18.17">
   <img src="https://img.shields.io/badge/framework-any-8b5cf6.svg" alt="Any framework">
