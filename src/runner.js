@@ -578,7 +578,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
       const p = pages.find((x) => normalizeUrl(x.url) === normalizeUrl(f.url) && (x.role || null) === (f.role || null) && !/\[state:/.test(x.path) && !x.quick);
       for (const vp of allViewports) allIssues.push({ ...f, page: p ? p.path : pathOf(f.url, origin), viewport: vp.width, scheme: 'light' });
     }
-    roleCoverage.pages = list.map((o) => ({ route: o.route, url: o.url, source: o.source, roles: Object.fromEntries(Object.entries(o.roles).map(([r, why]) => [r || 'default', why === null ? 'checked' : why.kind === 'unstable' ? 'differs by viewport' : o.expected && o.expected[r] ? 'denied (expected)' : (why.kind === 'login' ? 'sent to ' + why.to : why.kind === 'redirect' ? '→ ' + why.to : why.text) + (o.reported && o.reported[r] ? '' : ' (ordinary redirect)')])) }));
+    roleCoverage.pages = list.map((o) => ({ route: o.route, url: o.url, source: o.source, roles: Object.fromEntries(Object.entries(o.roles).map(([r, why]) => [r || 'default', why === null ? 'checked' : why.kind === 'unstable' ? 'differs by viewport' : o.expected && o.expected[r] ? 'denied (expected)' : (why.kind === 'login' ? 'sent to ' + why.to : why.kind === 'redirect' ? '→ ' + why.to : why.text) + (o.reported && o.reported[r] ? '' : why.kind === 'redirect' ? ' (ordinary redirect)' : ' (not a finding)')])) }));
   }
   return { issues: allIssues, pages, roleCoverage };
 }

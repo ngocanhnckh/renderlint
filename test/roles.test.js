@@ -233,3 +233,13 @@ test('notShownFindings: who saw what', () => {
   ], { roles: ['admin', 'viewer'], deny: { viewer: ['/billing'] }, multi: true });
   assert.deepEqual(f.map((x) => `${x.details.route} ${x.role} ${x.severity}`), ['/admin viewer warn', '/reports admin warn', '/reports viewer warn']);
 });
+
+test('notShownFindings: the app\'s own error page, and the page a guard lands on, are not findings', () => {
+  const denied = { kind: 'denied', text: 'Access denied' };
+  const o = (route, source, extra = {}) => ({ url: 'https://app.test' + route, route, source, page: true, roles: { admin: denied, viewer: denied }, ...extra });
+  const f = notShownFindings([o('/403', 'route'), o('/forbidden', 'link'), o('/nope', 'landed'), o('/settings', 'link')], { roles: ['admin', 'viewer'], multi: true });
+  assert.deepEqual(f.map((x) => x.details.route), ['/settings', '/settings']);
+  // one of a role's own pages is reported all the same
+  const g = notShownFindings([o('/403', 'route', { listedFor: { viewer: true } })], { roles: ['admin', 'viewer'], multi: true });
+  assert.ok(g.some((x) => x.role === 'viewer' && x.severity === 'error'));
+});

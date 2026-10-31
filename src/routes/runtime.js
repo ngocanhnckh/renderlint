@@ -288,6 +288,7 @@ export function redirectedTo(asked, landed) {
   return rb;
 }
 
+const ERROR_PAGE = /^\/(errors?\/)?(40[134]|50\d|forbidden|unauthori[sz]ed|access-denied|denied|no-access|not-allowed|not-found|notfound|error)(\/|$)/i;
 const ROOT = (u) => { try { const x = new URL(u); return routeOf(u) === '/' || (/\.html?$/.test(x.pathname) && !/^#!?\//.test(x.hash)); } catch { return false; } };
 
 // Turns each page's outcome for every role into findings. `outcomes` maps a page key to
@@ -303,6 +304,8 @@ export function notShownFindings(outcomes, { roles, deny = {}, multi }) {
     const shownBy = roles.filter((r) => o.roles[r] === null);
     const missed = roles.filter((r) => o.roles[r] && o.roles[r].kind !== 'unstable'); // unstable: shown at some viewports only (a flaky render): no evidence either way
     if (!missed.length) continue;
+    // the app's own error page (/403, /forbidden, a guard's landing page) shows "Access denied" by design
+    if (!shownBy.length && !Object.values(o.listedFor || {}).some(Boolean) && (o.source === 'landed' || ERROR_PAGE.test(o.route))) continue;
     const alias = !shownBy.length && missed.every((r) => o.roles[r].kind === 'redirect' && o.roles[r].to === o.roles[missed[0]].to);
     for (const r of missed) {
       const why = o.roles[r];

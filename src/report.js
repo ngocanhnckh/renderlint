@@ -103,7 +103,7 @@ function roleCoverageLines(c) {
     for (const r of rows) {
       const cells = roles.map((name, i) => {
         const v = r.roles[name], t = (v || '—').slice(0, cw[i]).padEnd(cw[i]);
-        return v === undefined ? dim(t) : v === 'checked' ? green(t) : /\((expected|ordinary redirect)\)$/.test(v) ? dim(t) : yellow(t);
+        return v === undefined ? dim(t) : v === 'checked' ? green(t) : /\((expected|ordinary redirect|not a finding)\)$/.test(v) ? dim(t) : yellow(t);
       });
       out.push('  ' + r.route.slice(0, w).padEnd(w) + '  ' + cells.join('  '));
     }
