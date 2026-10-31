@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const SKILLS = ['renderlint-setup', 'renderlint-fix', 'renderlint-e2e'];
 export const SKILLS_DIR = join('.claude', 'skills');
-const MARK = /\n?<!-- renderlint-skill: (\S+) (\S+) ([0-9a-f]{12}) -->\s*$/;
+const MARK = /\n?<!-- renderlint-skill: (\S+) (\S+) ([0-9a-f]{12}) -->/;
 
 const version = () => JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8')).version;
 const hash = (s) => createHash('sha256').update(s.replace(/\r\n/g, '\n').trimEnd()).digest('hex').slice(0, 12);
@@ -35,7 +35,7 @@ export function skillState(cwd, name) {
   const cur = readFileSync(file, 'utf8');
   const m = MARK.exec(cur);
   if (!m || m[1] !== name) return 'foreign'; // not written by renderlint init
-  const body = cur.slice(0, m.index);
+  const body = cur.slice(0, m.index) + cur.slice(m.index + m[0].length); // notes added below the marker are edits too
   if (hash(body) !== m[3]) return 'edited';
   return hash(body) === hash(skillTemplate(name)) ? 'current' : 'update';
 }

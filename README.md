@@ -31,6 +31,8 @@ npx renderlint                        # check: exits 1 if any error is found
 
 Or just install it: `npm i -D @ngocanhnckh/renderlint`. The command is `renderlint` either way. To try it once without installing: `npx -y @ngocanhnckh/renderlint http://localhost:3000`.
 
+Not sure what your app needs (a login, roles, server rendering, hundreds of pages)? [Getting started](docs/getting-started.md) picks the setup for your situation, and there's a page for each [framework](docs/frameworks/README.md).
+
 ```
 ✖ contrast (3)  Text does not have enough contrast with what is actually behind it …
   error Low text contrast: 2.66:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#459bf4).
@@ -62,7 +64,7 @@ Or just install it: `npm i -D @ngocanhnckh/renderlint`. The command is `renderli
 - [Configuration](#configuration)
 - [How it works](#how-it-works)
 - [Limitations](#limitations)
-- Docs: [rules](docs/rules.md) · [configuration](docs/configuration.md) · [integrations](docs/integrations.md) · [authentication](docs/authentication.md) · [WordPress](docs/wordpress.md) · [gallery](docs/gallery.md) · [results](docs/results.md)
+- Docs: [getting started](docs/getting-started.md) · [frameworks](docs/frameworks/README.md) · [rules](docs/rules.md) · [configuration](docs/configuration.md) · [authentication](docs/authentication.md) · [roles and coverage](docs/roles-and-coverage.md) · [server mocks](docs/server-mocks.md) · [Playwright](docs/playwright.md) · [Storybook](docs/storybook.md) · [integrations](docs/integrations.md) · [coding agents](docs/agents.md) · [security](docs/security.md) · [WordPress](docs/wordpress.md) · [gallery](docs/gallery.md) · [results](docs/results.md) · [changelog](CHANGELOG.md)
 
 ## What it catches
 
@@ -203,7 +205,11 @@ It can also log in through your form once (`"auth": { "login": "/login", "user":
 
 With `"roles": { "admin": {…}, "viewer": {…} }`, every page is checked as each role, all roles at once (`/admin [role: admin]`). Routes come from your source and from your Vue, React Router or Angular router at runtime, so pages reached only with a button, and dynamic routes such as `/users/:id`, are checked too. A page a role isn't shown (a guard's redirect, HTTP 401/403, "Access denied" in place) is reported as `page-not-shown`, never passed. See [roles and coverage](docs/roles-and-coverage.md).
 
-Server-rendered apps (Next.js, Nuxt, SvelteKit, React Router / Remix) check the session and fetch data on the server. When renderlint starts the app, `mock` (and each role's) answers the server's own requests too, so the real login form, `middleware.ts`, `getServerSideProps` and loaders all run with no backend. See [server-rendered apps](docs/authentication.md#server-rendered-apps-nextjs-nuxt-sveltekit-react-router--remix).
+Server-rendered apps (Next.js, Nuxt, SvelteKit, React Router / Remix, Angular SSR) check the session and fetch data on the server. When renderlint starts the app, `mock` (and each role's) answers the server's own requests too, so the real login form, `middleware.ts`, `getServerSideProps` and loaders all run with no backend. See [server mocks](docs/server-mocks.md).
+
+Dialogs, multi-step forms and other states behind clicks: your [Playwright tests](docs/playwright.md) already reach them, and renderlint can check each one in the test's own page. Components in isolation: [Storybook](docs/storybook.md).
+
+renderlint never sends credentials anywhere, never opens log-out or destructive links (delete, cancel, unsubscribe…), and its server mocks only run on a loopback address. See [security](docs/security.md).
 
 ## WordPress and Elementor
 
@@ -231,7 +237,8 @@ renderlint exits non-zero when it finds errors, so you can gate any step on it:
 | **`npm run build`** (any framework) | `init` appends a check to your build script, e.g. `"build": "vite build && renderlint dist"` or `"build": "next build && renderlint --serve \"npx next start -p 4319\" --url http://localhost:4319"` |
 | **Vite** (React, Vue, Svelte, Solid, Preact, Lit, Qwik…) | `import renderlint from '@ngocanhnckh/renderlint/vite'` and add `renderlint()` to `plugins`. `vite build` fails on errors. In dev, an overlay shows findings live and prints them in the dev-server terminal, with source file:line. |
 | **Claude Code** | `init` adds a `Stop` hook (`npx renderlint hook`). Claude can't end its turn while UI errors remain in files it changed. The hook only runs when UI files changed and gives up after 4 attempts, so it can't trap the agent. |
-| **Other agents** | `init` writes the workflow into `AGENTS.md` (read by Codex, Cursor, Copilot, Gemini, Amp, Zed and others) and `CLAUDE.md`. |
+| **Other agents** | `init` writes the workflow into `AGENTS.md` (read by Codex, Cursor, Copilot, Gemini, Amp, Zed and others) and `CLAUDE.md`, and installs three [skills](docs/agents.md): setting up every page and role, fixing findings, Playwright and Storybook. |
+| **Playwright Test** | `withRenderlint(test)` checks each state your e2e tests reach. See [docs/playwright.md](docs/playwright.md). |
 | **CI** | `npx renderlint --format github` gives inline PR annotations. See [docs/integrations.md](docs/integrations.md). |
 | **Any bundler, in dev** | `import('@ngocanhnckh/renderlint/client').then((m) => m.start())` adds the live overlay to any app. |
 
@@ -241,11 +248,12 @@ renderlint exits non-zero when it finds errors, so you can gate any step on it:
 1. Adds renderlint as a dev dependency (creating a `package.json` for plain HTML sites).
 2. Writes `renderlint.config.json`, pointed at your dev command or static folder.
 3. Adds a `lint:ui` script and appends the check to `build`, so builds fail on UI defects (`--no-build` to skip).
-4. Adds the agent workflow to `AGENTS.md`, and creates `CLAUDE.md` (which imports it) or adds the workflow to an existing one.
-5. Installs the Claude Code Stop hook in `.claude/settings.json` (`--no-hook` to skip).
-6. Adds `.renderlint/` to `.gitignore` and makes sure a headless Chromium is available.
+4. Installs the agent skills `renderlint-setup`, `renderlint-fix` and `renderlint-e2e` in `.claude/skills/` (`--no-skills` to skip). A skill you edited is left alone; `--force` replaces it.
+5. Adds the agent workflow to `AGENTS.md`, pointing to the skills, and creates `CLAUDE.md` (which imports it) or adds the workflow to an existing one.
+6. Installs the Claude Code Stop hook in `.claude/settings.json` (`--no-hook` to skip).
+7. Adds `.renderlint/` to `.gitignore` and makes sure a headless Chromium is available.
 
-`init` is idempotent, so you can run it again safely.
+`init` is idempotent, so you can run it again safely: it updates skills it installed earlier to the current version.
 </details>
 
 ## Intentional? Say so.
@@ -312,7 +320,8 @@ process.exit(result.ok ? 0 : 1);
 ## Limitations
 
 - `<canvas>` charts (Chart.js, ECharts in canvas mode) are pixels, so their labels can't be inspected. Use an SVG renderer, or rely on your chart library's own label-collision handling.
-- Pages are checked as they load. Menus, dialogs, tabs and empty or error states are only checked when you list them in `states`, and pages behind a login need [`auth`](docs/authentication.md).
+- Pages are checked as they load. Menus, dialogs, tabs and empty or error states are only checked when you list them in `states` or reach them in a [Playwright test](docs/playwright.md), and pages behind a login need [`auth`](docs/authentication.md).
+- Server mocks are Node only. Pages a Django, Rails, Laravel or Go server renders need a running backend with test accounts ([other backends](docs/frameworks/other-backends.md)).
 - Contrast follows WCAG 2 AA math. It doesn't model font weight beyond the large-text rule, and doesn't apply APCA.
 - A single page takes about 4–10 seconds at three viewports with the sweep and stress passes. A site is faster per page: pages are checked side by side, and pages that render identically (an SPA's fallback route, duplicate URLs) share their checks. Use `--sweep 1024` or `--no-sweep` for a faster inner loop.
 

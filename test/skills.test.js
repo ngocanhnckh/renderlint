@@ -35,6 +35,14 @@ test('installs missing skills, leaves current and edited ones alone, updates out
   assert.equal(skillState(cwd, 'renderlint-fix'), 'edited');
   installSkills(cwd);
   assert.equal(readFileSync(file(cwd, 'renderlint-fix'), 'utf8'), edited);
+  // notes appended below the marker count as an edit too
+  installSkills(cwd, { force: true });
+  const appended = readFileSync(file(cwd, 'renderlint-fix'), 'utf8') + 'Our note.\n';
+  writeFileSync(file(cwd, 'renderlint-fix'), appended);
+  assert.equal(skillState(cwd, 'renderlint-fix'), 'edited');
+  installSkills(cwd);
+  assert.equal(readFileSync(file(cwd, 'renderlint-fix'), 'utf8'), appended);
+  writeFileSync(file(cwd, 'renderlint-fix'), edited);
 
   // an older version written by init (marker matches its content): updated
   const old = '---\nname: renderlint-setup\ndescription: old text. Use when old.\n---\n\nOld instructions.';

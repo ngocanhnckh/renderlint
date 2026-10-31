@@ -6,7 +6,8 @@ const HELP = `renderlint — catch visual UI defects in any web frontend before 
 
 Usage
   renderlint [targets...] [options]     Check pages (URLs, .html files, a build dir, or auto-detect)
-  renderlint init                       Set up renderlint in this project (config, scripts, agent instructions)
+  renderlint init                       Set up renderlint in this project (config, scripts, agent instructions, skills)
+                                        --no-install --no-build --no-hook --no-skills --no-browser; --force replaces edited skills
   renderlint storybook [url|dir]        Check every story of a Storybook (storybook-static/ or a running one)
   renderlint scan [dirs...]             Static source scan only (emoji, placeholder copy)
   renderlint explain [rule]             Describe rules and how to fix them
