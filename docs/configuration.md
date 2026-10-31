@@ -46,7 +46,7 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `maxScreenshotHeight` | `12000` | Pages taller than this are only contrast-checked down to this height. |
 | `beforeCheck` | — | JS config only: `async (page, { viewport, scheme }) => {}` — log in, open a menu, set state. `page` is a Playwright page. |
 | `auth` | — | Pages behind a login. `{ storage: { sessionStorage, localStorage, cookies } }` sets the token the route guard reads (frontend only, with `mock` for the API); `{ login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }` logs in once; `{ run: async (page) => {} }` (JS config) for SSO. With `roles`, the settings every role shares. A password or real-looking token written out in the config file (not `${ENV}`) gets a warning. See [authentication](authentication.md). |
-| `roles` | — | Check every page as each role, all roles at once: `{ "admin": { "storage"?, "login"?, …, "mock"?, "pages"?, "deny"? }, "viewer": { … } }`. A role's sign-in settings go over the top-level `auth` (none: the top-level `auth`; `"auth": null`: signed out); its `mock` goes over the top-level `mock`, in the browser and on the server; `pages` are pages it must see (checked as that role, an error when not shown); `deny` lists paths it is not meant to see (`["/admin/**"]`). Pages are reported as `/admin [role: admin]`, and the report shows a route × role table. A page one role sees and another doesn't is `page-not-shown`. `auth: { roles: … }` is accepted too. See [roles](authentication.md#every-page-as-every-role). |
+| `roles` | — | Check every page as each role, all roles at once: `{ "admin": { "storage"?, "login"?, …, "mock"?, "pages"?, "deny"? }, "viewer": { … } }`. A role's sign-in settings go over the top-level `auth` (none: the top-level `auth`; `"auth": null`: signed out); its `mock` goes over the top-level `mock`, in the browser and on the server; `pages` are pages it must see (checked as that role, an error when not shown); `deny` lists paths it is not meant to see (`["/admin/**"]`). Pages are reported as `/admin [role: admin]`, and the report shows a route × role table. A page one role sees and another doesn't is `page-not-shown`. `auth: { roles: … }` is accepted too. See [roles](roles-and-coverage.md). |
 | `serverMock` | `true` | When renderlint starts the server (`serve`, or the `dev` script), `mock` (and each role's and state's) also answers the requests the server makes (SSR: server components, loaders, `getServerSideProps`, Nuxt server routes), through a preload that only runs in the server renderlint starts and only answers requests to a loopback host. `false`: browser only. |
 | `contextOptions` | — | Extra Playwright browser-context options (e.g. `locale`, `storageState`). |
 
@@ -96,7 +96,7 @@ A state without `page` uses the first entry page. `run: async (page) => {}` (JS 
 
 When a dialog is open (`aria-modal="true"`, or a `<dialog>` opened with `showModal()`), only the dialog is checked: the page behind it is inert and dimmed by the backdrop on purpose.
 
-If your end-to-end tests already open these states, let them do it instead: see [Playwright Test](integrations.md#playwright-test). For API data the project already has, see `mockFrom` above:
+If your end-to-end tests already open these states, let them do it instead: see [Playwright](playwright.md). For API data the project already has, see `mockFrom` above:
 
 ```json
 { "mockFrom": ["src/mocks/handlers.ts"] }

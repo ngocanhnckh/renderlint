@@ -217,7 +217,7 @@ export const RULES = {
     severity: 'warn',
     category: 'runtime',
     summary: 'Signed in, the app did not show a page renderlint was asked to check or found (in a link or the app\'s routes), so it was not checked: a guard redirected elsewhere, the server answered HTTP 401/403, or "Access denied" / "Page not found" was rendered in its place. With several roles, a page one role sees and another does not. An error for a page you listed that no role could see, and for a page in a role\'s own `pages`. Not flagged: the home page forwarding, a section\'s default child, trailing slashes, locale prefixes, and a redirect every role takes the same way.',
-    fix: 'If the role is not meant to see the page, list it in `roles.<role>.deny` (e.g. ["/admin/**"]) and it is recorded as denied as expected. Otherwise give that role what the guard checks (its storage, a forged token `{ "$jwt": { "role": "admin" } }`, or `roles.<role>.mock`, e.g. `/api/me` answering with that role), or for a dynamic route set `params` to a value that exists. See docs/authentication.md#roles.',
+    fix: 'If the role is not meant to see the page, list it in `roles.<role>.deny` (e.g. ["/admin/**"]) and it is recorded as denied as expected. Otherwise give that role what the guard checks (its storage, a forged token `{ "$jwt": { "role": "admin" } }`, or `roles.<role>.mock`, e.g. `/api/me` answering with that role), or for a dynamic route set `params` to a value that exists. See docs/roles-and-coverage.md.',
   },
   'console-error': {
     severity: 'error',
