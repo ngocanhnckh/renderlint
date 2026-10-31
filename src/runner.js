@@ -7,8 +7,10 @@ import { measureContrast } from './contrast.js';
 import { measureDropdowns } from './controls.js';
 import { RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
-import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
+import { authenticate, loginRedirect, roleGuard, LOGIN_PATH } from './auth.js';
 import { loadMockSources, answerFrom } from './mock-sources.js';
+import { ROLE_COOKIE, RUN_COOKIE, STRESS_COOKIE, STATE_COOKIE } from './server-plan.js';
+import { randomUUID } from 'node:crypto';
 
 export const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -199,14 +201,14 @@ const FINGERPRINT_SCRIPT = ({ template }) => {
   return { fp, skeleton: template && document.body ? id(shape(document.body)) : null };
 };
 
-export function slugFor(url) {
+export function slugFor(url, role) {
   const u = new URL(url);
   const s = (u.pathname.replace(/\/+$/, '') || '/index').replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'index';
   const extra = u.search + hashRoute(u);
   const name = (s + (extra ? '-' + extra.replace(/[^a-z0-9]+/gi, '-') : '')).slice(0, 60);
   let h = 0;
   for (const ch of u.pathname + extra) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return name + '-' + h.toString(36).slice(0, 5);
+  return name + '-' + h.toString(36).slice(0, 5) + (role ? '-' + role.replace(/[^a-z0-9]+/gi, '-') : '');
 }
 
 const NAV_SKIP = /\.(pdf|zip|png|jpe?g|gif|svg|webp|avif|mp4|webm|mp3|xml|txt|json|css|js|ico|woff2?)(\?|#|$)/i;
@@ -227,7 +229,7 @@ function wpGroup(u) {
 
 // session: an existing signed-in state ({ storageState, initScript }) instead of config.auth, e.g. a test's.
 // replay: the pages are re-opened from a test's state: one that lands elsewhere is skipped, not checked.
-export async function runChecks(browser, { urls, config, log = () => {}, session: given = null, replay = false }) {
+export async function runChecks(browser, { urls, config, log = () => {}, session: given = null, replay = false, serverLog = null }) {
   const viewports = config.viewports;
   const outDir = config.outputDir;
   if (config.screenshots) mkdirSync(join(outDir, 'screens'), { recursive: true });
@@ -253,6 +255,8 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
     session = await authenticate(browser, urls[0], config, { log, routePage: Object.keys(mock).length || sources.length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock, sources, stressData: false })) : null });
   }
   const listed = new Set(urls.map(normalizeUrl)); // pages asked for, as opposed to found by crawling
+  const rolePages = new Set(((config.role && config.role.pages) || []).map(normalizeUrl)); // pages this role must be able to see
+  const roleLabel = config.role ? ` [role: ${config.role.name}]` : '';
   const queue = urls.slice();
   const visited = new Set(queue.map(normalizeUrl));
   const groups = new Map(); // WordPress: crawled pages per template kind
@@ -272,7 +276,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
   // first screenshot, so a later one is written only when it marks something new.
   const marked = new Set();
   const startPage = (url, state) => {
-    const pageInfo = { url, path: ((config.pageLabel && config.pageLabel(url)) || pathOf(url, origin)) + (state ? ` [state: ${state.name}]` : ''), runs: [] };
+    const pageInfo = { url, path: ((config.pageLabel && config.pageLabel(url)) || pathOf(url, origin)) + roleLabel + (state ? ` [state: ${state.name}]` : ''), runs: [], ...(config.role ? { role: config.role.name } : {}) };
     const k = pages.length;
     pages.push(pageInfo);
     const decisions = viewports.map(() => deferred());
@@ -287,7 +291,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
     const runs = [];
     const startScheme = (si) => {
       const scheme = schemes[si];
-      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, replay, sources, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
+      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, replay, sources, source, analyzeOpts, outDir, state, marked, session, serverLog, crawled: !state && !listed.has(normalizeUrl(url)), roleListed: rolePages.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
         // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
         wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
         onSig: si === 0 ? sigs[vi].resolve : null, refSig: si > 0 ? sigs[vi].promise : null,
@@ -338,7 +342,8 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
           if (res.stressReused) res.issues.push(...results[0][vi].res.issues.filter((i) => i.rule === 'fragile-layout' && !i.sweepWidth).map(cloneIssue));
           if (res.skipped) { pageInfo.skipped = res.skipped; continue; }
           pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}), ...(res.stressReused ? { stressReused: true } : {}) });
-          for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
+          for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}), ...(config.role ? { role: config.role.name } : {}) });
+          if (res.server && res.server.length && !pageInfo.server) pageInfo.server = res.server;
           if (res.error) issues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
         }
       }
@@ -525,7 +530,7 @@ const MQ_RECORDER = () => {
   window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
 };
 
-async function checkOne(browser, url, { replay, sources = [], vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
+async function checkOne(browser, url, { replay, sources = [], vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, serverLog, crawled, roleListed, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -533,6 +538,13 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     ...(session ? { storageState: session.storageState } : {}),
   });
   await context.addInitScript(READY_INIT);
+  // Server-side mocks: which role, UI state and run each page request is for (the preload reads these cookies).
+  const run = serverLog || config.role ? randomUUID() : null;
+  if (run) {
+    const at = new URL(url).origin;
+    await context.addCookies([[RUN_COOKIE, run], config.role && [ROLE_COOKIE, config.role.name], state && Object.keys(state.mock || {}).length && [STATE_COOKIE, state.name]]
+      .filter(Boolean).map(([name, value]) => ({ name, value: encodeURIComponent(value), url: at })));
+  }
   if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
   const net = trackNetwork(page);
@@ -599,8 +611,13 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
         await page.waitForTimeout(1000);
       }
     }
-    if (resp && resp.status() >= 400) {
-      issues.push({ rule: 'page-error', severity: 'error', message: `Page responded with HTTP ${resp.status()}.` });
+    const serverCalls = () => (run && serverLog ? serverLog.entries(run) : []);
+    const status = resp ? resp.status() : 0;
+    if (status >= 400 && !(roleListed && (status === 401 || status === 403))) {
+      // An SSR page whose server-side requests failed: say which, so they can be mocked.
+      const failedCalls = serverCalls().filter((e) => !e.mocked && (e.error || e.status >= 400));
+      const list = Array.from(new Set(failedCalls.map((e) => `${e.method} ${e.url} (${e.error || 'HTTP ' + e.status})`))).slice(0, 5);
+      issues.push({ rule: 'page-error', severity: 'error', message: `Page responded with HTTP ${status}.` + (list.length ? ` The server's own requests failed: ${list.join(', ')}. Add them to "mock" (renderlint serves them on the server too).` : ''), ...(list.length ? { details: { serverRequests: failedCalls } } : {}) });
     }
     lap('goto');
     await waitReady(page, net, 4000);
@@ -627,6 +644,17 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
           (config.auth ? 'The session from "auth" was not accepted here (expired, wrong role, or a token the guard doesn\'t read).' : 'Pages behind a login need "auth" in renderlint.config (log in once, or set the token your route guard reads and mock the API: no backend needed).'),
         details: { redirectedTo: redirect.to, external: redirect.external } });
       return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url() };
+    }
+    // A page this role must be able to see that sent it elsewhere (/403, /dashboard), answered 401/403 or says
+    // "Access denied": the role's session or mocks are wrong, and the page itself was never rendered.
+    const denied = roleListed && config.rules['auth-required'] !== 'off' ? roleGuard(url, page.url(), status, await page.evaluate(() => [document.title, ...Array.from(document.querySelectorAll('h1, h2, [role=alert]')).filter((e) => e.getClientRects().length).slice(0, 4).map((e) => e.textContent)].map((t) => (t || '').trim()).filter(Boolean)).catch(() => [])) : null;
+    if (denied) {
+      const what = new URL(url);
+      issues.length = 0;
+      issues.push({ rule: 'auth-required', severity: 'error',
+        message: `${what.pathname + what.search + hashRoute(what)} was not checked as role "${config.role.name}": ${denied.reason}. Give the role a session the page accepts (roles.${config.role.name}.auth) and the data that grants it (roles.${config.role.name}.mock, e.g. the user/session API answering with this role).`,
+        details: { role: config.role.name, ...denied } });
+      return { issues, meta: null, screenshot: null, error: null, landed: null };
     }
     if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
     if (state) await applyState(page, state, { viewport: vp, scheme });
@@ -696,7 +724,7 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
       const errs = visible.filter((i) => effectiveSeverity(i, config) === 'error');
       const shown = errs.length ? errs : visible;
       if (shown.some((i) => !marked.has(groupKey(i)))) {
-        screenshot = join(outDir, 'screens', `${slugFor(url)}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
+        screenshot = join(outDir, 'screens', `${slugFor(url, config.role && config.role.name)}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
         shown.forEach((i, n) => { i.marker = n + 1; });
         const shownSig = JSON.stringify(shown.map((i) => [i.rule, i.selector, i.message, i.rect, i.related && i.related.rect]));
         if (dupOf && dupOf.screenshot && dupOf.shownSig === shownSig) copyFileSync(dupOf.screenshot, screenshot);
@@ -740,7 +768,7 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
       if (process.env.RENDERLINT_DEBUG) log(`    [${vp.width}] sweep widths: ${sweepWidths.join(', ')}`);
     }
     if (sweepWidths.length) {
-      await sweepPasses(page, { widths: sweepWidths, vp, issues, analyzeOpts, config, outDir, url, scheme, marked, markedHere });
+      await sweepPasses(page, { widths: sweepWidths, vp, issues, analyzeOpts, config, outDir, url, scheme, marked, markedHere, role: config.role && config.role.name });
       lap('sweep');
     }
 
@@ -758,11 +786,14 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
       };
       // Data stress: reload with the app's JSON responses rewritten (longer names, titles,
       // emails), so content rendered from an API is tested through the app's own code path.
-      if (config.stressData !== false && sawJson) {
+      // Server-rendered data counts too: the preload lengthens the JSON the server fetched for this page.
+      const serverJson = run && serverLog && serverLog.entries(run).some((e) => e.json && !(e.status >= 300));
+      if (config.stressData !== false && (sawJson || serverJson)) {
         phase = 'data';
         routes.stressData = Math.max(2, config.stress);
         try {
           await ensureRoutes();
+          if (serverJson) await context.addCookies([{ name: STRESS_COOKIE, value: String(routes.stressData), url: new URL(url).origin }]);
           await page.reload({ waitUntil: 'load', timeout: config.timeout });
           await waitReady(page, net, 4000);
           if (config.waitFor) await page.waitForSelector(config.waitFor, { timeout: config.timeout }).catch(() => {});
@@ -787,7 +818,8 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     if (template && template.publish) { template.publish(null); template.decision.resolve(null); }
     await context.close().catch(() => {});
   }
-  return { issues, meta, screenshot, error, templateOf, stressReused };
+  const server = run && serverLog ? serverLog.entries(run).filter((e) => e.page && !/^\/(_next|__nuxt|@|node_modules)/.test(e.page)).map(({ method, url: u, mocked, status: st, error: err }) => ({ method, url: u, mocked, ...(st ? { status: st } : {}), ...(err ? { error: err } : {}) })) : [];
+  return { issues, meta, screenshot, error, templateOf, stressReused, server: Array.from(new Map(server.map((e) => [e.method + ' ' + e.url, e])).values()) };
 }
 
 // Stress passes on a loaded page: rewrites its text (longer, long words, big numbers, declared
@@ -823,7 +855,7 @@ export async function stressPasses(page, issues, analyzeOpts, config) {
 
 // Responsive sweep on a loaded page: layouts often fit at the tested widths and break in between
 // (1100px, 1366px…). Resizes in place, re-runs the layout rules at each width, then restores vp.
-export async function sweepPasses(page, { widths, vp, issues, analyzeOpts, config, outDir, url, scheme, marked, markedHere }) {
+export async function sweepPasses(page, { widths, vp, issues, analyzeOpts, config, outDir, url, scheme, marked, markedHere, role }) {
   const sweepRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) && config.rules[k] !== 'off' ? (config.rules[k] || RULES[k].severity) : 'off']));
   const sweepOpts = { ...analyzeOpts, rules: sweepRules, contrastCandidates: false };
   for (const w of widths) {
@@ -836,7 +868,7 @@ export async function sweepPasses(page, { widths, vp, issues, analyzeOpts, confi
     const found = r.issues.map((i) => ({ ...i, sweepWidth: w, details: { ...(i.details || {}), sweep: true } }));
     const shown = found.filter((i) => i.rect && effectiveSeverity(i, config) === 'error');
     if (config.screenshots && shown.length && shown.some((i) => !marked.has(groupKey(i)) && !markedHere.has(groupKey(i)))) {
-      const shot = join(outDir, 'screens', `${slugFor(url)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
+      const shot = join(outDir, 'screens', `${slugFor(url, role)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
       shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; markedHere.add(groupKey(i)); marked.add(groupKey(i)); });
       await annotate(page, shown, config);
       const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));

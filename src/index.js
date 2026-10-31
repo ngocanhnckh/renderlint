@@ -9,6 +9,7 @@ import { serveStatic, startAndWait, waitForUrl, probe } from './server.js';
 import { runChecks } from './runner.js';
 import { mergeIssues, formatPretty, formatMarkdown, formatGithub } from './report.js';
 import { scanSources } from './scan.js';
+import { serverPlan } from './server-plan.js';
 import { detectProject, detectWordPress, looksLikeWordPress, COMMON_PORTS } from './detect.js';
 import { resolveStorybook, storyIndex, storybookConfig } from './storybook.js';
 
@@ -61,19 +62,19 @@ export async function findWordPress(urls) {
   return null;
 }
 
-export async function resolveTargets(targets, config, cwd, log) {
+export async function resolveTargets(targets, config, cwd, log, { env } = {}) {
   const cleanup = [];
   try {
-    return await resolveTargetsInner(targets, config, cwd, log, cleanup);
+    return await resolveTargetsInner(targets, config, cwd, log, cleanup, env);
   } catch (e) {
     for (const fn of cleanup.reverse()) await Promise.resolve(fn()).catch(() => {});
     throw e;
   }
 }
 
-async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
+async function resolveTargetsInner(targets, config, cwd, log, cleanup, env) {
   const pages = [];
-  let base;
+  let base, started = false;
   const urls = targets.filter((t) => /^https?:\/\//.test(t));
   const paths = targets.filter((t) => !/^https?:\/\//.test(t));
 
@@ -102,14 +103,16 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
   } else if (config.url) {
     base = config.url.replace(/\/$/, '');
     if (config.serve && !(await reachable(base))) {
-      const s = await startAndWait(config.serve, { url: base, cwd, timeout: config.serverTimeout, log });
+      const s = await startAndWait(config.serve, { url: base, cwd, timeout: config.serverTimeout, log, env });
       cleanup.push(s.stop);
+      started = true;
     } else if (!(await reachable(base))) {
       await waitForUrl(base, { timeout: 15000 });
     }
   } else if (config.serve) {
-    const s = await startAndWait(config.serve, { cwd, timeout: config.serverTimeout, log });
+    const s = await startAndWait(config.serve, { cwd, timeout: config.serverTimeout, log, env });
     cleanup.push(s.stop);
+    started = true;
     base = new URL(s.url).origin;
     log(`Server ready at ${base}`);
   } else if (config.dir) {
@@ -141,8 +144,9 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
     }
     if (!base && proj.devCommand) {
       log(`Starting ${proj.framework ? proj.framework.name + ' ' : ''}dev server: ${proj.devCommand}`);
-      const s = await startAndWait(proj.devCommand, { cwd, timeout: config.serverTimeout, log });
+      const s = await startAndWait(proj.devCommand, { cwd, timeout: config.serverTimeout, log, env });
       cleanup.push(s.stop);
+      started = true;
       base = new URL(s.url).origin + new URL(s.url).pathname.replace(/\/$/, '');
     }
     if (!base && proj.staticDirs.length) {
@@ -165,7 +169,7 @@ async function resolveTargetsInner(targets, config, cwd, log, cleanup) {
     }
   }
   if (!pages.length) for (const p of config.pages) pages.push(/^https?:/.test(p) ? p : base + (p.startsWith('/') ? p : '/' + p));
-  return { base, pages: Array.from(new Set(pages)), cleanup };
+  return { base, pages: Array.from(new Set(pages)), cleanup, started };
 }
 
 export async function check(options = {}) {
@@ -175,7 +179,9 @@ export async function check(options = {}) {
   const config = normalize({ ...fileConfig, ...stripUndefined(options.config || {}), rules: { ...fileConfig.rules, ...((options.config || {}).rules || {}) } }, cwd);
   const started = Date.now();
   const targets = options.targets || (options.url ? [options.url] : []);
-  let urls, cleanup;
+  // SSR apps fetch on the server: a server renderlint starts gets the preload that serves "mock" there too.
+  const plan = options.storybook ? null : serverPlan(config);
+  let urls, cleanup, base, startedServer = false;
   if (options.storybook) {
     // Every story of a Storybook, each in its own iframe page (src/storybook.js).
     const sb = await resolveStorybook(options.storybook.target, cwd, log);
@@ -187,9 +193,14 @@ export async function check(options = {}) {
       const r = storybookConfig(config, stories, sb.base, { globals: variants, include: options.storybook.stories || (config.storybook && config.storybook.stories) });
       if (!r.urls.length) throw new Error('renderlint: no story matches ' + JSON.stringify(options.storybook.stories || config.storybook.stories));
       urls = r.urls;
+      base = sb.base;
       Object.assign(config, r.config);
     } catch (e) { for (const fn of cleanup) await Promise.resolve(fn()).catch(() => {}); throw e; }
-  } else ({ pages: urls, cleanup } = await resolveTargets(targets, config, cwd, log));
+  } else ({ pages: urls, cleanup, base, started: startedServer } = await resolveTargets(targets, config, cwd, log, { env: plan ? plan.env : undefined }));
+  if (plan) {
+    plan.setSelf(base || urls[0]);
+    if (startedServer) log('Server-side mocks: the server renderlint started answers its own requests from "mock" too.');
+  }
   // Make sure dev servers we started die with us (Ctrl+C, hook timeout, SIGTERM).
   const onSignal = (sig) => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } process.exit(sig === 'SIGINT' ? 130 : 143); };
   const onExit = () => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } };
@@ -198,7 +209,7 @@ export async function check(options = {}) {
   try {
     browser = options.browser || await launchBrowser({ log });
     log(`Checking ${urls.length} page(s)${config.crawl ? ' (+ crawling links)' : ''} at ${config.viewports.map((v) => v.width).join('/')}px…`);
-    const { issues: raw, pages } = await runChecks(browser, { urls, config, log });
+    const { issues: raw, pages } = config.roles ? await checkRoles(browser, { urls, base, config, log, plan }) : await runChecks(browser, { urls, config, log, serverLog: plan && plan.reader });
     let scanned = [];
     const doScan = options.scan !== undefined ? options.scan : config.scan && !options.storybook && !targets.some((t) => /^https?:/.test(t));
     if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
@@ -222,6 +233,23 @@ export async function check(options = {}) {
     if (browser && !options.browser) await browser.close().catch(() => {});
     for (const fn of cleanup.reverse()) await Promise.resolve(fn()).catch(() => {});
   }
+}
+
+// Every role is a run of its own: its own session ("auth"), its mocks over the top-level ones (in the
+// browser and, through the preload, on the server: a "renderlint-role" cookie tells it which role a
+// request is for), the entry pages plus the role's own pages, and its page names labelled "[role: name]".
+async function checkRoles(browser, { urls, base, config, log, plan }) {
+  const all = { issues: [], pages: [] };
+  for (const [name, role] of Object.entries(config.roles)) {
+    log(`Role ${name}:`);
+    const root = base || new URL(urls[0]).origin;
+    const own = role.pages.map((p) => (/^https?:/.test(p) ? p : root + (p.startsWith('/') ? p : '/' + p)));
+    const roleConfig = { ...config, auth: 'auth' in role ? role.auth : config.auth, mock: { ...config.mock, ...role.mock }, role: { name, pages: own } };
+    const r = await runChecks(browser, { urls: Array.from(new Set([...urls, ...own])), config: roleConfig, log, serverLog: plan && plan.reader });
+    all.issues.push(...r.issues);
+    all.pages.push(...r.pages);
+  }
+  return all;
 }
 
 function stripUndefined(o) { return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)); }

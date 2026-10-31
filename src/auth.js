@@ -8,6 +8,7 @@
 //   auth: { run: async (page, { baseUrl }) => { … } }      (JS config: SSO, MFA, anything else)
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { ROLE_COOKIE } from './server-plan.js';
 
 const USER_FIELD = 'input[autocomplete="username"], input[type="email"], input[name*="user" i], input[name*="email" i], input[name*="login" i], input[id*="user" i], input[id*="email" i], input[type="text"]';
 const PASSWORD_FIELD = 'input[type="password"]';
@@ -56,6 +57,8 @@ export async function authenticate(browser, baseUrl, config, { log = () => {}, r
   try {
     const page = await context.newPage();
     if (routePage) await routePage(page);
+    // A role's session is made with the role's server-side mocks (the mocked login API answers as that role).
+    if (config.role) await context.addCookies([{ name: ROLE_COOKIE, value: encodeURIComponent(config.role.name), url: origin }]);
     const storage = auth.storage || {};
     const cookies = (storage.cookies || []).map((c) => ({ path: '/', ...c, value: resolveEnv(String(c.value), 'auth.storage.cookies'), ...(c.domain ? {} : { url: origin }) }));
     if (cookies.length) await context.addCookies(cookies.map((c) => (c.url ? (({ path, ...rest }) => rest)(c) : c)));
@@ -152,5 +155,23 @@ export function loginRedirect(requested, landed, hasPasswordField) {
   }
   if (route(a).replace(/\/$/, '') === route(b).replace(/\/$/, '')) return null;
   if (LOGIN_PATH.test(route(b)) || hasPasswordField) return { to: route(b) + (b.search && !/[?&](returnUrl|redirect|next|returnTo)=/.test(b.search) ? b.search : ''), external: false };
+  return null;
+}
+
+// A page a role must be able to see, which the app didn't show it: sent elsewhere (not to a sub-page of it),
+// HTTP 401/403, or a heading that is only an "access denied" message. null when the page was shown.
+const DENIED = /^(error )?(40[13]\b ?[-:]? ?)?(access denied|access forbidden|forbidden|not authori[sz]ed|unauthori[sz]ed|permission denied|no access)?$/i;
+const NO_PERMISSION = /\byou (do not|don't|dont) have (the )?(required )?(permission|access|rights)\b/i;
+export function roleGuard(requested, landed, status, texts = []) {
+  if (status === 401 || status === 403) return { reason: `the server answered HTTP ${status}`, status };
+  let a, b;
+  try { a = new URL(requested); b = new URL(landed); } catch { return null; }
+  const route = (u) => (u.pathname + (u.hash.startsWith('#/') || u.hash.startsWith('#!/') ? u.hash : '')).replace(/\/$/, '') || '/';
+  if (a.origin === b.origin && route(a) !== route(b) && !route(b).startsWith(route(a) === '/' ? '/' : route(a) + '/')) return { reason: `the app sent renderlint to ${route(b)} instead`, redirectedTo: route(b) };
+  for (const [i, raw] of texts.entries()) {
+    const t = raw.replace(/\s+/g, ' ').trim();
+    const parts = i === 0 ? t.split(/\s+[|–—·:-]\s+/) : [t.replace(/[.!]+$/, '')];
+    if (parts.some((x) => /\S/.test(x) && DENIED.test(x.replace(/[.!]+$/, ''))) || (i > 0 && t.length < 160 && NO_PERMISSION.test(t))) return { reason: `the page says "${t.slice(0, 80)}"`, text: t };
+  }
   return null;
 }
