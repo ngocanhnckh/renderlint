@@ -145,12 +145,63 @@ function install() {
   const wrapFetch = (inner) => {
     return new Proxy(inner, { apply: (target, thisArg, args) => answer(target, thisArg, args) });
   };
+  const realFetchForDispatcher = globalThis.fetch;
   if (typeof globalThis.fetch === 'function') {
     let outer = wrapFetch(globalThis.fetch);
     Object.defineProperty(globalThis, 'fetch', {
       configurable: true, enumerable: true,
       get: () => outer,
       set: (f) => { outer = typeof f === 'function' ? wrapFetch(f) : f; },
+    });
+  }
+
+  // undici's global dispatcher, which Node's fetch sends every request through: also reaches fetch
+  // implementations that don't go through globalThis.fetch (the undici package, a bundled copy of it such
+  // as Next.js's edge runtime for middleware). Node creates it on the first fetch, so make one (a data:
+  // URL, no network) and wrap it. Calls the fetch layer above already handled pass straight through.
+  const DISPATCHER = Symbol.for('undici.globalDispatcher.1');
+  const answerDispatch = (opts, handler, ctx, spec, url) => {
+    (async () => {
+      const r = render(spec);
+      const body = Buffer.from(r.isJson && ctx && ctx.stress ? await stressed(r.body, ctx.stress) : r.body);
+      log({ run: ctx && ctx.run, role: ctx && ctx.role, page: ctx && ctx.page, method: String(opts.method || 'GET').toUpperCase(), url, via: 'undici', mocked: true, status: r.status, json: r.isJson });
+      const headers = { ...r.headers, 'content-length': String(body.length) };
+      if (typeof handler.onResponseStart === 'function') { // undici 7 handler API
+        const controller = { abort() {}, pause() {}, resume() {}, aborted: false, paused: false, reason: null };
+        if (handler.onRequestStart) handler.onRequestStart(controller, {});
+        handler.onResponseStart(controller, r.status, headers, '');
+        handler.onResponseData(controller, body);
+        handler.onResponseEnd(controller, {});
+      } else {
+        if (handler.onConnect) handler.onConnect(() => {});
+        handler.onHeaders(r.status, Object.entries(headers).flatMap(([k, v]) => [Buffer.from(k), Buffer.from(String(v))]), () => {}, '');
+        handler.onData(body);
+        handler.onComplete([]);
+      }
+    })().catch((e) => { try { (handler.onError || handler.onResponseError).call(handler, e); } catch { /* ignore */ } });
+    return true;
+  };
+  const wrapDispatcher = (real) => new Proxy(real, {
+    get(target, key) {
+      if (key === 'dispatch') {
+        return (opts, handler) => {
+          const ctx = als.getStore();
+          let url = null;
+          try { url = new URL(opts.path, opts.origin).href; } catch { /* not a URL */ }
+          const spec = !(ctx && ctx.through) && url ? lookup(url, ctx) : null;
+          return spec ? answerDispatch(opts, handler, ctx, spec, url) : target.dispatch(opts, handler);
+        };
+      }
+      const v = Reflect.get(target, key, target);
+      return typeof v === 'function' ? v.bind(target) : v;
+    },
+  });
+  if (typeof realFetchForDispatcher === 'function') {
+    realFetchForDispatcher('data:,').catch(() => {}).finally(() => {
+      const real = globalThis[DISPATCHER];
+      if (real && typeof real.dispatch === 'function') {
+        try { globalThis[DISPATCHER] = wrapDispatcher(real); } catch { /* not writable */ }
+      }
     });
   }
 
