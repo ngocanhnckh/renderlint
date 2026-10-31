@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { detectProject } from './detect.js';
 import { findWordPress } from './index.js';
 import { agentSection, upsertSection } from './agent-instructions.js';
+import { installSkills, SKILLS, SKILLS_DIR } from './skills.js';
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const DEFAULT_SPEC = '@ngocanhnckh/renderlint';
@@ -31,7 +32,8 @@ export async function init(argv = []) {
   let proj = detectProject(cwd);
 
   // 1. install as a dev dependency
-  const installed = proj.pkg && ({ ...proj.pkg.dependencies, ...proj.pkg.devDependencies }).renderlint;
+  const deps = proj.pkg ? { ...proj.pkg.dependencies, ...proj.pkg.devDependencies } : {};
+  const installed = deps[DEFAULT_SPEC] || deps.renderlint;
   if (!installed && !flag('--no-install')) {
     const spec = opt('--spec') || process.env.RENDERLINT_SPEC || defaultSpec();
     const cmd = { npm: ['npm', ['install', '-D', spec]], pnpm: ['pnpm', ['add', '-D', spec]], yarn: ['yarn', ['add', '-D', spec]], bun: ['bun', ['add', '-d', spec]] }[proj.pm];
@@ -74,8 +76,19 @@ export async function init(argv = []) {
     writeJson(pkgPath, pkg);
   }
 
-  // 4. agent instructions
-  const section = agentSection('npx renderlint', { wordpress: proj.wordpress });
+  // 4. agent skills (.claude/skills/: Claude Code loads them, other agents read them through AGENTS.md)
+  const withSkills = !flag('--no-skills');
+  if (withSkills) {
+    const res = installSkills(cwd, { force: flag('--force') });
+    const by = (st) => res.filter((r) => r.state === st);
+    if (by('install').length) say(`${SKILLS_DIR}/: added the ${by('install').map((r) => r.name).join(', ')} skill(s) for coding agents`);
+    if (by('update').length) say(`${SKILLS_DIR}/: updated ${by('update').map((r) => r.name).join(', ')}`);
+    for (const r of res.filter((x) => (x.state === 'edited' || x.state === 'foreign') && !x.written)) console.log(`  · ${SKILLS_DIR}/${r.name}/SKILL.md ${r.state === 'edited' ? 'was edited' : "wasn't written by renderlint"}: left as is (--force replaces it)`);
+    for (const r of res.filter((x) => (x.state === 'edited' || x.state === 'foreign') && x.written)) say(`${SKILLS_DIR}/${r.name}/SKILL.md: replaced (--force)`);
+  }
+
+  // 5. agent instructions
+  const section = agentSection('npx renderlint', { wordpress: proj.wordpress, skills: withSkills ? SKILLS.map((n) => `${SKILLS_DIR}/${n}/SKILL.md`.split('\\').join('/')) : SKILLS.map((n) => `node_modules/${DEFAULT_SPEC}/skills/${n}/SKILL.md`) });
   const agentsPath = join(cwd, 'AGENTS.md');
   writeFileSync(agentsPath, upsertSection(existsSync(agentsPath) ? readFileSync(agentsPath, 'utf8') : '# Agent instructions\n\n', section));
   say('AGENTS.md: added the renderlint workflow (read by Codex, Cursor, Copilot, Gemini, Amp, Zed, …)');
@@ -88,7 +101,7 @@ export async function init(argv = []) {
     say('CLAUDE.md: created (imports AGENTS.md)');
   }
 
-  // 5. Claude Code Stop hook: Claude can't end its turn while UI errors remain
+  // 6. Claude Code Stop hook: Claude can't end its turn while UI errors remain
   if (!flag('--no-hook')) {
     const dir = join(cwd, '.claude');
     mkdirSync(dir, { recursive: true });
@@ -104,12 +117,12 @@ export async function init(argv = []) {
     }
   }
 
-  // 6. .gitignore
+  // 7. .gitignore
   const gi = join(cwd, '.gitignore');
   const cur = existsSync(gi) ? readFileSync(gi, 'utf8') : '';
   if (!/^\.renderlint\/?$/m.test(cur)) { writeFileSync(gi, cur.replace(/\s*$/, cur ? '\n' : '') + '.renderlint/\n'); say('.gitignore: ignore .renderlint/ output'); }
 
-  // 7. browser
+  // 8. browser
   if (!flag('--no-browser')) {
     try {
       const { launchBrowser } = await import('./browser.js');

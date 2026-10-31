@@ -46,6 +46,7 @@
     "bin",
     "src",
     "dist",
+    "skills",
     "docs/*.md",
     "README.md",
     "LICENSE"

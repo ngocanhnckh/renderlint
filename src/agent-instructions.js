@@ -3,7 +3,7 @@
 export const START = '<!-- renderlint:start -->';
 export const END = '<!-- renderlint:end -->';
 
-export function agentSection(cmd = 'npx renderlint', { wordpress } = {}) {
+export function agentSection(cmd = 'npx renderlint', { wordpress, skills } = {}) {
   return `${START}
 ## UI quality gate: renderlint
 
@@ -15,7 +15,7 @@ This project uses **renderlint** to catch visual UI defects that type checks and
 3. Never use emoji as icons or decoration. Use an SVG icon library (e.g. lucide / heroicons / phosphor / tabler packages for your framework).
 4. If a finding is genuinely intentional, mark that element with \`data-renderlint-ignore="<rule>"\` plus \`data-renderlint-reason="why"\` (or CSS \`--renderlint-ignore: <rule>;\`). Use this rarely; it is reviewed like an \`eslint-disable\`.
 5. Annotated screenshots of every finding are written to \`.renderlint/screens/\`. Look at them when a finding is unclear. \`${cmd} explain <rule>\` describes any rule.
-
+${skills ? skillsBlock(skills) : ''}
 **Get it right the first time**
 - Text must always be able to wrap: avoid fixed heights and widths on text containers, give flex/grid children \`min-width: 0\`, and use \`overflow-wrap: anywhere\` (Tailwind \`break-words\`) where long words, emails or URLs can appear. Assume real content is longer than your sample copy.
 - Build mobile-first: rows wrap (\`flex-wrap\`), grids collapse (\`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3\`), and nothing has a fixed pixel width wider than 320px.
@@ -25,8 +25,7 @@ This project uses **renderlint** to catch visual UI defects that type checks and
 - Form controls: a native \`<select>\` draws its arrow next to the border whatever its \`padding-right\`, so styled selects need \`appearance: none\` and a chevron inset like the text (e.g. \`right 12px center\` with \`padding-right: 40px\`). Scope \`width: 100%\` input styles to text fields so checkboxes and radios stay small and sit beside their labels. Pad inputs on the side of any icon drawn inside them (\`pl-10\`). Give controls in the same row the same height, and center icons with their text (\`inline-flex items-center\`).
 - Content you can't see: when a field has a known limit or a realistic worst case, declare it so renderlint tests it: \`data-renderlint-maxlength="60"\` or \`data-renderlint-sample="Aleksandra Wiśniewska-Kowalczyk"\` on the element that shows it. Keep text clear of the padding at every width, not just at 375/768/1280 (\`text-crowding\`, \`@1024px\` findings come from the width sweep).
 - States behind interaction: add menus, dialogs, tabs, filled forms, and empty/error API states to \`states\` in \`renderlint.config.mjs\` (\`{ name, page, click, waitFor }\`, \`mock: { "**/api/items*": [] }\` for empty data, \`{ status: 500, json: {...} }\` for errors) so they get checked too.
-- Pages behind a login: an \`auth-required\` finding means the page sent renderlint to the login page, so it was never checked. Don't ask for credentials. Find the key the route guard reads (\`sessionStorage\`/\`localStorage\`/cookie in the auth service), set a test value with \`"auth": { "storage": { "sessionStorage": { "<key>": "test" } } }\`, and mock the API calls the pages make (\`"mock": { "**/api/me": {...} }\`), so the pages render with only the dev server running. Server-rendered apps (Next.js, Nuxt, SvelteKit, Remix) fetch on the server: when renderlint starts the server (\`serve\`), \`mock\` answers the server's requests too, so mock the backend's login API and keep \`"auth": { "login": "/login", … }\`. Write passwords and real tokens as \`"\${ENV_VAR}"\`, never in the config file. Details: https://github.com/ngocanhnckh/renderlint/blob/master/docs/authentication.md
-- Roles: if the app shows different pages to different roles (admin, viewer), list them under \`"roles": { "admin": {...}, "viewer": {...} }\`: each with its own sign-in settings (\`storage\`, \`{ "$jwt": { "role": "admin" } }\` for a token the frontend decodes) or none (the top-level \`auth\`), its own \`mock\` (e.g. \`/api/me\` answering with that role), the \`pages\` it must see and the paths it may not see (\`deny\`). A \`page-not-shown\` finding means a role was redirected, answered 401/403 or shown "Access denied" / "Page not found" instead of the page: if that role is not meant to see it, add the path to that role's \`deny\`; otherwise fix its session or mocks. For a dynamic route renderlint could not fill, set \`"params": { "/users/:id": ["<an id the mocks serve>"] }\`.
+- Pages behind a login, roles, dynamic routes: \`auth-required\`, \`page-not-shown\` or routes listed as not checked mean pages were never checked. Don't ask for credentials and don't turn those rules off: give renderlint a test session and API mocks in \`renderlint.config.json\` (frontend only, no backend), as the renderlint-setup skill describes.
 - No placeholder leaks: format numbers and dates and handle \`null\` values so the UI never shows \`undefined\`, \`NaN\`, \`[object Object]\`, \`Invalid Date\` or lorem ipsum.
 
 Warnings (\`fragile-layout\` = breaks with longer text, long words, bigger numbers or longer API data; small tap targets; tiny text…) don't fail the run, but fix them when it's cheap.
@@ -34,6 +33,18 @@ Warnings (\`fragile-layout\` = breaks with longer text, long words, bigger numbe
 ${wordpress ? wordpressNotes(cmd, wordpress) : ''}Commands: \`${cmd}\` (auto-detects the dev server or build output), \`${cmd} http://localhost:3000\`, \`${cmd} dist\`, \`${cmd} --pages /,/pricing\`, \`${cmd} --json\`.
 ${END}
 `;
+}
+
+function skillsBlock(paths) {
+  const what = {
+    'renderlint-setup': 'making renderlint check every page: login, roles, API mocks, dynamic routes, and closing coverage gaps',
+    'renderlint-fix': 'fixing what it reports, rule by rule',
+    'renderlint-e2e': 'checking the states Playwright tests and Storybook stories reach; reusing MSW or HAR mocks',
+  };
+  return `6. Read the matching skill before that kind of work:\n${paths.map((p) => {
+    const name = (p.match(/(renderlint-[a-z0-9]+)\/SKILL\.md$/) || [])[1];
+    return `   - \`${p}\`: ${what[name] || name}`;
+  }).join('\n')}\n`;
 }
 
 function wordpressNotes(cmd, wp) {
