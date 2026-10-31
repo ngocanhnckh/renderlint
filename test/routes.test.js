@@ -11,6 +11,7 @@ import { discoverRoutes, fillPattern, staticParamsFrom } from '../src/routes/dis
 import { matchRoute, inferPatterns } from '../src/routes/match.js';
 import { buildGraph, routeClosures, affectedRoutes, shellEntries } from '../src/routes/graph.js';
 import { choose, coverageGate, coverageLine } from '../src/routes/plan.js';
+import { updatePageMap } from '../src/routes/incremental.js';
 
 function tree(files) {
   const dir = mkdtempSync(join(tmpdir(), 'rl-routes-'));
@@ -292,4 +293,13 @@ test('TanStack generated route tree is used only when newer than the route files
   const old = new Date(Date.now() - 60000);
   utimesSync(join(dir, 'src/routeTree.gen.ts'), old, old); // stale: about.tsx was added after it
   assert.deepEqual(patterns(discoverRoutes(dir)), ['/', '/about']);
+});
+
+test('page map after a partial re-check: a route keeps its errors unless all its instances were checked again', () => {
+  const dir = tree({ 'x': '' });
+  const map = { routes: [{ pattern: '/a', checked: ['/a'], errors: 0 }, { pattern: '/docs/:slug+', checked: ['/docs/x', '/docs/y'], errors: 2 }] };
+  const stale = updatePageMap(dir, map, { routes: ['/a', '/docs/:slug+'], now: {} }, { issues: [], pages: [{ path: '/a' }, { path: '/docs/x' }] });
+  assert.deepEqual(stale.map((r) => r.pattern), ['/docs/:slug+'], '/docs/y was not checked again: its errors still count');
+  const clean = updatePageMap(dir, map, { routes: ['/docs/:slug+'], now: {} }, { issues: [], pages: [{ path: '/docs/x' }, { path: '/docs/y' }] });
+  assert.deepEqual(clean, []);
 });

@@ -252,7 +252,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, coverag
   const seeds = coverage ? coverage.seeds() : [];
   const queue = Array.from(new Set([...urls, ...seeds]));
   const visited = new Set(queue.map(normalizeUrl));
-  const maxPages = config.maxPages || (coverage && coverage.routes.length ? Math.max(12, queue.length + coverage.routes.length + 20) : 12);
+  const maxPages = config.maxPages || (coverage && coverage.routes.length ? Math.max(12, queue.length + coverage.routes.length + 20) : Math.max(12, queue.length)); // pages listed explicitly are all checked
   const enqueue = (href) => { const key = normalizeUrl(href); if (visited.has(key)) return; visited.add(key); queue.push(href); };
   const onJson = coverage ? (apiUrl, body) => { for (const u of coverage.onJson(apiUrl, body)) enqueue(u); } : null;
   const groups = new Map(); // WordPress: crawled pages per template kind
