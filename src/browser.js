@@ -3,7 +3,7 @@
 // finally installing Chromium on demand.
 import { existsSync, readdirSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 
@@ -52,7 +52,7 @@ export async function launchBrowser({ log = () => {}, executablePath } = {}) {
     } catch (e) { lastErr = e; }
   }
   log('No Chromium found — installing one with `npx playwright install chromium` (one-time)…');
-  const cli = require.resolve('playwright/cli.js');
+  const cli = join(dirname(require.resolve('playwright/package.json')), 'cli.js'); // newer playwright doesn't export ./cli.js
   const r = spawnSync(process.execPath, [cli, 'install', 'chromium'], { stdio: 'inherit' });
   if (r.status === 0) return chromium.launch({ headless: true, args });
   throw new Error('renderlint could not launch Chromium. Run `npx playwright install chromium` or set RENDERLINT_CHROME=/path/to/chrome.\n' + (lastErr ? lastErr.message : ''));
