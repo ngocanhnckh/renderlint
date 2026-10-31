@@ -113,6 +113,18 @@ export default [
   assert.deepEqual(patterns(ts), ['/', '/files/:_splat*', '/grouped', '/inside', '/posts', '/posts/:postId'].sort());
 });
 
+test('React Router 7 with react-router-auto-routes (folders as segments, _layout, +colocated, .server)', () => {
+  const d = discoverRoutes(tree({
+    'package.json': pkg({ '@react-router/dev': '7' }), 'app/root.tsx': P,
+    'app/routes.ts': "import { autoRoutes } from 'react-router-auto-routes'\nexport default autoRoutes({ ignoredRouteFiles: ['**/*.server.*'] })\n",
+    'app/routes/_marketing/index.tsx': P, 'app/routes/_marketing/+logos/logos.ts': 'export const x = 1', 'app/routes/_auth/login.tsx': P, 'app/routes/_auth/login.server.ts': 'export const y = 1',
+    'app/routes/users/index.tsx': P, 'app/routes/users/$username/notes/_layout.tsx': P, 'app/routes/users/$username/notes/$noteId.tsx': P, 'app/routes/users/$username/notes/$noteId_.edit.tsx': P,
+    'app/routes/_seo/sitemap[.]xml.ts': 'export function loader() {}', 'app/routes/$.tsx': P,
+  }));
+  assert.deepEqual(patterns(d), ['/', '/:splat*', '/login', '/users', '/users/:username/notes/:noteId', '/users/:username/notes/:noteId/edit']);
+  assert.ok(d.routes.find((r) => r.pattern === '/users/:username/notes/:noteId').files.includes('app/routes/users/$username/notes/_layout.tsx'));
+});
+
 test('config route arrays: Angular (lazy children, NgModule forChild, guards), Vue Router (spreads, imports, meta), React Router JSX', () => {
   const ng = discoverRoutes(tree({
     'package.json': pkg({ '@angular/core': '20', '@angular/router': '20' }),

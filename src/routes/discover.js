@@ -285,6 +285,7 @@ function reactRouterApp(cwd, aliases) {
     }
     if (fn === 'layout') { const f = file(a[0]); visit(kids(a[1]) || kids(a[2]), prefix, f ? [...layouts, f] : layouts); return; }
     if (fn === 'prefix') { visit(kids(a[1]), joinPath(prefix, rrPath(a[0] && a[0].t === 'str' ? a[0].v : '')), layouts); return; }
+    if (fn === 'autoRoutes') { out.push(...autoRoutes(cwd, join(appDir, 'routes'), layouts, prefix)); return; }
     if (fn === 'flatRoutes') {
       const o = a[0] && a[0].t === 'obj' ? a[0] : null;
       const dir = o && o.props.rootDirectory && o.props.rootDirectory.t === 'str' ? o.props.rootDirectory.v : 'routes';
@@ -340,6 +341,37 @@ function remixFlat(cwd, routesDir, layouts, prefix = '') {
     // a parent route with an _index child is reached through the child
     if (last !== '_index' && byId.has(m.id + '._index')) continue;
     out.push(mkRoute(cwd, joinPath(prefix, url.join('/')), m.file, [...layouts, ...chain], 'remix-flat'));
+  }
+  return out;
+}
+
+// react-router-auto-routes (folders are segments too): users/$username/notes/_layout.tsx, index.tsx,
+// _auth/ pathless folders, +shared/ colocated folders, *.server.* / *.test.* ignored.
+function remixSeg(x) {
+  x = x.replace(/_$/, '');
+  if (x === '$') return ':splat*';
+  if (/^\(\$(.+)\)$/.test(x)) return ':' + x.slice(2, -1) + '?';
+  if (/^\((.+)\)$/.test(x)) return x.slice(1, -1);
+  if (x.startsWith('$')) return ':' + x.slice(1);
+  return x.replace(/[[\]]/g, '');
+}
+function autoRoutes(cwd, dir, layouts, prefix = '', segs = []) {
+  const out = [];
+  const entries = ls(dir);
+  const layout = entries.find((e) => e.isFile() && /^_layout\.(tsx|jsx|ts|js)$/.test(e.name));
+  const chain = layout ? [...layouts, join(dir, layout.name)] : layouts;
+  for (const e of entries) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) {
+      if (e.name.startsWith('+') || e.name.startsWith('.')) continue;
+      const parts = e.name.startsWith('_') ? [] : e.name.split('.').map(remixSeg);
+      out.push(...autoRoutes(cwd, p, chain, prefix, [...segs, ...parts]));
+      continue;
+    }
+    if (!/\.(tsx|jsx|ts|js|mdx|md)$/.test(e.name) || /\.(server|client|test|spec)\./.test(e.name) || /^_layout\./.test(e.name)) continue;
+    if (!hasDefault(p)) continue; // resource route
+    const parts = e.name.replace(/\.[^.]+$/, '').split('.').filter((x) => x !== 'index' && !x.startsWith('_')).map(remixSeg);
+    out.push(mkRoute(cwd, joinPath(prefix, [...segs, ...parts].join('/')), p, chain, 'auto-routes'));
   }
   return out;
 }
@@ -442,8 +474,9 @@ function makeReader(cwd, aliases) {
 
 function guardsFrom(text) {
   const out = [];
-  for (const m of text.matchAll(/\b(canActivate|canMatch|canActivateChild|middleware|beforeEnter)\s*:\s*(\[[^\]]*\]|['"][^'"]+['"]|[\w.]+)/g)) out.push(m[1] + ': ' + m[2].replace(/\s+/g, ' ').slice(0, 80));
-  for (const m of text.matchAll(/\b(roles?|requiresAuth|requiresAdmin|permissions?|authorize)\s*:\s*(\[[^\]]*\]|['"][^'"]+['"]|true|[\w.]+)/g)) out.push(m[1] + ': ' + m[2].replace(/\s+/g, ' ').slice(0, 80));
+  const add = (k, v) => { v = v.replace(/\s+/g, ' ').trim(); if (v && v !== '[]' && v !== '{}') out.push(k + ': ' + (v.length > 60 ? v.slice(0, 57) + '…' : v)); };
+  for (const m of text.matchAll(/\b(canActivate|canMatch|canActivateChild|middleware|beforeEnter)\s*:\s*(\[[^\]]*\]|['"][^'"]+['"]|[\w.]+)/g)) add(m[1], m[2]);
+  for (const m of text.matchAll(/\b(roles?|requiresAuth|requiresAdmin|permissions?|authorize)\s*:\s*(\[[^\]]*\]|['"][^'"]+['"]|true|[\w.]+)/g)) add(m[1], m[2]);
   return out;
 }
 
