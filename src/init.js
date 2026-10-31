@@ -9,7 +9,7 @@ import { findWordPress } from './index.js';
 import { agentSection, upsertSection } from './agent-instructions.js';
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-export const DEFAULT_SPEC = 'github:ngocanhnckh/renderlint';
+export const DEFAULT_SPEC = '@ngocanhnckh/renderlint';
 const PREVIEW_PORT = 4319;
 
 function readJson(p) { try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; } }
@@ -125,7 +125,7 @@ Done. Next:
   npx renderlint explain    list every rule
 ${proj.framework && /vite|sveltekit|astro|qwik|remix|react-router/.test(proj.framework.id) ? `
 Optional (Vite): live overlay + terminal output while developing:
-  // vite.config: import renderlint from 'renderlint/vite'; plugins: [..., renderlint()]
+  // vite.config: import renderlint from '@ngocanhnckh/renderlint/vite'; plugins: [..., renderlint()]
 ` : ''}
 Agents: follow the "UI quality gate: renderlint" section in AGENTS.md.`);
   return 0;
@@ -135,7 +135,7 @@ function defaultSpec() {
   // When run from a local checkout (development), install that checkout.
   try {
     const own = readJson(join(PKG_ROOT, 'package.json'));
-    if (existsSync(join(PKG_ROOT, '.git')) && own && own.name === 'renderlint') return 'file:' + realpathSync(PKG_ROOT);
+    if (existsSync(join(PKG_ROOT, '.git')) && own && own.name === DEFAULT_SPEC) return 'file:' + realpathSync(PKG_ROOT);
   } catch { /* ignore */ }
   return DEFAULT_SPEC;
 }

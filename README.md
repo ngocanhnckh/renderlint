@@ -20,17 +20,16 @@ renderlint renders every page at phone, tablet and desktop widths (and dark mode
 
 **Paste this into your coding agent** (Claude Code, Cursor, Codex, Copilot, Gemini CLI, Windsurf, Aider, Zed, Amp…):
 
-> Set up renderlint in this project: run `npx -y github:ngocanhnckh/renderlint init`, then follow the "UI quality gate: renderlint" section it adds to AGENTS.md: after every UI change run `npx renderlint` and fix every reported error until it shows 0 errors.
+> Set up renderlint in this project: run `npx -y @ngocanhnckh/renderlint init`, then follow the "UI quality gate: renderlint" section it adds to AGENTS.md: after every UI change run `npx renderlint` and fix every reported error until it shows 0 errors.
 
 Or run it yourself:
 
 ```bash
-npx -y github:ngocanhnckh/renderlint init   # one-time setup: config, build gate, agent instructions, Claude Code hook
-npx renderlint                              # check: exits 1 if any error is found
+npx -y @ngocanhnckh/renderlint init   # one-time setup: installs it, adds config, build gate, agent instructions, Claude Code hook
+npx renderlint                        # check: exits 1 if any error is found
 ```
 
-> [!NOTE]
-> renderlint isn't on npm yet, so install it from GitHub as above. Once it's published, the command becomes `npx -y renderlint init`.
+Or just install it: `npm i -D @ngocanhnckh/renderlint`. The command is `renderlint` either way. To try it once without installing: `npx -y @ngocanhnckh/renderlint http://localhost:3000`.
 
 ```
 ✖ contrast (3)  Text does not have enough contrast with what is actually behind it …
@@ -211,11 +210,11 @@ renderlint exits non-zero when it finds errors, so you can gate any step on it:
 | Where | How |
 |---|---|
 | **`npm run build`** (any framework) | `init` appends a check to your build script, e.g. `"build": "vite build && renderlint dist"` or `"build": "next build && renderlint --serve \"npx next start -p 4319\" --url http://localhost:4319"` |
-| **Vite** (React, Vue, Svelte, Solid, Preact, Lit, Qwik…) | `import renderlint from 'renderlint/vite'` and add `renderlint()` to `plugins`. `vite build` fails on errors. In dev, an overlay shows findings live and prints them in the dev-server terminal, with source file:line. |
+| **Vite** (React, Vue, Svelte, Solid, Preact, Lit, Qwik…) | `import renderlint from '@ngocanhnckh/renderlint/vite'` and add `renderlint()` to `plugins`. `vite build` fails on errors. In dev, an overlay shows findings live and prints them in the dev-server terminal, with source file:line. |
 | **Claude Code** | `init` adds a `Stop` hook (`npx renderlint hook`). Claude can't end its turn while UI errors remain in files it changed. The hook only runs when UI files changed and gives up after 4 attempts, so it can't trap the agent. |
 | **Other agents** | `init` writes the workflow into `AGENTS.md` (read by Codex, Cursor, Copilot, Gemini, Amp, Zed and others) and `CLAUDE.md`. |
 | **CI** | `npx renderlint --format github` gives inline PR annotations. See [docs/integrations.md](docs/integrations.md). |
-| **Any bundler, in dev** | `import('renderlint/client').then((m) => m.start())` adds the live overlay to any app. |
+| **Any bundler, in dev** | `import('@ngocanhnckh/renderlint/client').then((m) => m.start())` adds the live overlay to any app. |
 
 <details>
 <summary><b>What <code>init</code> does</b></summary>
@@ -284,7 +283,7 @@ It's tuned for a low false-positive rate. Things that are usually intentional ar
 ### Programmatic API
 
 ```js
-import { check, formatPretty } from 'renderlint';
+import { check, formatPretty } from '@ngocanhnckh/renderlint';
 
 const result = await check({ targets: ['http://localhost:5173'], config: { viewports: [390, 1440] } });
 console.log(formatPretty(result));

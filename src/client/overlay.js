@@ -1,5 +1,5 @@
 // Dev-time overlay. Bundled after the analyzer into dist/client.js.
-// Usage (any bundler, dev only):  import('renderlint/client').then((m) => m.start());
+// Usage (any bundler, dev only):  import('@ngocanhnckh/renderlint/client').then((m) => m.start());
 
 const SEV_COLOR = { error: '#e11d48', warn: '#d97706' };
 const DEFAULT_WARN = new Set(['missing-alt', 'dead-link', 'tap-target', 'font-size-min', 'unlabeled-control', 'button-text-wrap', 'line-length', 'focus-indicator', 'control-height-mismatch', 'icon-misaligned']);

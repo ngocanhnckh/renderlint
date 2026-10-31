@@ -1,5 +1,5 @@
 {
-  "name": "renderlint",
+  "name": "@ngocanhnckh/renderlint",
   "version": "0.1.0",
   "main": "./src/index.js",
   "scripts": {
@@ -57,5 +57,8 @@
   "homepage": "https://github.com/ngocanhnckh/renderlint#readme",
   "bugs": {
     "url": "https://github.com/ngocanhnckh/renderlint/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

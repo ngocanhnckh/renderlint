@@ -1,15 +1,18 @@
 // Vite plugin (React, Vue, Svelte, Solid, Preact, Lit, Qwik… any Vite app).
 //
 //   // vite.config.ts
-//   import renderlint from 'renderlint/vite';
+//   import renderlint from '@ngocanhnckh/renderlint/vite';
 //   export default defineConfig({ plugins: [react(), renderlint()] });
 //
 // dev:   injects an in-page checker; findings show in a corner overlay and are
 //        printed in the dev-server terminal (where coding agents read logs).
 // build: after `vite build`, renders the output in a headless browser and
 //        FAILS THE BUILD when error-level UI defects are found.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+
+// The package name the injected client import resolves to in the user's project.
+const PKG = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).name;
 
 const VIRTUAL = 'virtual:renderlint-client';
 const RESOLVED = '\0' + VIRTUAL;
@@ -24,7 +27,7 @@ export default function renderlint(options = {}) {
     resolveId(id) { return id === VIRTUAL ? RESOLVED : undefined; },
     load(id) {
       if (id !== RESOLVED) return undefined;
-      return `import { start } from 'renderlint/client';
+      return `import { start } from '${PKG}/client';
 start(${JSON.stringify({ rules: rules || {}, overlay })}, (report) => { if (import.meta.hot) import.meta.hot.send('renderlint:report', report); });`;
     },
     transformIndexHtml: {

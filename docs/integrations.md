@@ -25,7 +25,7 @@ renderlint works on anything that renders in a browser. Pick the gate that suits
 
 ```ts
 // vite.config.ts
-import renderlint from 'renderlint/vite';
+import renderlint from '@ngocanhnckh/renderlint/vite';
 
 export default defineConfig({
   plugins: [react(), renderlint({ /* rules, viewports, pages, build: true, overlay: true */ })],
@@ -46,7 +46,7 @@ export default defineConfig({
 
 ```js
 // e.g. in a Next.js client component, Nuxt plugin, or main.ts — dev only
-if (process.env.NODE_ENV === 'development') import('renderlint/client').then((m) => m.start());
+if (process.env.NODE_ENV === 'development') import('@ngocanhnckh/renderlint/client').then((m) => m.start());
 ```
 
 ## Claude Code
