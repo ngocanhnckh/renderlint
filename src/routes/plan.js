@@ -100,7 +100,7 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
     return 'check';
   };
   const cov = {
-    routes, outside, framework: found.framework, sitemap, perRoute: per, opts,
+    routes, outside, framework: found.framework, sitemap, perRoute: per, opts, exclude: config.exclude || [], signedIn: !!(config.auth || config.roles),
     // static routes first, then instances of dynamic routes, chosen for variety
     seeds() {
       const out = [];
@@ -287,6 +287,18 @@ function classify(path, res, route) {
   return { status: 'checked' };
 }
 
+// Why a route that was found got no page checked: say what actually happened, the report is acted on.
+const SIGN_IN = /(^|[/#_-])(log-?in|sign-?in|signin|auth|sso|session\/new|account\/login)([/?#._-]|$)/i;
+const SIGN_OUT = /(^|[/#_-])(log-?out|sign-?out|signoff|logoff|end-?session)([/?#._-]|$)/i;
+export function notCheckedReason(cov, r) {
+  const p = r.pattern;
+  if (/^\/?(:[\w$]+(\*|\+|\(\.\*\)\*?)|\*\*?|\[\[?\.\.\.[\w$]+\]\]?)$/.test(p.replace(/^\//, '')) || /^\/:(splat|pathMatch|catchAll|all|path)\*?$/.test(p)) return 'catch-all route (the not-found page): list a URL in "pages" to check it';
+  if (cov.exclude.some((g) => globMatch(g, p))) return 'excluded by "exclude"';
+  if (SIGN_OUT.test(p)) return 'log-out route: never opened (it would end the session)';
+  if (cov.signedIn && SIGN_IN.test(p)) return 'sign-in page: not opened while signed in (it only redirects); check it without "auth"';
+  return r.checked.length ? 'page limit (maxPages) reached' : 'not reached (no page linked to it, and the route table did not list it)';
+}
+
 const ORDER = ['checked', 'needs-auth', 'needs-role', 'needs-params', 'redirected', 'unreachable', 'error', 'not-checked', 'excluded'];
 function summarize(cov) {
   const list = [];
@@ -304,7 +316,7 @@ function summarize(cov) {
       const best = r.results.slice().sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status))[0];
       status = best.status; reason = best.reason;
     } else if (r.dynamic && !r.candidates.size) { status = 'needs-params'; reason = `no value for ${r.params.map((p) => ':' + p).join(', ')} (no link, sitemap entry, API list or build manifest named one; set "params")`; }
-    else { status = 'not-checked'; reason = r.checked.length ? 'page limit (maxPages) reached' : 'excluded by "exclude"'; }
+    else { status = 'not-checked'; reason = notCheckedReason(cov, r); }
     list.push({ pattern: r.pattern, file: r.file, status, reason, instances: r.candidates.size, checked: Array.from(new Set(ok.map((x) => x.path))), quickChecked: okQuick.size, tried: r.results.length, guards: r.guards, sources: Array.from(new Set(Array.from(r.candidates.values(), (c) => c.source))) });
   }
   // URLs that no discovered route serves (rewrites, a CMS, a site without source)

@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { discoverRoutes, fillPattern, staticParamsFrom } from '../src/routes/discover.js';
 import { matchRoute, inferPatterns } from '../src/routes/match.js';
 import { buildGraph, routeClosures, affectedRoutes, shellEntries } from '../src/routes/graph.js';
-import { choose, coverageGate, coverageLine } from '../src/routes/plan.js';
+import { choose, coverageGate, coverageLine, notCheckedReason } from '../src/routes/plan.js';
 import { updatePageMap } from '../src/routes/incremental.js';
 
 function tree(files) {
@@ -244,6 +244,19 @@ const router = createBrowserRouter([{ path: '/login', element: <Login /> }, { pa
 `,
   }));
   assert.deepEqual(patterns(inline), ['/login', '/settings', '/users'], 'components declared as functions or classes in the router file');
+});
+
+test('coverage: the reason a found route was not checked is the real one', () => {
+  const cov = (o = {}) => ({ exclude: [], signedIn: false, ...o });
+  const r = (pattern, checked = []) => ({ pattern, checked });
+  assert.match(notCheckedReason(cov(), r('/:splat*')), /catch-all/);
+  assert.match(notCheckedReason(cov(), r('/[...slug]')), /catch-all/);
+  assert.match(notCheckedReason(cov({ exclude: ['/blog/*'] }), r('/blog/:slug')), /excluded by "exclude"/);
+  assert.match(notCheckedReason(cov(), r('/logout')), /log-out/);
+  assert.match(notCheckedReason(cov({ signedIn: true }), r('/login')), /sign-in page/);
+  assert.match(notCheckedReason(cov(), r('/reports', ['/reports'])), /page limit/);
+  assert.match(notCheckedReason(cov(), r('/reports')), /not reached/);
+  assert.doesNotMatch(notCheckedReason(cov(), r('/blog/authors')), /sign-in|catch-all/, '"auth" inside a word is not a sign-in page');
 });
 
 test('generateStaticParams that is not a literal yields no values (they come from the build manifest or links)', () => {
