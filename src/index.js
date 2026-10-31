@@ -183,7 +183,7 @@ export async function check(options = {}) {
   try {
     browser = options.browser || await launchBrowser({ log });
     log(`Checking ${urls.length} page(s)${config.crawl ? ' (+ crawling links)' : ''} at ${config.viewports.map((v) => v.width).join('/')}px…`);
-    const { issues: raw, pages } = await runChecks(browser, { urls, config, log });
+    const { issues: raw, pages, coverage } = await runChecks(browser, { urls, config, log });
     let scanned = [];
     const doScan = options.scan !== undefined ? options.scan : config.scan && !targets.some((t) => /^https?:/.test(t));
     if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
@@ -198,8 +198,9 @@ export async function check(options = {}) {
       suppressed: 0,
     };
     const result = { ok: config.failOn === 'never' ? true : config.failOn === 'warn' ? stats.errors + stats.warnings === 0 : stats.errors === 0, issues, pages, stats, config };
+    if (coverage && (coverage.pages || coverage.framework || coverage.skipped.length || coverage.overLimit)) result.coverage = coverage;
     mkdirSync(config.outputDir, { recursive: true });
-    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues }, null, 2));
+    writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues, ...(result.coverage ? { coverage: result.coverage } : {}) }, null, 2));
     writeFileSync(join(config.outputDir, 'report.md'), formatMarkdown(result));
     return result;
   } finally {

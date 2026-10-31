@@ -77,11 +77,36 @@ function sourceStr(src) {
   return [src.component, file && (file + (src.line ? ':' + src.line : '')), !src.component && !file && block].filter(Boolean).join(' — ');
 }
 
+// Which page was checked as which role, and which ones the app didn't show.
+function coverageLines(c) {
+  const out = [];
+  const rows = (c.pages || []).slice().sort((a, b) => a.route.localeCompare(b.route));
+  const roles = c.roles.length ? c.roles : ['default'];
+  if (rows.length && (c.roles.length || rows.some((r) => Object.values(r.roles).some((v) => v !== 'checked')))) {
+    const w = Math.min(36, Math.max(5, ...rows.map((r) => r.route.length)));
+    out.push(dim(`Coverage${c.framework ? ` (routes from the ${c.framework} router)` : ''}:`));
+    const cw = roles.map((name) => Math.min(48, Math.max(name.length, 7, ...rows.map((r) => (r.roles[name] || '').length))));
+    if (c.roles.length) out.push(dim('  ' + 'route'.padEnd(w) + '  ' + roles.map((r, i) => r.padEnd(cw[i])).join('  ')));
+    for (const r of rows) {
+      const cells = roles.map((name, i) => {
+        const v = r.roles[name], t = (v || '—').slice(0, cw[i]).padEnd(cw[i]);
+        return v === undefined ? dim(t) : v === 'checked' ? green(t) : /\((expected|ordinary redirect)\)$/.test(v) ? dim(t) : yellow(t);
+      });
+      out.push('  ' + r.route.slice(0, w).padEnd(w) + '  ' + cells.join('  '));
+    }
+  }
+  for (const s of c.skipped || []) out.push(yellow('  not checked: ') + s.route + dim(` (${s.reason})`));
+  if (c.overLimit) out.push(yellow(`  ${c.overLimit.count} more page(s) found but not checked`) + dim(` (maxPages ${c.overLimit.maxPages}${c.roles.length ? ' per role' : ''}): ${c.overLimit.routes.join(', ')}${c.overLimit.count > c.overLimit.routes.length ? ', …' : ''}. Raise "maxPages" to check them.`));
+  if (out.length) out.push('');
+  return out;
+}
+
 export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = {}) {
   const { issues, pages, config, stats } = result;
   const lines = [];
   const vps = config.viewports.map((v) => v.width + 'px').join(', ');
   lines.push(bold('renderlint') + dim(` — ${pages.length} page(s) × viewports ${vps}${stats.schemes.length > 1 ? ' × ' + stats.schemes.join('/') : ''}${stats.scanned ? ` + source scan (${stats.scanned} findings)` : ''}`));
+  if (result.coverage) lines.push(...coverageLines(result.coverage));
   if (!issues.length) {
     lines.push(green('✔ No UI defects found.'));
     return lines.join('\n');

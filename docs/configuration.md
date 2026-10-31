@@ -10,7 +10,9 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `base` | — | Public base path the build expects, e.g. `"/my-repo/"` (Vite `base`, GitHub Pages). The Vite plugin passes it automatically. CLI: `--base`. |
 | `pages` | `["/"]` | Entry pages (paths or absolute URLs). |
 | `crawl` | `true` | Follow same-origin links found on checked pages. |
-| `maxPages` | `12` | Page limit when crawling. |
+| `routes` | `true` | With `crawl`, also check every route in the app's router config (Vue Router, React Router, Angular Router), including pages no link points to. Read at runtime, from dev servers and production builds. `false`: links only. See [roles and routes](authentication.md#every-page-as-every-role). |
+| `params` | `{}` | Values for dynamic routes: `{ "/users/:id": ["7"], "slug": "hello-world" }`. Without one, a value comes from a link on a checked page, then from the API data (the `id` of the first item of a JSON list whose URL names the route's segment, e.g. `/api/users` for `/users/:id`). |
+| `maxPages` | `12` | Page limit when crawling (per role). Pages over the limit are listed as not checked. |
 | `exclude` | `[]` | Path globs to skip while crawling, e.g. `"/blog/*"`. |
 | `viewports` | `[375, 768, 1280]` | Widths, or `"WxH"` strings, or `{ width, height }`. |
 | `colorSchemes` | `"auto"` | `"auto"` checks dark mode too when the app has `prefers-color-scheme: dark` CSS. Or `["light"]`, `["light","dark"]`. |
@@ -41,7 +43,7 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `serverTimeout` | `120000` | How long to wait for `serve` to come up (ms). |
 | `maxScreenshotHeight` | `12000` | Pages taller than this are only contrast-checked down to this height. |
 | `beforeCheck` | — | JS config only: `async (page, { viewport, scheme }) => {}` — log in, open a menu, set state. `page` is a Playwright page. |
-| `auth` | — | Pages behind a login. `{ storage: { sessionStorage, localStorage, cookies } }` sets the token the route guard reads (frontend only, with `mock` for the API); `{ login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }` logs in once; `{ run: async (page) => {} }` (JS config) for SSO. See [authentication](authentication.md). |
+| `auth` | — | Pages behind a login. `{ storage: { sessionStorage, localStorage, cookies } }` sets the token the route guard reads (frontend only, with `mock` for the API); `{ login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }` logs in once; `{ run: async (page) => {} }` (JS config) for SSO. `{ roles: { admin: {…}, viewer: {…} } }` checks every page as each role. See [authentication](authentication.md). |
 | `contextOptions` | — | Extra Playwright browser-context options (e.g. `locale`, `storageState`). |
 
 ## Content you didn't render

@@ -213,6 +213,12 @@ export const RULES = {
     summary: 'A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself).',
     fix: 'Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. See docs/authentication.md.',
   },
+  'page-not-shown': {
+    severity: 'warn',
+    category: 'runtime',
+    summary: 'Signed in, the app did not show a page renderlint was asked to check or found (in a link or the app\'s router config), so it was not checked: a guard redirected elsewhere, or "Access denied" / "Page not found" was rendered in its place. With several roles, a page one role sees and another does not. An error for a page you listed that no role could see.',
+    fix: 'If the role is not meant to see the page, list it in `auth.roles.<role>.deny` (e.g. ["/admin/**"]) and it is recorded as denied as expected. Otherwise give that role what the guard checks (its storage, a forged token `{ "$jwt": { "role": "admin" } }`, or the `/api/me` mock), or for a dynamic route set `params` to a value that exists. See docs/authentication.md#roles.',
+  },
   'console-error': {
     severity: 'error',
     category: 'runtime',

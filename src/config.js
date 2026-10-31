@@ -3,7 +3,7 @@ import { availableParallelism } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { RULES } from './rules-meta.js';
-import { normalizeAuth } from './auth.js';
+import { normalizeAuth, forgeJwt } from './auth.js';
 
 export const DEFAULTS = {
   url: undefined,          // base URL of a running app
@@ -12,7 +12,9 @@ export const DEFAULTS = {
   base: undefined,         // public base path the build expects, e.g. "/my-repo/" (Vite `base`)
   pages: ['/'],            // entry pages (paths or absolute URLs)
   crawl: true,             // follow same-origin links from entry pages
-  maxPages: 12,
+  routes: true,            // with crawl: also check the routes in the app's router config (Vue Router, React Router, Angular), linked or not
+  params: {},              // values for dynamic routes: { "/users/:id": ["7"], "slug": "hello" } (default: from links, then from the API data)
+  maxPages: 12,            // per role
   exclude: [],             // path globs to skip while crawling, e.g. "/blog/*"
   viewports: [375, 768, 1280],
   colorSchemes: 'auto',    // 'auto' (light + dark if the app has dark-mode CSS) | ['light'] | ['light','dark']
@@ -101,6 +103,8 @@ export function normalize(c, cwd = process.cwd()) {
   if (out.sweep.some((w) => !(w >= 200 && w <= 4000))) throw new Error(`renderlint: "sweep" must be true, false or a list of widths (got ${JSON.stringify(c.sweep)})`);
   out.mock = resolveMocks(c.mock, cwd, 'mock');
   out.auth = normalizeAuth(c.auth);
+  if (out.auth && out.auth.roles) for (const [name, r] of Object.entries(out.auth.roles)) r.mock = resolveMocks(r.mock, cwd, `auth.roles.${name}.mock`);
+  if (out.params !== undefined && (typeof out.params !== 'object' || out.params === null || Array.isArray(out.params))) throw new Error('renderlint: "params" must map a route or parameter to values: { "/users/:id": ["7"], "slug": "hello-world" }');
   if (!Array.isArray(out.states)) throw new Error('renderlint: "states" must be an array of { name, page, click, … }');
   out.states = out.states.map((st, i) => {
     if (!st || typeof st !== 'object' || !st.name) throw new Error(`renderlint: states[${i}] needs a "name"`);
@@ -118,8 +122,16 @@ function resolveMocks(mock, cwd, where) {
   if (mock === undefined || mock === null) return {};
   if (typeof mock !== 'object' || Array.isArray(mock)) throw new Error(`renderlint: "${where}" must map URL patterns to responses`);
   const out = {};
-  for (const [pattern, v] of Object.entries(mock)) out[pattern] = typeof v === 'string' && /\.json$/i.test(v) ? { file: resolve(cwd, v) } : v && typeof v === 'object' && typeof v.file === 'string' ? { ...v, file: resolve(cwd, v.file) } : v;
+  for (const [pattern, v] of Object.entries(mock)) out[pattern] = typeof v === 'string' && /\.json$/i.test(v) ? { file: resolve(cwd, v) } : v && typeof v === 'object' && typeof v.file === 'string' ? { ...v, file: resolve(cwd, v.file) } : withJwts(v);
   return out;
+}
+
+// { "$jwt": claims } anywhere in inline mock data becomes an unsigned token (a mocked login API that returns one).
+function withJwts(v) {
+  if (Array.isArray(v)) return v.map(withJwts);
+  if (!v || typeof v !== 'object') return v;
+  if (v.$jwt && Object.keys(v).length === 1) return forgeJwt(v.$jwt);
+  return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, withJwts(x)]));
 }
 
 function defaultHeight(w) { return w <= 480 ? 812 : w <= 900 ? 1024 : 800; }

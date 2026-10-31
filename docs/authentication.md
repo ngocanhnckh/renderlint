@@ -90,6 +90,45 @@ export default {
 
 `run` gets a Playwright page and can do anything a test can. It runs once per renderlint run. A saved session from Playwright works too: `npx playwright codegen --save-storage=.auth/state.json http://localhost:4200`, then `"contextOptions": { "storageState": ".auth/state.json" }` (add `.auth/` to `.gitignore`; it doesn't hold sessionStorage, so token-in-sessionStorage apps need option 1 or 2).
 
+## Every page as every role
+
+Admin-only pages, a viewer's read-only banner, an "upgrade" card only free users see: each role renders a different UI. List the roles and renderlint checks every page as each of them, in one run, with no backend:
+
+```json
+{
+  "pages": ["/"],
+  "auth": {
+    "roles": {
+      "admin":  { "storage": { "localStorage": { "token": { "$jwt": { "sub": "1", "role": "admin" } } } } },
+      "viewer": { "storage": { "localStorage": { "token": { "$jwt": { "sub": "2", "role": "viewer" } } } }, "deny": ["/admin/**"] }
+    }
+  },
+  "mock": { "**/api/users": "fixtures/users.json", "**/api/users/*": "fixtures/user.json" }
+}
+```
+
+- **A role** takes anything `auth` takes (`storage`, `login`, `run`), plus its own `mock` (on top of the top-level one) and `deny`. Settings next to `roles` are shared by all roles.
+- **Where the role comes from** decides what to set:
+  - `/api/me` (or any user endpoint): the same token for everyone, and a mock per role: `"admin": { "mock": { "**/api/me": { "name": "Ada", "role": "admin" } } }`, with the shared `"storage": { "sessionStorage": { "token": "test" } }` next to `roles`.
+  - JWT claims decoded in the frontend: `{ "$jwt": { …claims } }` makes an unsigned token that expires in 2100. It works as a storage value, inside a persisted store's JSON, as a cookie value, and in inline mocks (a mocked login API returning `{ "token": { "$jwt": … } }`).
+  - A persisted store (Pinia, Redux, NgRx, Zustand): the store's JSON as the value, `"localStorage": { "auth": { "token": "t", "user": { "role": "viewer" } } }`.
+  - A login form: shared `"login": "/login", "user": …, "password": …` with a per-role mock of the login API, or each role with its own credentials.
+- **Every page:** renderlint reads the route table from the app's router (Vue Router, React Router, Angular Router) at runtime, dev server or production build, and checks every route, including pages reached only with a button. Dynamic routes (`/users/:id`) get a value from a link on a checked page, else from the API data (`/api/users` → the first user's `id`), else from `params`: `"params": { "/users/:id": ["7"] }`. Routes it can't fill are listed as not checked. `"routes": false` turns this off.
+- **Pages a role isn't shown** are reported, never checked in that role's name: a guard that redirects (`/admin` → `/dashboard`), or "Access denied" / "Page not found" rendered in place. A page one role sees and another doesn't is a `page-not-shown` warning for the other; list it in that role's `deny` (globs: `/admin`, `/admin/**`) and it is recorded as denied as expected instead. Ordinary redirects (`/` → `/dashboard`, `/settings` → `/settings/profile`, trailing slashes) are not findings.
+
+The report starts with the coverage, page by page and role by role:
+
+```
+Coverage (routes from the vue router):
+  route              admin    viewer
+  /admin             checked  denied (expected)
+  /billing           checked  Access denied
+  /dashboard         checked  checked
+  /users/7           checked  checked
+```
+
+Findings name the role (`/dashboard [role: viewer]`), screenshots too (`dashboard-…-viewer@375.png`). `report.json` has the same table under `coverage`. With one session (no `roles`), the same detection applies: a page you listed that the app doesn't show is an error, a crawled one a warning.
+
 ## Crawling a signed-in app
 
 - Log out links (`/logout`, `/sign-out`, `#/logout`…) are never followed, and with `auth` the login page isn't crawled either.

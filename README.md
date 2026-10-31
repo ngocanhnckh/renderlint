@@ -84,7 +84,7 @@ npx renderlint                              # check: exits 1 if any error is fou
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No viewport meta, a pointless 3px scrollbar, `href="#"` links | `missing-viewport-meta`, `accidental-scrollbar`, `dead-link` |
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
-| Hydration errors, crashes, 404s, pages that only showed the login form | `page-error`, `console-error`, `broken-resource`, `auth-required` |
+| Hydration errors, crashes, 404s, pages that only showed the login form or "Access denied" | `page-error`, `console-error`, `broken-resource`, `auth-required`, `page-not-shown` |
 
 All rules, their defaults and fix guidance: [docs/rules.md](docs/rules.md). `npx renderlint explain <rule>` prints the same in the terminal.
 
@@ -185,7 +185,9 @@ Without a session, an SPA sends every inner route to `/login`. renderlint report
 }
 ```
 
-It can also log in through your form once (`"auth": { "login": "/login", "user": "${RENDERLINT_USER}", "password": "${RENDERLINT_PASSWORD}" }`) or run a script for SSO. Hash routes (`/#/accounts`) are crawled as pages of their own, and log-out links are never followed. See [docs/authentication.md](docs/authentication.md).
+It can also log in through your form once (`"auth": { "login": "/login", "user": "${RENDERLINT_USER}", "password": "${RENDERLINT_PASSWORD}" }`) or run a script for SSO. Hash routes (`/#/accounts`) are crawled as pages of their own, and log-out links are never followed.
+
+With `"auth": { "roles": { "admin": {…}, "viewer": {…} } }`, every page is checked as each role. renderlint reads the route table from your Vue, React Router or Angular router, so pages reached only with a button, and dynamic routes such as `/users/:id`, are checked too. A page a role isn't shown (a guard's redirect, "Access denied" in place) is reported, never passed. See [docs/authentication.md](docs/authentication.md).
 
 ## WordPress and Elementor
 

@@ -8,6 +8,7 @@ import { measureDropdowns } from './controls.js';
 import { RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
 import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
+import { DISCOVER_ROUTES, NG_ROUTES_HOOK, NOT_SHOWN_SCRIPT, fillParams, isDynamic, notShownFindings, pagePatterns, redirectedTo, routeOf } from './routes.js';
 
 const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -240,138 +241,234 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     minTapTarget: config.minTapTarget, minFontSize: config.minFontSize, maxLineLength: config.maxLineLength,
   };
 
-  // Signed-in pages: log in (or set the storage the app's guards read) once, reuse the session everywhere.
-  let session = null;
-  if (config.auth) {
-    const mock = config.mock || {};
-    session = await authenticate(browser, urls[0], config, { log, routePage: Object.keys(mock).length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock, stressData: false })) : null });
-  }
+  // Roles: every page is checked as each role (its own session and mocks). Without auth.roles, one unnamed role.
+  const roles = config.auth && config.auth.roles ? Object.entries(config.auth.roles).map(([name, auth]) => ({ name, auth })) : [{ name: null, auth: config.auth }];
+  const multi = !!(config.auth && config.auth.roles);
+  const detect = !!config.auth && config.rules['page-not-shown'] !== 'off'; // signed in: tell pages the app didn't show from checked ones
+  const discover = config.crawl && config.routes !== false; // read the route table from the app's router
   const listed = new Set(urls.map(normalizeUrl)); // pages asked for, as opposed to found by crawling
-  const queue = urls.slice();
-  const visited = new Set(queue.map(normalizeUrl));
-  const groups = new Map(); // WordPress: crawled pages per template kind
   const origin = new URL(urls[0]).origin;
   const pages = [];
+  const routeKeys = new Set(); // URLs that are rendered routes in the app's router config
+  const outcomes = new Map(); // page key → { url, route, source, page, roles: { role: null (shown) | why not } }
+  const jsonSeen = []; // JSON the app received (mocked or real): values for dynamic route parameters
+  const mockData = Object.entries(config.mock || {}).map(([pattern, v]) => ({ url: pattern, json: mockJson(v) })).filter((d) => d.json !== undefined);
+  const coverage = { roles: roles.map((r) => r.name).filter(Boolean), framework: null, skipped: [], overLimit: null };
 
   // Every page × color scheme × viewport is one browser context; `concurrency` of them run at once, across
-  // pages: the next page starts as soon as its URL is known, while earlier pages are still in their slower passes.
+  // pages (and roles): the next page starts as soon as its URL is known, while earlier pages are still in their slower passes.
   // Links are taken from each page's first analysis, in the same order as a page-by-page crawl, so the same pages are checked.
   const slot = limiter(config.concurrency || 3);
   const reps = config.dedupe === false ? null : new Map(); // rendering fingerprint → the run whose later passes are shared
-  // dedupe: "template": per viewport, each page's skeleton hash (in crawl order), so the representative is always the first page
-  const skeletons = config.dedupe === 'template' ? viewports.map(() => []) : null;
   let darkSeen = false;
   const cssCache = new Map(); // cross-origin stylesheet → can it depend on the color scheme?
   // Findings already marked on a written screenshot. The report points each finding to its
   // first screenshot, so a later one is written only when it marks something new.
   const marked = new Set();
-  const startPage = (url, state) => {
-    const pageInfo = { url, path: pathOf(url, origin) + (state ? ` [state: ${state.name}]` : ''), runs: [] };
-    const k = pages.length;
-    pages.push(pageInfo);
-    const decisions = viewports.map(() => deferred());
-    if (skeletons && !state) skeletons.forEach((list) => { list[k] = deferred(); });
-    const template = (vi, si) => (!skeletons || state ? null : si > 0 ? { decision: decisions[vi] } : {
-      decision: decisions[vi], publish: skeletons[vi][k].resolve,
-      decide: async (h) => { for (let j = 0; j < k; j++) if (skeletons[vi][j] && await skeletons[vi][j].promise === h) return pages[j].path; return null; },
-    });
-    const schemes = config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
-    const metas = viewports.map(() => deferred()); // first scheme's analysis meta per viewport (null on error)
-    const sigs = viewports.map(() => deferred()); // first scheme's layout signature per viewport
-    const runs = [];
-    const startScheme = (si) => {
-      const scheme = schemes[si];
-      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
-        // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
-        wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
-        onSig: si === 0 ? sigs[vi].resolve : null, refSig: si > 0 ? sigs[vi].promise : null,
-        reps: dedupe && reps && !state ? reps : null, template: template(vi, si),
-        onMeta: si === 0 ? (m) => {
-          metas[vi].resolve(m);
-          // dark mode starts as soon as the first light run has seen dark-mode CSS
-          if (config.colorSchemes === 'auto' && m.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; startScheme(schemes.length - 1); }
-        } : null });
-      runs[si] = viewports.map((vp, vi) => slot(async () => {
-        const t0 = Date.now();
-        const res = await checkOne(browser, url, opts(vp, vi, true)).then((r) => {
-          // Without "auth", the sign-in page we were sent to is a page of its own: check it under its real name.
-          if (r.landed && !config.auth && !state && si === 0) {
-            const key = normalizeUrl(r.landed);
-            if (!visited.has(key)) { visited.add(key); queue.push(r.landed); }
-          }
-          return r;
-        }).finally(() => {
-          // never leave the crawl or later pages waiting on a run that failed outright
-          if (si > 0) return;
-          metas[vi].resolve(null);
-          sigs[vi].resolve(null); // no signature (error, stress off, shared): later schemes run their own stress passes
-          if (skeletons && !state) { skeletons[vi][k].resolve(null); decisions[vi].resolve(null); }
-        });
-        log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms${res.stressReused ? ' (+ stress findings of ' + schemes[0] + ': same layout)' : ''}${res.reuse ? ' (renders like ' + res.reuse.path + ': later passes shared)' : res.templateOf ? ' (same template as ' + res.templateOf + ': base checks only)' : ''}`);
-        return { vp, res, ms: Date.now() - t0 };
-      }).then(async (r) => {
-        if (!r.res.reuse) return r;
-        // The stress, sweep and data passes of an identical rendering found what they would find here.
-        const shared = await r.res.reuse.rest;
-        if (!shared || shared.error) return slot(async () => ({ vp, res: await checkOne(browser, url, opts(vp, vi, false)), ms: r.ms }));
-        r.res.issues.push(...shared.issues.map(cloneIssue));
-        return r;
-      }));
-      for (const r of runs[si]) r.catch(() => {}); // rethrown by pageInfo.done
+
+  const runRole = async ({ name: roleName, auth }) => {
+    const rmock = mergeMocks(config.mock, auth && auth.mock);
+    // Signed-in pages: log in (or set the storage the app's guards read) once, reuse the session everywhere.
+    let session = null;
+    if (auth) {
+      session = await authenticate(browser, urls[0], { ...config, auth, mock: rmock }, { log: roleName ? (m) => log(`[${roleName}] ${m}`) : log, routePage: Object.keys(rmock).length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock: rmock, stressData: false })) : null });
+    }
+    const role = { name: roleName, mock: auth && auth.mock };
+    const queue = urls.slice();
+    const visited = new Set(queue.map(normalizeUrl));
+    const sourceOf = new Map(queue.map((u) => [normalizeUrl(u), 'listed']));
+    const linkRoutes = new Set(); // routes of every same-origin link seen (values for dynamic parameters)
+    const groups = new Map(); // WordPress: crawled pages per template kind
+    let rolePages = 0, routesFound = null, dynamic = [];
+    const skeletons = config.dedupe === 'template' ? viewports.map(() => []) : null; // dedupe: "template": per viewport, each page's skeleton hash (in crawl order)
+    const mine = []; // this role's pages, for "template" dedupe
+    const enqueue = (href, src, { page = false } = {}) => {
+      const key = normalizeUrl(href);
+      if (page) routeKeys.add(key);
+      if (visited.has(key)) return false;
+      visited.add(key); sourceOf.set(key, src);
+      queue.push(href);
+      return true;
     };
-    for (let si = 0; si < schemes.length; si++) startScheme(si);
-    pageInfo.done = (async () => {
-      const results = [];
-      for (let si = 0; si < schemes.length; si++) results.push(await Promise.all(runs[si])); // a scheme added meanwhile has started already
-      const issues = [];
-      for (let si = 0; si < schemes.length; si++) {
+
+    const startPage = (url, state) => {
+      const key = normalizeUrl(url);
+      const pageInfo = { url, path: pathOf(url, origin) + (roleName ? ` [role: ${roleName}]` : '') + (state ? ` [state: ${state.name}]` : ''), ...(roleName ? { role: roleName } : {}), runs: [] };
+      const k = mine.length;
+      pages.push(pageInfo); mine.push(pageInfo);
+      if (!state) rolePages++;
+      const decisions = viewports.map(() => deferred());
+      if (skeletons && !state) skeletons.forEach((list) => { list[k] = deferred(); });
+      const template = (vi, si) => (!skeletons || state ? null : si > 0 ? { decision: decisions[vi] } : {
+        decision: decisions[vi], publish: skeletons[vi][k].resolve,
+        decide: async (h) => { for (let j = 0; j < k; j++) if (skeletons[vi][j] && await skeletons[vi][j].promise === h) return mine[j].path; return null; },
+      });
+      const schemes = config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
+      const metas = viewports.map(() => deferred()); // first scheme's analysis meta per viewport (null on error)
+      const sigs = viewports.map(() => deferred()); // first scheme's layout signature per viewport
+      const runs = [];
+      const startScheme = (si) => {
         const scheme = schemes[si];
-        for (const [vi, { vp, res, ms }] of results[si].entries()) {
-          // Same DOM, same layout, color-only CSS differences: the stress passes would find exactly what they found in the first scheme.
-          if (res.stressReused) res.issues.push(...results[0][vi].res.issues.filter((i) => i.rule === 'fragile-layout' && !i.sweepWidth).map(cloneIssue));
-          pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}), ...(res.stressReused ? { stressReused: true } : {}) });
-          for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
-          if (res.error) issues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
+        const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, role, crawled: !state && !listed.has(key), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
+          detect: detect && !state, discover: discover && !state && si === 0 && vi === 0 && !routesFound,
+          onJson: !state && si === 0 && vi === 0 ? (u, j) => { if (jsonSeen.length < 200) jsonSeen.push({ url: u, json: j }); } : null,
+          // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
+          wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
+          onSig: si === 0 ? sigs[vi].resolve : null, refSig: si > 0 ? sigs[vi].promise : null,
+          reps: dedupe && reps && !state ? reps : null, template: template(vi, si),
+          onMeta: si === 0 ? (m) => {
+            metas[vi].resolve(m);
+            // dark mode starts as soon as the first light run has seen dark-mode CSS
+            if (config.colorSchemes === 'auto' && m.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; startScheme(schemes.length - 1); }
+          } : null });
+        runs[si] = viewports.map((vp, vi) => slot(async () => {
+          const t0 = Date.now();
+          const res = await checkOne(browser, url, opts(vp, vi, true)).then((r) => {
+            // Without "auth", the sign-in page we were sent to is a page of its own: check it under its real name.
+            if (r.landed && !config.auth && !state && si === 0) enqueue(r.landed, 'landed');
+            // Sent elsewhere (a role guard, an ordinary redirect): the page we landed on is checked under its own name.
+            if (r.notShown && r.landed && !state && si === 0 && !LOGIN_PATH.test(routeOf(r.landed)) && !LOGOUT.test(routeOf(r.landed))) enqueue(r.landed, 'landed');
+            if (!state && si === 0 && vi === 0 && (detect || r.notShown)) {
+              const o = outcomes.get(key) || { url, route: routeOf(url), source: sourceOf.get(key) || 'link', page: false, roles: {} };
+              if (!r.error) o.roles[roleName || ''] = r.notShown || null;
+              outcomes.set(key, o);
+              pageInfo.notShown = r.notShown || undefined;
+            }
+            return r;
+          }).finally(() => {
+            // never leave the crawl or later pages waiting on a run that failed outright
+            if (si > 0) return;
+            metas[vi].resolve(null);
+            sigs[vi].resolve(null); // no signature (error, stress off, shared): later schemes run their own stress passes
+            if (skeletons && !state) { skeletons[vi][k].resolve(null); decisions[vi].resolve(null); }
+          });
+          log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.notShown ? 'not shown (' + (res.notShown.to ? 'redirected to ' + res.notShown.to : res.notShown.text) + ')' : res.issues.length + ' finding(s)'} in ${Date.now() - t0}ms${res.stressReused ? ' (+ stress findings of ' + schemes[0] + ': same layout)' : ''}${res.reuse ? ' (renders like ' + res.reuse.path + ': later passes shared)' : res.templateOf ? ' (same template as ' + res.templateOf + ': base checks only)' : ''}`);
+          return { vp, res, ms: Date.now() - t0 };
+        }).then(async (r) => {
+          if (!r.res.reuse) return r;
+          // The stress, sweep and data passes of an identical rendering found what they would find here.
+          const shared = await r.res.reuse.rest;
+          if (!shared || shared.error) return slot(async () => ({ vp, res: await checkOne(browser, url, opts(vp, vi, false)), ms: r.ms }));
+          r.res.issues.push(...shared.issues.map(cloneIssue));
+          return r;
+        }));
+        for (const r of runs[si]) r.catch(() => {}); // rethrown by pageInfo.done
+      };
+      for (let si = 0; si < schemes.length; si++) startScheme(si);
+      pageInfo.done = (async () => {
+        const results = [];
+        for (let si = 0; si < schemes.length; si++) results.push(await Promise.all(runs[si])); // a scheme added meanwhile has started already
+        const issues = [];
+        for (let si = 0; si < schemes.length; si++) {
+          const scheme = schemes[si];
+          for (const [vi, { vp, res, ms }] of results[si].entries()) {
+            // Same DOM, same layout, color-only CSS differences: the stress passes would find exactly what they found in the first scheme.
+            if (res.stressReused) res.issues.push(...results[0][vi].res.issues.filter((i) => i.rule === 'fragile-layout' && !i.sweepWidth).map(cloneIssue));
+            pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.notShown ? { notShown: res.notShown } : {}), ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}), ...(res.stressReused ? { stressReused: true } : {}) });
+            for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(roleName ? { role: roleName } : {}), ...(state ? { state: state.name } : {}) });
+            if (res.error) issues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
+          }
         }
+        return issues;
+      })();
+      pageInfo.done.catch(() => {});
+      return metas;
+    };
+
+    // Dynamic routes (/users/:id) once the pages that link to them or load their data have been checked.
+    const expandDynamic = () => {
+      if (!dynamic.length) return false;
+      const todo = dynamic; dynamic = [];
+      let added = false;
+      for (const pattern of todo) {
+        const r = fillParams(pattern, { params: config.params || {}, links: Array.from(linkRoutes), data: [...jsonSeen, ...mockData] });
+        if (r.missing) { if (!coverage.skipped.some((s) => s.route === pattern)) coverage.skipped.push({ route: pattern, reason: `no value for ${r.missing.map((m) => ':' + m).join(', ')} (set "params")` }); continue; }
+        for (const p of r.paths) if (enqueue(origin + routesFound.prefix + p, 'params', { page: true })) added = true;
       }
-      return issues;
-    })();
-    pageInfo.done.catch(() => {});
-    return metas;
+      return added;
+    };
+
+    const metasOf = [];
+    const room = () => queue.length && rolePages < config.maxPages;
+    let k = 0;
+    for (;;) {
+      while (room()) metasOf.push(startPage(queue.shift(), null));
+      if (k >= metasOf.length) {
+        if (expandDynamic()) continue;
+        break;
+      }
+      for (const d of metasOf[k++]) {
+        const meta = await d.promise;
+        if (!config.crawl || !meta) continue;
+        for (const link of meta.links) {
+          let u;
+          try { u = new URL(link); } catch { continue; }
+          if (u.origin !== origin || NAV_SKIP.test(u.pathname) || LOGOUT.test(u.pathname + u.hash)) continue;
+          if (config.auth && LOGIN_PATH.test(u.pathname + hashRoute(u))) continue; // signed in: the login page only redirects
+          u.hash = hashRoute(u);
+          linkRoutes.add(routeOf(u.href));
+          const key = normalizeUrl(u.href);
+          if (visited.has(key)) continue;
+          if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
+          if (meta.platform && meta.platform.wordpress) {
+            if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
+            const g = wpGroup(u);
+            if (g && (groups.set(g, (groups.get(g) || 0) + 1).get(g)) > 2) continue;
+          }
+          enqueue(u.href, 'link');
+        }
+        // The app's own route table: pages no link points to (reached by a button, typed in, behind a role).
+        if (meta.routes && !routesFound) {
+          routesFound = meta.routes;
+          if (!coverage.framework) coverage.framework = routesFound.framework;
+          log(`  ${routesFound.framework} router: ${routesFound.routes.filter((r) => r.page).length} page route(s)${roleName ? ' (role ' + roleName + ')' : ''}`);
+          const skip = (p) => LOGOUT.test(p) || (config.auth && LOGIN_PATH.test(p)) || (config.exclude || []).some((x) => globMatch(x, p));
+          for (const p of pagePatterns(routesFound, { skip })) {
+            if (isDynamic(p)) { dynamic.push(p); continue; }
+            enqueue(origin + routesFound.prefix + p, 'router', { page: true });
+          }
+          for (const r of routesFound.routes) if (r.lazy && !r.page) coverage.skipped.push({ route: r.path, reason: 'lazy-loaded children renderlint could not load' });
+        }
+        if (room()) metasOf.push(startPage(queue.shift(), null));
+      }
+    }
+    // found but over the page limit: counted, not silently dropped
+    if (queue.length) { const o = coverage.overLimit || (coverage.overLimit = { maxPages: config.maxPages, count: 0, routes: [] }); o.count += queue.length; for (const u of queue) if (o.routes.length < 8 && !o.routes.includes(routeOf(u))) o.routes.push(routeOf(u)); }
+    // UI states: once every page's light-mode analysis is in (it decides whether they get dark mode too).
+    for (const st of config.states || []) if (!st.role || st.role === roleName) startPage(st.page ? new URL(st.page, urls[0]).href : urls[0], st);
   };
 
-  const metasOf = [];
-  for (let k = 0; ; k++) {
-    while (queue.length && pages.length < config.maxPages) metasOf.push(startPage(queue.shift(), null));
-    if (k >= metasOf.length) break;
-    for (const d of metasOf[k]) {
-      const meta = await d.promise;
-      if (!config.crawl || !meta) continue;
-      for (const link of meta.links) {
-        let u;
-        try { u = new URL(link); } catch { continue; }
-        if (u.origin !== origin || NAV_SKIP.test(u.pathname) || LOGOUT.test(u.pathname + u.hash)) continue;
-        if (config.auth && LOGIN_PATH.test(u.pathname + hashRoute(u))) continue; // signed in: the login page only redirects
-        u.hash = hashRoute(u);
-        const key = normalizeUrl(u.href);
-        if (visited.has(key)) continue;
-        if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
-        if (meta.platform && meta.platform.wordpress) {
-          if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
-          const g = wpGroup(u);
-          if (g && (groups.set(g, (groups.get(g) || 0) + 1).get(g)) > 2) continue;
-        }
-        visited.add(key);
-        queue.push(u.href);
-      }
-      if (queue.length && pages.length < config.maxPages) metasOf.push(startPage(queue.shift(), null));
-    }
-  }
-  // UI states: once every page's light-mode analysis is in (it decides whether they get dark mode too).
-  for (const st of config.states || []) startPage(st.page ? new URL(st.page, urls[0]).href : urls[0], st);
+  await Promise.all(roles.map(runRole));
   const allIssues = [];
   for (const p of pages) { allIssues.push(...await p.done); delete p.done; }
-  return { issues: allIssues, pages };
+
+  // Pages the app didn't show (a guard's redirect, "Access denied" or "Page not found" in place), per role.
+  if (detect) {
+    const deny = Object.fromEntries(roles.map((r) => [r.name || '', (r.auth && r.auth.deny) || []]));
+    const list = Array.from(outcomes.entries()).map(([key, o]) => Object.assign(o, { page: routeKeys.has(key) }));
+    for (const f of notShownFindings(list, { roles: roles.map((r) => r.name || ''), deny, multi })) {
+      const p = pages.find((x) => normalizeUrl(x.url) === normalizeUrl(f.url) && (x.role || null) === (f.role || null) && !/\[state:/.test(x.path));
+      for (const vp of viewports) allIssues.push({ ...f, page: p ? p.path : pathOf(f.url, origin), viewport: vp.width, scheme: 'light' });
+    }
+    coverage.pages = list.map((o) => ({ route: o.route, url: o.url, source: o.source, roles: Object.fromEntries(Object.entries(o.roles).map(([r, why]) => [r || 'default', why === null ? 'checked' : o.expected && o.expected[r] ? 'denied (expected)' : (why.kind === 'login' ? 'sent to ' + why.to : why.kind === 'redirect' ? '→ ' + why.to : why.text) + (o.reported && o.reported[r] ? '' : ' (ordinary redirect)')])) }));
+  }
+  return { issues: allIssues, pages, coverage };
+}
+
+// The JSON a mock serves (for dynamic route parameters), or undefined.
+function mockJson(v) {
+  try {
+    if (v && typeof v === 'object' && !Array.isArray(v) && 'file' in v) return /\.json$/i.test(v.file) ? JSON.parse(readFileSync(v.file, 'utf8')) : undefined;
+    if (v && typeof v === 'object' && !Array.isArray(v) && ('status' in v || 'json' in v || 'body' in v)) return v.json;
+    return v;
+  } catch { return undefined; }
+}
+
+// Mock layers, the last one winning: its patterns come first, since the first matching pattern serves the request.
+function mergeMocks(...layers) {
+  const out = {};
+  for (const m of layers.filter(Boolean).reverse()) for (const [k, v] of Object.entries(m)) if (!(k in out)) out[k] = v;
+  return out;
 }
 
 // Both sides of each breakpoint the page uses (u = first width of the wider layout), within the
@@ -499,7 +596,7 @@ const MQ_RECORDER = () => {
   window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
 };
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
+async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, role, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig, detect, discover, onJson }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -507,6 +604,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     ...(session ? { storageState: session.storageState } : {}),
   });
   await context.addInitScript(READY_INIT);
+  if (discover) await context.addInitScript(NG_ROUTES_HOOK);
   if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
   const net = trackNetwork(page);
@@ -517,7 +615,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   const origin = new URL(url).origin;
   // Console errors and failed requests count only in the main pass, not while data is stressed.
   let phase = 'main', sawJson = false;
-  const routes = { mock: { ...(config.mock || {}), ...((state && state.mock) || {}) }, stressData: false };
+  const routes = { mock: mergeMocks(config.mock, role && role.mock, state && state.mock), stressData: false };
   let routed = false;
   const ensureRoutes = async () => { if (!routed) { routed = true; await page.route('**/*', (route) => handleRoute(route, routes)); } };
   if (Object.keys(routes.mock).length) await ensureRoutes(); // interception disables the HTTP cache, so only when needed
@@ -543,7 +641,10 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   const failed = new Set();
   page.on('response', (r) => {
     if (phase !== 'main') return;
-    if (/^(fetch|xhr)$/.test(r.request().resourceType()) && /json/.test(r.headers()['content-type'] || '')) sawJson = true;
+    if (/^(fetch|xhr)$/.test(r.request().resourceType()) && /json/.test(r.headers()['content-type'] || '')) {
+      sawJson = true;
+      if (onJson && r.status() < 300) r.json().then((j) => onJson(r.url(), j), () => {});
+    }
     const u = r.url();
     if (r.status() < 400 || !u.startsWith(origin) || /favicon|apple-touch-icon|\.map(\?|$)|__nextjs|_next\/webpack-hmr|\/@vite\//.test(u)) return;
     const type = r.request().resourceType();
@@ -588,13 +689,25 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
         message: `${asked} was not checked: the app sent renderlint to ${redirect.external ? 'the sign-in page at ' + redirect.to : redirect.to} instead. ` +
           (config.auth ? 'The session from "auth" was not accepted here (expired, wrong role, or a token the guard doesn\'t read).' : 'Pages behind a login need "auth" in renderlint.config (log in once, or set the token your route guard reads and mock the API: no backend needed).'),
         details: { redirectedTo: redirect.to, external: redirect.external } });
-      return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url() };
+      return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url(), notShown: { kind: 'login', to: redirect.to } };
+    }
+    // Signed in, the app may still not show the page: a role guard's redirect (/admin → /dashboard),
+    // or "Access denied" / "Page not found" rendered in its place. Its UI was never rendered: don't check
+    // what was shown instead in its name. Ordinary redirects (trailing slash, a section's default child) don't count.
+    if (detect) {
+      const to = redirectedTo(url, page.url());
+      const screen = to ? null : await page.evaluate(NOT_SHOWN_SCRIPT).catch(() => null);
+      if (to || screen) {
+        issues.length = 0;
+        return { issues, meta: null, screenshot: null, error: null, landed: to && new URL(page.url()).origin === origin ? page.url() : null, notShown: to ? { kind: 'redirect', to } : screen };
+      }
     }
     if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
     if (state) await applyState(page, state, { viewport: vp, scheme });
     await page.evaluate(source);
     const res = await page.evaluate((o) => window.__renderlint.analyze(o), { ...analyzeOpts, contrastCandidates: false });
     meta = res.meta;
+    if (discover && meta) meta.routes = await page.evaluate(DISCOVER_ROUTES).catch(() => null);
     if (onMeta) onMeta(meta);
     for (const e of res.errors) log('  analyzer error: ' + e);
     lap('analyze');
@@ -658,7 +771,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       const errs = visible.filter((i) => effectiveSeverity(i, config) === 'error');
       const shown = errs.length ? errs : visible;
       if (shown.some((i) => !marked.has(groupKey(i)))) {
-        screenshot = join(outDir, 'screens', `${slugFor(url)}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
+        screenshot = join(outDir, 'screens', `${slugFor(url)}${role && role.name ? '-' + role.name : ''}@${vp.width}${scheme === 'dark' ? '-dark' : ''}.png`);
         shown.forEach((i, n) => { i.marker = n + 1; });
         const shownSig = JSON.stringify(shown.map((i) => [i.rule, i.selector, i.message, i.rect, i.related && i.related.rect]));
         if (dupOf && dupOf.screenshot && dupOf.shownSig === shownSig) copyFileSync(dupOf.screenshot, screenshot);
@@ -739,7 +852,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
         const found = r.issues.map((i) => ({ ...i, sweepWidth: w, details: { ...(i.details || {}), sweep: true } }));
         const shown = found.filter((i) => i.rect && effectiveSeverity(i, config) === 'error');
         if (config.screenshots && shown.length && shown.some((i) => !marked.has(groupKey(i)) && !markedHere.has(groupKey(i)))) {
-          const shot = join(outDir, 'screens', `${slugFor(url)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
+          const shot = join(outDir, 'screens', `${slugFor(url)}${role && role.name ? '-' + role.name : ''}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
           shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; markedHere.add(groupKey(i)); marked.add(groupKey(i)); });
           await annotate(page, shown, config);
           const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));

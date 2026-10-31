@@ -1,0 +1,35 @@
+/* Clean except for the PLANTED DEFECTS block at the end. */
+*{box-sizing:border-box}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;margin:0;color:#18181b;background:#fff;line-height:1.5}
+nav{display:flex;flex-wrap:wrap;gap:8px 16px;padding:8px 24px;border-bottom:1px solid #e4e4e7}
+nav a{color:#1d4ed8;padding:12px 4px;text-decoration:none}
+nav a:hover{text-decoration:underline}
+main{padding:24px;max-width:720px}
+h1{font-size:28px;margin:0 0 16px}
+h2{font-size:20px;margin:0 0 8px}
+p{margin:0 0 12px}
+form{display:grid;gap:16px;max-width:320px}
+label{display:grid;gap:4px}
+input{font:inherit;padding:10px 12px;border:1px solid #71717a;border-radius:6px}
+button{font:inherit;padding:10px 16px;border:0;border-radius:6px;background:#1d4ed8;color:#fff;cursor:pointer}
+button.link{background:none;color:#1d4ed8;padding:12px 4px;text-decoration:underline}
+.card{border:1px solid #d4d4d8;border-radius:12px;padding:16px;margin:0 0 16px}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.list{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.list li{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid #e4e4e7;border-radius:8px;padding:8px 12px}
+.list a{color:#1d4ed8;padding:12px 4px}
+.muted{color:#52525b}
+.error{color:#b91c1c;margin:0}
+.denied{border:1px solid #fecaca;background:#fef2f2;color:#7f1d1d;border-radius:12px;padding:16px}
+
+/* ---------- PLANTED DEFECTS (each on a page only one role sees) ---------- */
+/* D1 viewer-only card on /dashboard: the badge is too narrow for its label (text-overflow) */
+.upgrade-badge{display:inline-block;width:90px;white-space:nowrap;padding:4px 8px;border-radius:999px;background:#ede9fe;color:#5b21b6}
+/* D2 admin-only route /admin: the stat captions are far too light (contrast) */
+.admin-stat-caption{color:#c8c8c8}
+/* D3 /billing, rendered for admins only (viewers get "Access denied" in place): pill too narrow (text-overflow) */
+.plan-pill{display:inline-block;width:80px;white-space:nowrap;padding:4px 8px;border-radius:999px;background:#dcfce7;color:#166534}
+/* D4 dynamic /users/:id: the e-mail chip is too narrow (text-overflow) */
+.email-chip{display:inline-block;width:120px;white-space:nowrap;padding:4px 8px;border-radius:6px;background:#e0f2fe;color:#075985}
+/* D5 /export, reached only with a button click: the hint is too light (contrast) */
+.export-hint{color:#c4c4c4}

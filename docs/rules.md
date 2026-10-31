@@ -41,6 +41,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`icon-misaligned`](#icon-misaligned) | warn | An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text). |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
 | [`auth-required`](#auth-required) | error | A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). |
+| [`page-not-shown`](#page-not-shown) | warn | Signed in, the app did not show a page renderlint was asked to check or found (in a link or the app's router config), so it was not checked: a guard redirected elsewhere, or "Access denied" / "Page not found" was rendered in its place. With several roles, a page one role sees and another does not. An error for a page you listed that no role could see. |
 | [`console-error`](#console-error) | error | Uncaught JavaScript error or console.error while rendering (hydration mismatches, crashed components). |
 | [`broken-resource`](#broken-resource) | error | A same-origin stylesheet, script, font or image request failed (404/500), or a web font failed to load. |
 
@@ -343,6 +344,14 @@ The page could not be loaded or analyzed: navigation failed, timed out, or retur
 A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself).
 
 **How to fix:** Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. See docs/authentication.md.
+
+### page-not-shown
+
+**Default:** warn
+
+Signed in, the app did not show a page renderlint was asked to check or found (in a link or the app's router config), so it was not checked: a guard redirected elsewhere, or "Access denied" / "Page not found" was rendered in its place. With several roles, a page one role sees and another does not. An error for a page you listed that no role could see.
+
+**How to fix:** If the role is not meant to see the page, list it in `auth.roles.<role>.deny` (e.g. ["/admin/**"]) and it is recorded as denied as expected. Otherwise give that role what the guard checks (its storage, a forged token `{ "$jwt": { "role": "admin" } }`, or the `/api/me` mock), or for a dynamic route set `params` to a value that exists. See docs/authentication.md#roles.
 
 ### console-error
 
