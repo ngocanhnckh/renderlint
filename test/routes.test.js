@@ -245,6 +245,7 @@ test('import graph: barrels resolve to the defining module, lazy imports are per
     'src/components/index.ts': "export { Header } from './Header';\nexport * from './ui';\n", 'src/components/ui/index.ts': "export * from './Card';\nexport * from './Price';\n",
     'src/components/Header.tsx': P, 'src/components/ui/Card.tsx': "import styles from './Card.module.css';\nexport function Card() { return null; }\n", 'src/components/ui/Card.module.css': '',
     'src/components/ui/Price.tsx': "import { fmt } from '../../lib/fmt';\nexport function Price() { return null; }\n", 'src/lib/fmt.ts': 'export const fmt = 1;',
+    'src/app/docs/layout.tsx': P, 'src/app/docs/[...slug]/page.tsx': P, 'docs/guide.md': '',
     'src/components/Chart.tsx': P, 'src/components/Unused.tsx': P, 'src/data/products.json': '[]', 'content/posts.json': '[]', 'public/img/blog.png': '',
   });
   const d = discoverRoutes(dir);
@@ -257,12 +258,14 @@ test('import graph: barrels resolve to the defining module, lazy imports are per
   const sel = (changed) => { const a = affectedRoutes(g, changed, { closures: cl }); return a.all ? 'all' : Array.from(a.routes, (i) => d.routes[i].pattern).sort(); };
   assert.deepEqual(sel(['src/components/ui/Card.module.css']), ['/']);
   assert.deepEqual(sel(['src/lib/fmt.ts']), ['/products/:id']);
-  assert.deepEqual(sel(['src/app/tokens.css']).length, 3, 'global CSS through the root layout: every route');
+  assert.deepEqual(sel(['src/app/tokens.css']).length, 4, 'global CSS through the root layout: every route');
   assert.equal(sel(['next.config.ts']), 'all');
   assert.deepEqual(sel(['src/components/Unused.tsx']), [], 'nothing imports it');
   assert.deepEqual(sel(['public/img/blog.png']), ['/blog']);
   assert.equal(sel(['content/posts.json']), 'all', 'read with fs at runtime: no import edge, so every route');
   assert.deepEqual(sel(['src/components/Header.test.tsx']), []);
+  assert.deepEqual(sel(['src/app/docs/layout.tsx']), ['/docs/:slug+'], 'a docs/ route folder is rendered, not documentation');
+  assert.deepEqual(sel(['docs/guide.md']), [], 'docs/ at the project root is documentation');
 });
 
 test('Nuxt auto-imported components and composables are edges of the graph', () => {

@@ -25,7 +25,7 @@ const STYLE = /\.(css|scss|sass|less|styl|pcss)$/;
 // Files whose change can affect every page, whatever imports them.
 export const GLOBAL_FILES = /(^|\/)(package\.json|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|tsconfig(\.[\w-]+)?\.json|jsconfig\.json|\.env(\.[\w.-]+)?|(next|nuxt|svelte|astro|vite|vitest|tailwind|postcss|webpack|rollup|react-router|remix|angular|uno|windi|babel|tsr)\.config\.[cm]?[jt]s|\.babelrc|\.postcssrc(\.json)?|angular\.json|project\.json|index\.html|app\.html|middleware\.[jt]s|instrumentation\.[jt]s|tsr\.config\.json|components\.json|theme\.json|\.browserslistrc|browserslist)$/;
 // Never affect what renders.
-const IRRELEVANT = /(^|\/)(README|CHANGELOG|LICENSE)[^/]*$|\.(test|spec|stories|story)\.[cm]?[jt]sx?$|(^|\/)(__tests__|__mocks__|e2e|cypress|playwright|\.storybook|\.github|\.vscode|\.husky|\.renderlint|docs)\//;
+const IRRELEVANT = /(^|\/)(README|CHANGELOG|LICENSE)[^/]*$|\.(test|spec|stories|story)\.[cm]?[jt]sx?$|(^|\/)(__tests__|__mocks__|e2e|cypress|playwright|\.storybook|\.github|\.vscode|\.husky|\.renderlint)\/|^docs\//;
 
 // Imports of one file: [{ spec, names: ['A', 'B'] | null (whole module / side effect) }]
 export function importsOf(file, src) {
@@ -274,7 +274,8 @@ export function affectedRoutes(graph, changed, { closures = routeClosures(graph)
   closures.per.forEach((set, i) => { for (const f of set) { if (!byFile.has(f)) byFile.set(f, []); byFile.get(f).push(i); } });
   for (const c of changed) {
     const abs = resolve(cwd, c), r = rel(cwd, abs);
-    if (IRRELEVANT.test(r)) { result.reasons.push(`${r}: not rendered (test, story, docs)`); continue; }
+    const rendered = closures.shell.has(abs) || byFile.has(abs) || graph.routes.some((x) => x.files.includes(r));
+    if (!rendered && IRRELEVANT.test(r)) { result.reasons.push(`${r}: not rendered (test, story, docs)`); continue; }
     if (GLOBAL_FILES.test(r)) { result.all = true; result.reasons.push(`${r}: project configuration → every route`); continue; }
     if (closures.shell.has(abs)) { result.all = true; result.reasons.push(`${r}: part of the app shell → every route`); continue; }
     const hits = byFile.get(abs);
