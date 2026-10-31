@@ -262,7 +262,8 @@ test('import graph: barrels resolve to the defining module, lazy imports are per
   assert.equal(sel(['next.config.ts']), 'all');
   assert.deepEqual(sel(['src/components/Unused.tsx']), [], 'nothing imports it');
   assert.deepEqual(sel(['public/img/blog.png']), ['/blog']);
-  assert.equal(sel(['content/posts.json']), 'all', 'read with fs at runtime: no import edge, so every route');
+  assert.deepEqual(sel(['content/posts.json']), ['/blog'], 'read with fs at runtime: the routes whose code names its folder');
+  assert.equal(sel(['data/other/x.json']), 'all', 'nothing names its folder: every route');
   assert.deepEqual(sel(['src/components/Header.test.tsx']), []);
   assert.deepEqual(sel(['src/app/docs/layout.tsx']), ['/docs/:slug+'], 'a docs/ route folder is rendered, not documentation');
   assert.deepEqual(sel(['docs/guide.md']), [], 'docs/ at the project root is documentation');

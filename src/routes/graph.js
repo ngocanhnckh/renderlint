@@ -291,8 +291,19 @@ export function affectedRoutes(graph, changed, { closures = routeClosures(graph)
       if (now >= 0) { result.routes.add(now); result.reasons.push(`${r}: new route`); continue; }
       if (previousRoutes.some((x) => x.files.includes(r))) { result.reasons.push(`${r}: route removed`); continue; }
     }
-    if ((CODE.test(r) || STYLE.test(r)) && existsSync(abs)) { result.reasons.push(`${r}: no page imports it`); continue; }
-    if (!existsSync(abs) && (CODE.test(r) || STYLE.test(r))) { result.reasons.push(`${r}: deleted, no page imported it`); continue; }
+    // code and styles reach a page only through imports; content (.md, .json…) may also be read by path
+    const importOnly = (CODE.test(r) && !/\.mdx?$/.test(r)) || STYLE.test(r);
+    if (importOnly && existsSync(abs)) { result.reasons.push(`${r}: no page imports it`); continue; }
+    if (importOnly) { result.reasons.push(`${r}: deleted, no page imported it`); continue; }
+    if (!/^(public|static)\//.test(r) && r.includes('/')) {
+      // content read at runtime (fs, glob): the routes whose code names its folder, e.g. 'content/posts'
+      const dir = r.slice(0, r.lastIndexOf('/'));
+      const users = [];
+      for (const f of graph.edges.keys()) { const src = read(f); if (src.includes(dir + '/') || src.includes(dir + "'") || src.includes(dir + '"') || src.includes(dir + '`')) users.push(f); }
+      const idx = new Set(users.flatMap((u) => byFile.get(u) || []));
+      if (users.some((u) => closures.shell.has(u))) { result.all = true; result.reasons.push(`${r}: read by the app shell → every route`); continue; }
+      if (idx.size && users.every((u) => byFile.has(u))) { for (const i of idx) result.routes.add(i); result.reasons.push(`${r}: its folder ${dir} is read by ${idx.size} route(s)`); continue; }
+    }
     if (/^public\//.test(r) || /^static\//.test(r)) {
       // assets served by URL: the routes whose code mentions that URL
       const url = r.replace(/^(public|static)/, '');
