@@ -890,6 +890,23 @@ RL.rule({
       if (clipped) continue;
       culprit.set(el, over);
     }
+    // Text that runs past the viewport out of a box that fits (a long unbreakable word in a heading with
+    // no border or background, so text-overflow has no box to measure against): the page scrolls sideways.
+    // Only when it does: the visible parts of the text are already cut to every clipping ancestor.
+    const textOnly = new Set();
+    if (scrolls) {
+      for (const t of ctx.texts) {
+        if (culprit.has(t.el) || RL.flagged.has(t.el) || RL.isIgnored(t.el, 'viewport-overflow')) continue;
+        const over = Math.max(...t.vis.map((r) => r.x + r.w)) - vw;
+        if (over <= 1) continue;
+        // in a fixed layer, or inside a box already reported as too wide
+        let skip = false;
+        for (let n = t.el; n && n !== document.body && n !== de && !skip; n = RL.parentOf(n)) skip = RL.cs(n).position === 'fixed' || (n !== t.el && culprit.has(n) && !textOnly.has(n));
+        if (skip) continue;
+        culprit.set(t.el, over);
+        textOnly.add(t.el);
+      }
+    }
     // Keep only the outermost culprits (whose parent is not itself overflowing as much).
     const roots = [];
     for (const [el, over] of culprit) {
@@ -907,7 +924,9 @@ RL.rule({
       }
       ctx.report({
         rule: 'viewport-overflow', el,
-        message: scrolls
+        message: textOnly.has(el)
+          ? 'Text runs ' + Math.round(over) + 'px beyond the ' + vw + 'px viewport, causing horizontal page scroll (a long word or URL that does not wrap: overflow-wrap: anywhere).'
+          : scrolls
           ? 'Element extends ' + Math.round(over) + 'px beyond the ' + vw + 'px viewport, causing horizontal page scroll.'
           : 'Element extends ' + Math.round(over) + 'px beyond the ' + vw + 'px viewport and is cut off (overflow-x is hidden on the page).',
         details: { overflow: Math.round(over), viewportWidth: vw, pageScrollWidth: scrollW, width: Math.round(el.getBoundingClientRect().width), cssWidth: RL.cs(el).width, minWidth: RL.cs(el).minWidth, whiteSpace: RL.cs(el).whiteSpace },
