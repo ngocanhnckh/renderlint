@@ -61,6 +61,7 @@
     "url": "https://github.com/ngocanhnckh/renderlint/issues"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1"
+    "@playwright/test": "^1.64.1",
+    "msw": "^2.7.0"
   }
 }

@@ -30,6 +30,7 @@ export const DEFAULTS = {
   states: [],              // extra UI states to check: [{ name, page, click, hover, fill, press, waitFor, mock, run }]
   auth: null,              // signed-in pages: { login: '/login', user: '${RENDERLINT_USER}', password: '${RENDERLINT_PASSWORD}' } or { storage: { sessionStorage: { token: 'test' } } }
   mock: {},                // API responses to serve instead: { "**/api/orders*": "fixtures/orders.json" | { status, json } | data }
+  mockFrom: [],            // API responses from the project's MSW handlers ("src/mocks/handlers.ts") or a HAR recording ("recordings/app.har")
   scan: true,              // static source scan (emoji, placeholder copy) in addition to rendering
   scanDirs: undefined,
   contrastLevel: 'AA',
@@ -100,6 +101,7 @@ export function normalize(c, cwd = process.cwd()) {
   out.sweep = out.sweep === false ? [] : defaultSweep ? SWEEP_WIDTHS : (Array.isArray(out.sweep) ? out.sweep : String(out.sweep).split(',')).map(Number);
   if (out.sweep.some((w) => !(w >= 200 && w <= 4000))) throw new Error(`renderlint: "sweep" must be true, false or a list of widths (got ${JSON.stringify(c.sweep)})`);
   out.mock = resolveMocks(c.mock, cwd, 'mock');
+  out.mockFrom = (c.mockFrom === undefined || c.mockFrom === null ? [] : Array.isArray(c.mockFrom) ? c.mockFrom : [c.mockFrom]).map((f) => resolve(cwd, String(f)));
   out.auth = normalizeAuth(c.auth);
   if (!Array.isArray(out.states)) throw new Error('renderlint: "states" must be an array of { name, page, click, … }');
   out.states = out.states.map((st, i) => {

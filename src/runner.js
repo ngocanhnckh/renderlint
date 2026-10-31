@@ -8,6 +8,7 @@ import { measureDropdowns } from './controls.js';
 import { RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
 import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
+import { loadMockSources, answerFrom } from './mock-sources.js';
 
 export const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -243,10 +244,13 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
   };
 
   // Signed-in pages: log in (or set the storage the app's guards read) once, reuse the session everywhere.
+  // API responses from the project's MSW handlers or a HAR recording ("mockFrom"), loaded once
+  const sources = await loadMockSources(config.mockFrom);
+  if (sources.length) log(`Answering API requests from ${sources.map((x) => x.kind === 'har' ? 'the HAR ' + x.file : 'the MSW handlers in ' + x.file).join(' and ')}`);
   let session = given;
   if (!session && config.auth) {
     const mock = config.mock || {};
-    session = await authenticate(browser, urls[0], config, { log, routePage: Object.keys(mock).length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock, stressData: false })) : null });
+    session = await authenticate(browser, urls[0], config, { log, routePage: Object.keys(mock).length || sources.length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock, sources, stressData: false })) : null });
   }
   const listed = new Set(urls.map(normalizeUrl)); // pages asked for, as opposed to found by crawling
   const queue = urls.slice();
@@ -283,7 +287,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
     const runs = [];
     const startScheme = (si) => {
       const scheme = schemes[si];
-      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, replay, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
+      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, replay, sources, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
         // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
         wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
         onSig: si === 0 ? sigs[vi].resolve : null, refSig: si > 0 ? sigs[vi].promise : null,
@@ -412,10 +416,23 @@ async function handleRoute(route, routes) {
   const spec = mockFor(req.url(), routes.mock);
   try {
     if (spec) {
+      if (routes.answered) routes.answered.add(req);
       let body = spec.file ? readFileSync(spec.file, 'utf8') : spec.body !== undefined ? (typeof spec.body === 'string' ? spec.body : JSON.stringify(spec.body)) : JSON.stringify(spec.json !== undefined ? spec.json : spec.data);
       const isJson = spec.file ? /\.json$/i.test(spec.file) : typeof spec.body !== 'string';
       if (routes.stressData && isJson) { try { body = JSON.stringify(stressJson(JSON.parse(body), routes.stressData)); } catch { /* not JSON */ } }
       return await route.fulfill({ status: spec.status || 200, headers: { 'content-type': isJson ? 'application/json' : 'text/plain', ...(spec.headers || {}) }, body });
+    }
+    if (routes.sources && routes.sources.length && /^(fetch|xhr|eventsource|other)$/.test(req.resourceType())) {
+      const a = await answerFrom(routes.sources, req);
+      if (a && a.abort) return await route.abort('failed');
+      if (a) {
+        if (routes.answered) routes.answered.add(req);
+        let body = a.body;
+        if (routes.stressData && /json/.test(a.headers['content-type'] || '') && !notStressed(req.url(), routes)) { try { body = JSON.stringify(stressJson(JSON.parse(String(body)), routes.stressData)); } catch { /* not JSON */ } }
+        const headers = { ...a.headers };
+        delete headers['content-length']; delete headers['content-encoding'];
+        return await route.fulfill({ status: a.status, headers, body });
+      }
     }
     if (!routes.stressData || !/^(fetch|xhr)$/.test(req.resourceType()) || notStressed(req.url(), routes)) return await route.fallback();
     const resp = await route.fetch();
@@ -508,7 +525,7 @@ const MQ_RECORDER = () => {
   window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
 };
 
-async function checkOne(browser, url, { replay, vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
+async function checkOne(browser, url, { replay, sources = [], vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -526,10 +543,10 @@ async function checkOne(browser, url, { replay, vp, scheme, config, source, anal
   const origin = new URL(url).origin;
   // Console errors and failed requests count only in the main pass, not while data is stressed.
   let phase = 'main', sawJson = false;
-  const routes = { mock: { ...(config.mock || {}), ...((state && state.mock) || {}) }, stressData: false, stressDataExclude: config.stressDataExclude };
+  const routes = { mock: { ...(config.mock || {}), ...((state && state.mock) || {}) }, sources, stressData: false, stressDataExclude: config.stressDataExclude, answered: new WeakSet() };
   let routed = false;
   const ensureRoutes = async () => { if (!routed) { routed = true; await page.route('**/*', (route) => handleRoute(route, routes)); } };
-  if (Object.keys(routes.mock).length) await ensureRoutes(); // interception disables the HTTP cache, so only when needed
+  if (Object.keys(routes.mock).length || sources.length) await ensureRoutes(); // interception disables the HTTP cache, so only when needed
   const consoleSeen = new Set();
   page.on('pageerror', (err) => {
     if (config.rules['console-error'] === 'off' || phase !== 'main') return;
@@ -556,6 +573,13 @@ async function checkOne(browser, url, { replay, vp, scheme, config, source, anal
     const u = r.url();
     if (r.status() < 400 || !u.startsWith(origin) || /favicon|apple-touch-icon|\.map(\?|$)|__nextjs|_next\/webpack-hmr|\/@vite\//.test(u)) return;
     const type = r.request().resourceType();
+    if (sources.length && /^(fetch|xhr)$/.test(type) && r.status() >= 400 && r.status() !== 401 && r.status() !== 403 && !failed.has(u) && !routes.answered.has(r.request())) {
+      // With "mockFrom", the backend usually isn't running: a request the HAR or handlers don't cover fails,
+      // and the page is checked without that data. Say so, rather than pass a page that rendered nothing.
+      failed.add(u);
+      issues.push({ rule: 'broken-resource', severity: 'warn', message: `API request not covered by "mockFrom" failed (${r.status()}): ${r.request().method()} ${u.replace(origin, '')}. This page was checked without that data.`, details: { url: u, status: r.status(), type, unmocked: true } });
+      return;
+    }
     if (!/stylesheet|script|image|font|media/.test(type)) return;
     if (failed.has(u)) return;
     failed.add(u);
