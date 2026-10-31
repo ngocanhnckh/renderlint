@@ -40,7 +40,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`control-height-mismatch`](#control-height-mismatch) | warn | Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up. |
 | [`icon-misaligned`](#icon-misaligned) | warn | An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text). |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
-| [`auth-required`](#auth-required) | error | A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). |
+| [`auth-required`](#auth-required) | error | A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). With `roles`, also a page listed for a role that the app didn't show it (sent elsewhere, HTTP 401/403, or only an "Access denied" heading). |
 | [`console-error`](#console-error) | error | Uncaught JavaScript error or console.error while rendering (hydration mismatches, crashed components). |
 | [`broken-resource`](#broken-resource) | error | A same-origin stylesheet, script, font or image request failed (404/500), or a web font failed to load. |
 
@@ -340,9 +340,9 @@ The page could not be loaded or analyzed: navigation failed, timed out, or retur
 
 **Default:** error
 
-A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself).
+A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). With `roles`, also a page listed for a role that the app didn't show it (sent elsewhere, HTTP 401/403, or only an "Access denied" heading).
 
-**How to fix:** Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. See docs/authentication.md.
+**How to fix:** Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. For a role: give it a session and mocks that grant the page (`roles.<name>.auth`, `roles.<name>.mock`, e.g. `/api/me` answering with that role). See docs/authentication.md.
 
 ### console-error
 

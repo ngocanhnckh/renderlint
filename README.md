@@ -187,6 +187,8 @@ Without a session, an SPA sends every inner route to `/login`. renderlint report
 
 It can also log in through your form once (`"auth": { "login": "/login", "user": "${RENDERLINT_USER}", "password": "${RENDERLINT_PASSWORD}" }`) or run a script for SSO. Hash routes (`/#/accounts`) are crawled as pages of their own, and log-out links are never followed. See [docs/authentication.md](docs/authentication.md).
 
+Server-rendered apps (Next.js, Nuxt, SvelteKit, React Router / Remix) check the session and fetch data on the server. When renderlint starts the app, `mock` answers the server's own requests too, so the real login form, `middleware.ts`, `getServerSideProps` and loaders all run with no backend. `roles` checks every page as every role (`/admin [role: admin]`), and reports a role page the app refused to show. See [server-rendered apps](docs/authentication.md#server-rendered-apps-nextjs-nuxt-sveltekit-react-router--remix).
+
 ## WordPress and Elementor
 
 Run `init` in a theme or plugin folder, or point renderlint at any WordPress URL. It finds the local site (wp-env, LocalWP, DDEV, Lando, Docker Compose), crawls the real pages and skips wp-admin, feeds and login. It also scans your PHP templates. Findings in Elementor content name the widget and link straight to the editor:

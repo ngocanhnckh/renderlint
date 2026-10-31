@@ -210,8 +210,8 @@ export const RULES = {
   'auth-required': {
     severity: 'error',
     category: 'runtime',
-    summary: 'A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself).',
-    fix: 'Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. See docs/authentication.md.',
+    summary: 'A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). With `roles`, also a page listed for a role that the app didn\'t show it (sent elsewhere, HTTP 401/403, or only an "Access denied" heading).',
+    fix: 'Add "auth" to renderlint.config: log in once with `auth: { login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }`, or, frontend only with no backend, set what the route guard reads (`auth: { storage: { sessionStorage: { "token": "test" } } }`) and serve the API with `mock`. For a role: give it a session and mocks that grant the page (`roles.<name>.auth`, `roles.<name>.mock`, e.g. `/api/me` answering with that role). See docs/authentication.md.',
   },
   'console-error': {
     severity: 'error',

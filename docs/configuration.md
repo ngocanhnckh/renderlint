@@ -42,6 +42,8 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `maxScreenshotHeight` | `12000` | Pages taller than this are only contrast-checked down to this height. |
 | `beforeCheck` | — | JS config only: `async (page, { viewport, scheme }) => {}` — log in, open a menu, set state. `page` is a Playwright page. |
 | `auth` | — | Pages behind a login. `{ storage: { sessionStorage, localStorage, cookies } }` sets the token the route guard reads (frontend only, with `mock` for the API); `{ login: "/login", user: "${RENDERLINT_USER}", password: "${RENDERLINT_PASSWORD}" }` logs in once; `{ run: async (page) => {} }` (JS config) for SSO. See [authentication](authentication.md). |
+| `roles` | — | Check the app once per role: `{ "admin": { "auth"?, "mock"?, "pages"? }, "viewer": { … } }`. Pages are reported as `/admin [role: admin]`; a page listed for a role that the app doesn't show it (redirect, 401/403, "Access denied") is `auth-required`. See [server-rendered apps](authentication.md#server-rendered-apps-nextjs-nuxt-sveltekit-react-router--remix). |
+| `serverMock` | `true` | When renderlint starts the server (`serve`, or the `dev` script), `mock` (and each role's and state's) also answers the requests the server makes (SSR: server components, loaders, `getServerSideProps`, Nuxt server routes), through a preload. `false`: browser only. |
 | `contextOptions` | — | Extra Playwright browser-context options (e.g. `locale`, `storageState`). |
 
 ## Content you didn't render

@@ -19,9 +19,19 @@ const page = (title, user, body) => `<!doctype html><html lang="en"><head><meta 
 <nav><a href="/dashboard">Dashboard</a>${user && user.role === 'admin' ? '<a href="/admin">Admin</a>' : ''}${user && user.role === 'viewer' ? '<a href="/tasks">My tasks</a>' : ''}${user ? '<a href="/logout">Log out</a>' : '<a href="/login">Sign in</a>'}</nav>
 <main>${body}</main></body></html>`;
 
+// Like Next.js, the framework wraps fetch with a data cache for requests marked "force-cache" (keyed by
+// URL only here, so every role's /me is the same request): mocked responses must never land in it.
+const frameworkFetch = globalThis.fetch, dataCache = new Map();
+globalThis.fetch = async (url, init = {}) => {
+  if (init.cache !== 'force-cache') return frameworkFetch(url, init);
+  if (!dataCache.has(String(url))) { const r = await frameworkFetch(url, init); dataCache.set(String(url), { status: r.status, headers: [...r.headers], body: await r.text() }); }
+  const c = dataCache.get(String(url));
+  return new Response(c.body, { status: c.status, headers: c.headers });
+};
+
 // fetch() for most calls, node:http for one (as axios or got would)
 async function api(path, token) {
-  const r = await fetch(API + path, { headers: { authorization: 'Bearer ' + token } });
+  const r = await fetch(API + path, { headers: { authorization: 'Bearer ' + token }, ...(path === '/me' ? { cache: 'force-cache' } : {}) });
   if (!r.ok) throw new Error('API ' + path + ': ' + r.status);
   return r.json();
 }

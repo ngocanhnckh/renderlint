@@ -90,6 +90,42 @@ export default {
 
 `run` gets a Playwright page and can do anything a test can. It runs once per renderlint run. A saved session from Playwright works too: `npx playwright codegen --save-storage=.auth/state.json http://localhost:4200`, then `"contextOptions": { "storageState": ".auth/state.json" }` (add `.auth/` to `.gitignore`; it doesn't hold sessionStorage, so token-in-sessionStorage apps need option 1 or 2).
 
+## Server-rendered apps (Next.js, Nuxt, SvelteKit, React Router / Remix)
+
+In an SSR app the session check and the data fetching run on the server: `middleware.ts`, Auth.js, `getServerSideProps`, server components, Nuxt `useFetch` and server routes, SvelteKit `hooks.server` and `+page.server` loads, React Router loaders. A browser-side `mock` never reaches them. When renderlint starts the app (`serve`, or the `dev` script it finds on its own), it loads a small preload into the server process (`NODE_OPTIONS=--require renderlint/server-mock`), and `mock` then also answers the requests the **server** makes: `fetch` (which Next.js, ofetch/Nuxt, SvelteKit and React Router all use) and `node:http`/`https` (axios, got). Nothing else about the app changes, and no backend has to run.
+
+So the real login form works without a backend: the app's own auth code (Auth.js `authorize`, an iron-session, `nuxt-auth-utils` or React Router cookie session, a token cookie) runs as usual, and the API call that checks the password is answered by a mock. Sessions are minted by the app itself, so no secret is needed.
+
+### Every role
+
+`roles` checks the app once per role. Each role gets its own session, its own mocks (over the top-level ones) and, optionally, pages only it can see:
+
+```json
+{
+  "serve": "npm run dev",
+  "pages": ["/dashboard"],
+  "auth": { "login": "/login", "user": "qa@example.com", "password": "any" },
+  "mock": { "**/api/reports": "fixtures/reports.json" },
+  "roles": {
+    "admin":  { "pages": ["/admin"], "mock": { "**/api/auth/login": { "token": "t-admin", "user": { "name": "Ada", "role": "admin" } }, "**/api/me": { "name": "Ada", "role": "admin" } } },
+    "viewer": { "pages": ["/tasks"], "mock": { "**/api/auth/login": { "token": "t-viewer", "user": { "name": "Vic", "role": "viewer" } }, "**/api/me": { "name": "Vic", "role": "viewer" } } }
+  }
+}
+```
+
+- Pages are reported as `/admin [role: admin]`. Each role crawls the links it sees (an admin's nav has the admin pages).
+- A role's `auth` replaces the top-level one (`"auth": null` checks signed out). Real test accounts work too: `"admin": { "auth": { "login": "/login", "user": "${ADMIN_USER}", "password": "${ADMIN_PASSWORD}" } }`.
+- The server knows which role a request is for from a `renderlint-role` cookie renderlint sends with every request of that role: the preload handles each incoming request in its own async context, so every server call made while rendering it (after any `await`) gets that role's mocks.
+- A page listed in a role's `pages` that the app doesn't show it is reported as `auth-required` (error): sent somewhere else (`/admin` → `/403` or `/dashboard`), answered 401/403, or showing only an "Access denied" heading. The role's session or mocks are wrong, and the denial page isn't checked in the page's name.
+- An SSR page that fails (HTTP 500) because a server request isn't mocked says which one: `The server's own requests failed: GET http://localhost:4501/api/billing (ECONNREFUSED)`. `report.json` lists every page's server requests (`pages[].server`).
+- Data stress reaches server-rendered data: the reload with longer strings tells the preload (a `renderlint-stress` cookie) to lengthen the JSON the server fetched.
+- Next.js: mocked responses never reach Next's data cache (`fetch(…, { cache: 'force-cache' })`), so one role can't get another's cached data, and nothing mocked is left in `.next/cache` after the run. Pages prerendered at `next build` keep their build-time data; dynamic pages (cookies, headers, `no-store`) use the mocks.
+- A server you start yourself: run it with the preload, and it reads the mocks renderlint writes to `.renderlint/server-mock.json`:
+  `NODE_OPTIONS="--require renderlint/server-mock" RENDERLINT_SERVER_MOCK=.renderlint/server-mock.json npm run dev`.
+  Production builds work the same way (`next start`, `node .output/server/index.mjs`, `node build`, `react-router-serve`).
+- `"serverMock": false` keeps `mock` browser-only. The app's own origin is never mocked on the server (its own routes, the dev server's internal hops).
+- Not covered: servers that aren't Node (Django, Rails, Laravel, Go), and logins that check the password in the app's own database (no HTTP call to mock). For those, use test accounts against a seeded backend, or `auth.run`.
+
 ## Crawling a signed-in app
 
 - Log out links (`/logout`, `/sign-out`, `#/logout`…) are never followed, and with `auth` the login page isn't crawled either.
