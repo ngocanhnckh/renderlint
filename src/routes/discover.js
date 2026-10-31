@@ -643,6 +643,33 @@ function dedupe(routes) {
   return Array.from(m.values());
 }
 
+// ------------------------------------------------------------------------------------- endpoints
+// Server endpoints of the same project (Next route handlers and pages/api, SvelteKit +server, Nuxt
+// server/api and server/routes, Astro .ts pages): a page that fetches one renders what its code returns.
+export function discoverEndpoints(cwd, framework = detectRouting(cwd)) {
+  const out = [];
+  const walk = (dir, segs, test, seg = (n) => n) => {
+    for (const e of ls(dir)) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) { walk(p, /^\(.*\)$/.test(e.name) || e.name.startsWith('@') ? segs : [...segs, seg(e.name)], test, seg); continue; }
+      const name = test(e.name);
+      if (name !== null) out.push(mkRoute(cwd, '/' + [...segs, ...(name ? [seg(name)] : [])].join('/'), p, [], 'endpoint'));
+    }
+  };
+  if (framework === 'next') {
+    for (const d of ['app', 'src/app']) if (isDir(join(cwd, d))) walk(join(cwd, d), [], (n) => (/^route\.(ts|js|tsx|jsx)$/.test(n) ? '' : null), nextSegment);
+    for (const d of ['pages/api', 'src/pages/api']) if (isDir(join(cwd, d))) walk(join(cwd, d), ['api'], (n) => (/\.(ts|js)$/.test(n) ? n.replace(/\.(ts|js)$/, '').replace(/^index$/, '') : null), nextSegment);
+  } else if (framework === 'sveltekit') {
+    walk(join(cwd, 'src', 'routes'), [], (n) => (/^\+server\.(ts|js)$/.test(n) ? '' : null), svelteSegment);
+  } else if (framework === 'nuxt') {
+    walk(join(cwd, 'server', 'api'), ['api'], (n) => (/\.(ts|js)$/.test(n) ? n.replace(/(\.(get|post|put|patch|delete))?\.(ts|js)$/, '').replace(/^index$/, '') : null), nuxtSegment);
+    walk(join(cwd, 'server', 'routes'), [], (n) => (/\.(ts|js)$/.test(n) ? n.replace(/(\.(get|post|put|patch|delete))?\.(ts|js)$/, '').replace(/^index$/, '') : null), nuxtSegment);
+  } else if (framework === 'astro') {
+    walk(join(cwd, 'src', 'pages'), [], (n) => (/\.(ts|js)$/.test(n) ? n.replace(/\.(ts|js)$/, '').replace(/^index$/, '') : null), svelteSegment);
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------- manifests
 // Build output lists the instances a build prerendered (generateStaticParams, prerender entries).
 export function manifestInstances(cwd) {

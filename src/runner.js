@@ -332,7 +332,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, coverag
       for (let si = 0; si < schemes.length; si++) results.push(await Promise.all(runs[si])); // a scheme added meanwhile has started already
       if (coverage && !state) {
         const first = results[0][0].res;
-        pageInfo.status = { httpStatus: first.httpStatus, finalUrl: first.finalUrl, authRequired: first.landed || (first.issues.some((i) => i.rule === 'auth-required') ? 'sign-in page' : null), denied: first.denied, error: first.error };
+        pageInfo.status = { httpStatus: first.httpStatus, finalUrl: first.finalUrl, authRequired: first.landed || (first.issues.some((i) => i.rule === 'auth-required') ? 'sign-in page' : null), denied: first.denied, error: first.error, features: first.features };
         if (first.resources) pageInfo.resources = first.resources;
         coverage.onResult(url, pageInfo.status);
       }
@@ -576,7 +576,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     issues.push({ rule: 'broken-resource', severity: 'error', message: `${type} failed to load (${r.status()}): ${u.replace(origin, '')}`, details: { url: u, status: r.status(), type } });
   });
 
-  let meta, screenshot, error, sig, stressReused = false, httpStatus = null, finalUrl = null, denied = null, resources = null;
+  let meta, screenshot, error, sig, stressReused = false, httpStatus = null, finalUrl = null, denied = null, resources = null, features = null;
   let mine = null, dupOf = null; // this run shares its later passes (mine), or uses those of an identical rendering (dupOf)
   let templateOf = null; // dedupe: "template": the earlier page with the same skeleton, whose stress and sweep stand for this one
   const T = { t: Date.now() };
@@ -606,7 +606,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     finalUrl = page.url();
     if (probe) {
       // for the coverage report: a page that renders "access denied" in place of its content, and the files it loaded
-      ({ denied, resources } = await page.evaluate(PROBE_SCRIPT).catch(() => ({})));
+      ({ denied, resources, features } = await page.evaluate(PROBE_SCRIPT).catch(() => ({})));
     }
     const redirect = loginRedirect(url, page.url(), await page.evaluate(() => Array.from(document.querySelectorAll('input[type=password]')).some((i) => i.getClientRects().length)).catch(() => false));
     if (redirect && config.rules['auth-required'] !== 'off') {
@@ -618,7 +618,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
         message: `${asked} was not checked: the app sent renderlint to ${redirect.external ? 'the sign-in page at ' + redirect.to : redirect.to} instead. ` +
           (config.auth ? 'The session from "auth" was not accepted here (expired, wrong role, or a token the guard doesn\'t read).' : 'Pages behind a login need "auth" in renderlint.config (log in once, or set the token your route guard reads and mock the API: no backend needed).'),
         details: { redirectedTo: redirect.to, external: redirect.external } });
-      return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url(), httpStatus, finalUrl, denied, resources };
+      return { issues, meta: null, screenshot: null, error: null, landed: redirect.external ? null : page.url(), httpStatus, finalUrl, denied, resources, features };
     }
     if (config.beforeCheck) await config.beforeCheck(page, { viewport: vp, scheme });
     if (state) await applyState(page, state, { viewport: vp, scheme });
@@ -706,7 +706,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     const markedHere = new Set(issues.filter((i) => i.marker).map(groupKey));
     lap('screenshot');
     const iRest = issues.length;
-    if (dupOf) return { issues, meta, screenshot, reuse: { path: dupOf.path, rest: dupOf.rest }, httpStatus, finalUrl, denied, resources };
+    if (dupOf) return { issues, meta, screenshot, reuse: { path: dupOf.path, rest: dupOf.rest }, httpStatus, finalUrl, denied, resources, features };
 
     // Taken just before the stress passes, in the state they start from (after contrast, focus, screenshot).
     const ref = config.stress && refSig ? await refSig : null;
@@ -826,7 +826,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     if (template && template.publish) { template.publish(null); template.decision.resolve(null); }
     await context.close().catch(() => {});
   }
-  return { issues, meta, screenshot, error, templateOf, stressReused, httpStatus, finalUrl, denied, resources };
+  return { issues, meta, screenshot, error, templateOf, stressReused, httpStatus, finalUrl, denied, resources, features };
 }
 
 // What a page says when the session lacks the role (headings and alerts only, short text), and the
@@ -839,7 +839,24 @@ const PROBE_SCRIPT = () => {
     if (t && t.length <= 80 && DENIED.test(t) && el.getClientRects().length) { denied = t; break; }
   }
   const resources = Array.from(new Set(performance.getEntriesByType('resource').map((e) => e.name).filter((n) => n.startsWith(location.origin)).map((n) => new URL(n).pathname))).slice(0, 2000);
-  return { denied, resources };
+  // how extreme this instance of its route is: longest unbroken word, longest text, amount of text,
+  // size, horizontal overflow, broken images, and its layout skeleton (for choosing which instances to check fully)
+  let maxWord = 0, maxText = 0, textTotal = 0;
+  const w = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(), k = 0; n && k < 20000; n = w.nextNode(), k++) {
+    const t = n.data.trim();
+    if (!t || !n.parentElement || !n.parentElement.getClientRects().length) continue;
+    textTotal += t.length;
+    if (t.length > maxText) maxText = t.length;
+    for (const word of t.split(/\s+/)) if (word.length > maxWord) maxWord = word.length;
+  }
+  const shape = (el, d) => { const kids = []; if (d < 40) for (const c of el.children) { const k = shape(c, d + 1); if (kids[kids.length - 1] !== k) kids.push(k); } return el.tagName + (el.classList.length ? '.' + Array.from(el.classList).sort().join('.') : '') + (kids.length ? '[' + kids.join(',') + ']' : ''); };
+  let h = 0; const sk = document.body ? shape(document.body, 0) : '';
+  for (let i = 0; i < sk.length; i++) h = (Math.imul(h, 31) + sk.charCodeAt(i)) | 0;
+  const imgs = Array.from(document.images);
+  const features = { maxWord, maxText, textTotal, elements: document.getElementsByTagName('*').length, overflowX: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+    height: document.documentElement.scrollHeight, broken: imgs.filter((i) => i.complete && !i.naturalWidth).length, skeleton: String(h) };
+  return { denied, resources, features };
 };
 
 // Stylesheets the page can't read (cross-origin): fetch them. Any color-scheme condition,

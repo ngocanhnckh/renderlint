@@ -3,8 +3,8 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createCoverage, coverageGate, coverageLine, normalizeCoverage } from './plan.js';
-import { discoverRoutes, detectRouting } from './discover.js';
-import { buildGraph, routeClosures, shellEntries, snapshot } from './graph.js';
+import { discoverRoutes, detectRouting, discoverEndpoints } from './discover.js';
+import { buildGraph, routeClosures, shellEntries, snapshot, closure } from './graph.js';
 import { matchRoute } from './match.js';
 import { rel } from './resolve.js';
 
@@ -50,18 +50,7 @@ function writePageMap(cov, s, pages, config) {
     const cwd = cov.cwd;
     const graph = buildGraph(cwd, { framework: cov.framework, routes: cov.routes.filter((r) => r.files && r.files.length), entries: shellEntries(cwd, cov.framework) });
     const { shell, per } = routeClosures(graph);
-    const runtime = new Map();
-    for (const p of pages) {
-      if (!p.resources) continue;
-      const m = matchRoute(cov.routes, p.path);
-      if (!m) continue;
-      const files = runtime.get(m.route.pattern) || new Set();
-      for (const r of p.resources) {
-        const f = resourceFile(cwd, r);
-        if (f) files.add(f);
-      }
-      runtime.set(m.route.pattern, files);
-    }
+    const runtime = runtimeFiles(cwd, cov.framework, cov.routes, pages.filter((p) => p.resources).map((p) => [p.path, p.resources]), graph);
     const list = graph.routes.map((r, i) => {
       const cs = s.list.find((x) => x.pattern === r.pattern) || {};
       return { pattern: r.pattern, file: r.file, files: Array.from(new Set([...Array.from(per[i], (f) => rel(cwd, f)), ...(runtime.get(r.pattern) || [])])).sort(), checked: cs.checked || [], status: cs.status, errors: cs.errors || 0 };
@@ -71,6 +60,26 @@ function writePageMap(cov, s, pages, config) {
     // the page map only speeds up later runs
     if (process.env.RENDERLINT_DEBUG) console.error('page map: ' + e.message);
   }
+}
+
+// Files a route's pages loaded at runtime: source modules (Vite dev), public/ assets, and the code of
+// the project's own API endpoints it fetched (a client page rendering /api/users renders that handler's data).
+export function runtimeFiles(cwd, framework, routes, visits, graph) {
+  const endpoints = discoverEndpoints(cwd, framework);
+  const out = new Map();
+  for (const [path, resources] of visits) {
+    const m = matchRoute(routes, path);
+    if (!m) continue;
+    const files = out.get(m.route.pattern) || new Set();
+    for (const r of resources) {
+      const f = resourceFile(cwd, r);
+      if (f) { files.add(f); continue; }
+      const e = endpoints.length && matchRoute(endpoints, r);
+      if (e) for (const x of closure(graph, [resolve(cwd, e.route.file)])) files.add(rel(cwd, x));
+    }
+    out.set(m.route.pattern, files);
+  }
+  return out;
 }
 
 // A URL path the page loaded → the project file behind it (Vite: /src/x.tsx, /@fs/abs; public/ assets).
