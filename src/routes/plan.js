@@ -116,7 +116,7 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
     onJson(apiUrl, body) {
       const lists = listsIn(body);
       if (!lists.length) return [];
-      const apiSegs = new URL(apiUrl).pathname.toLowerCase().split('/').filter(Boolean);
+      const apiSegs = new URL(apiUrl).pathname.toLowerCase().split('/').filter(Boolean).map((s) => s.replace(/\.\w+$/, ''));
       const out = [];
       for (const r of routes) {
         if (!r.dynamic || r.params.length !== 1 || excluded(r.pattern)) continue;

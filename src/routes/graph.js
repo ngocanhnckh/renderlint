@@ -146,7 +146,7 @@ function nuxtAutoImports(cwd) {
   const pascal = (s) => s.split(/[-_]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
   walk(join(src, 'components'), [], (p, prefix, name) => {
     if (!/\.(vue|tsx|jsx|ts|js)$/.test(name)) return;
-    const base = name.replace(/\.(client|server)?\.[^.]+$/, '').replace(/\.(client|server)$/, '');
+    const base = name.replace(/(\.(client|server))?\.[^.]+$/, '');
     const parts = [...prefix, base === 'index' ? '' : base].filter(Boolean).map(pascal);
     // Nuxt drops a repeated prefix: components/base/BaseButton.vue → BaseButton
     const dedup = parts.filter((x, i) => !(i < parts.length - 1 && parts[parts.length - 1].startsWith(x)));
