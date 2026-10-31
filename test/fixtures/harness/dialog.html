@@ -1,0 +1,39 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orders</title>
+<!-- A state only a click reaches: the dialog. Its hint is too light, and its summary row is
+     fixed at 520px, which only breaks on phones. The page behind it is clean. -->
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,sans-serif;color:#1f2933;background:#fff}
+main{max-width:720px;margin:0 auto;padding:24px 20px}
+.btn{display:inline-block;background:#1d4ed8;color:#fff;border:0;border-radius:6px;padding:10px 16px;font:inherit;min-height:40px}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.6);display:grid;place-items:center;padding:16px}
+.panel{background:#fff;border-radius:10px;padding:20px;width:min(600px,100%);display:grid;gap:12px}
+.panel label{display:grid;gap:4px;font-size:14px}
+.panel textarea{font:inherit;padding:8px;border:1px solid #9aa5b1;border-radius:6px}
+.hint{color:#c0c4ca;font-size:14px;margin:0}
+.summary{display:flex;gap:12px;width:520px}
+.summary>div{flex:none;width:160px;border:1px solid #d9e2ec;border-radius:6px;padding:8px}
+</style></head><body>
+<main>
+  <h1>Orders</h1>
+  <p>Seven orders are waiting to be shipped today.</p>
+  <button class="btn" id="open">New order</button>
+  <div style="height:1600px"></div>
+  <p id="bottom">End of the list.</p>
+</main>
+<script>
+document.getElementById('open').addEventListener('click', () => {
+  const d = document.createElement('div');
+  d.className = 'backdrop';
+  d.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="New order">
+    <h2>New order</h2>
+    <label>Note<textarea rows="3"></textarea></label>
+    <p class="hint">The customer gets an email when the order ships.</p>
+    <div class="summary"><div>Cy Chen</div><div>2 items</div><div>$45.75</div></div>
+    <button class="btn" id="place">Place order</button></div>`;
+  document.body.appendChild(d);
+  d.querySelector('#place').addEventListener('click', () => { d.remove(); document.querySelector('h1').textContent = 'Order placed'; });
+});
+</script>
+</body></html>

@@ -78,7 +78,7 @@ export async function renderlint(page, name, options = {}) {
   const t0 = Date.now();
   const role = options.role;
   const issues = await checkLive(page, { config, name: [role, name].filter(Boolean).join(': ') || undefined, marked });
-  record(dir, { kind: 'live', url: page.url(), name: name || null, role: role || null, test: options.test || null, ms: Date.now() - t0, issues });
+  record(dir, { kind: 'live', url: page.url(), name: name || null, role: role || null, test: options.test || null, viewports: config.viewports.map((v) => v.width), ms: Date.now() - t0, issues });
   return issues;
 }
 
@@ -175,7 +175,7 @@ async function replay(browser, queue) {
     }
     const label = (p) => (first.role ? `${p} [${first.role}]` : p);
     record(runDir(config.outputDir), {
-      kind: 'replay', role: first.role || null, ms: Date.now() - t0,
+      kind: 'replay', role: first.role || null, viewports: config.viewports.map((v) => v.width), ms: Date.now() - t0,
       pages: res.pages.map((p) => ({ path: label(p.path), url: p.url, skipped: p.skipped || null, runs: p.runs.length })),
       issues: res.issues.map((i) => ({ ...i, page: label(i.page) })),
     });

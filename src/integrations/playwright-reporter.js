@@ -36,13 +36,14 @@ export default class RenderlintReporter {
   async onEnd() {
     const config = await this.config();
     const dir = runDir(config.outputDir, process.pid);
-    const raw = [], pages = [], notes = [];
+    const raw = [], pages = [], notes = [], widths = new Set();
     if (existsSync(dir)) {
       for (const f of readdirSync(dir).filter((f) => f.endsWith('.jsonl'))) {
         for (const line of readFileSync(join(dir, f), 'utf8').split('\n')) {
           if (!line.trim()) continue;
           let e;
           try { e = JSON.parse(line); } catch { continue; }
+          for (const w of e.viewports || []) widths.add(w);
           if (e.kind === 'live') {
             const u = new URL(e.url);
             pages.push({ path: u.pathname + u.search + u.hash + ((e.role || e.name) ? ` [${[e.role, e.name].filter(Boolean).join(': ')}]` : ''), url: e.url, mode: 'in place', test: e.test, ms: e.ms });
@@ -55,6 +56,8 @@ export default class RenderlintReporter {
       }
     }
     if (!pages.length && !notes.length) return undefined; // the fixture wasn't used
+    // the widths the fixture checked (its options may differ from renderlint.config)
+    if (widths.size) config.viewports = Array.from(widths).sort((a, b) => a - b).map((width) => ({ width, height: 0 }));
     const issues = mergeIssues(raw, config);
     const schemes = Array.from(new Set(raw.map((i) => i.scheme).filter(Boolean)));
     const stats = {

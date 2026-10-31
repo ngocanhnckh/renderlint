@@ -268,7 +268,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
   // first screenshot, so a later one is written only when it marks something new.
   const marked = new Set();
   const startPage = (url, state) => {
-    const pageInfo = { url, path: pathOf(url, origin) + (state ? ` [state: ${state.name}]` : ''), runs: [] };
+    const pageInfo = { url, path: ((config.pageLabel && config.pageLabel(url)) || pathOf(url, origin)) + (state ? ` [state: ${state.name}]` : ''), runs: [] };
     const k = pages.length;
     pages.push(pageInfo);
     const decisions = viewports.map(() => deferred());
@@ -417,7 +417,7 @@ async function handleRoute(route, routes) {
       if (routes.stressData && isJson) { try { body = JSON.stringify(stressJson(JSON.parse(body), routes.stressData)); } catch { /* not JSON */ } }
       return await route.fulfill({ status: spec.status || 200, headers: { 'content-type': isJson ? 'application/json' : 'text/plain', ...(spec.headers || {}) }, body });
     }
-    if (!routes.stressData || !/^(fetch|xhr)$/.test(req.resourceType())) return await route.fallback();
+    if (!routes.stressData || !/^(fetch|xhr)$/.test(req.resourceType()) || notStressed(req.url(), routes)) return await route.fallback();
     const resp = await route.fetch();
     const headers = { ...resp.headers() };
     if (!/json/.test(headers['content-type'] || '')) return await route.fulfill({ response: resp });
@@ -428,6 +428,11 @@ async function handleRoute(route, routes) {
   } catch {
     try { await route.fallback(); } catch { /* already handled */ }
   }
+}
+
+// JSON that isn't the page's data (a tool's own index, e.g. Storybook's index.json): never stressed.
+function notStressed(url, { stressDataExclude }) {
+  return (stressDataExclude || []).some((p) => globMatch(p, url) || globMatch(p, new URL(url).pathname));
 }
 
 function mockFor(url, mock) {
@@ -521,7 +526,7 @@ async function checkOne(browser, url, { replay, vp, scheme, config, source, anal
   const origin = new URL(url).origin;
   // Console errors and failed requests count only in the main pass, not while data is stressed.
   let phase = 'main', sawJson = false;
-  const routes = { mock: { ...(config.mock || {}), ...((state && state.mock) || {}) }, stressData: false };
+  const routes = { mock: { ...(config.mock || {}), ...((state && state.mock) || {}) }, stressData: false, stressDataExclude: config.stressDataExclude };
   let routed = false;
   const ensureRoutes = async () => { if (!routed) { routed = true; await page.route('**/*', (route) => handleRoute(route, routes)); } };
   if (Object.keys(routes.mock).length) await ensureRoutes(); // interception disables the HTTP cache, so only when needed
@@ -547,7 +552,7 @@ async function checkOne(browser, url, { replay, vp, scheme, config, source, anal
   const failed = new Set();
   page.on('response', (r) => {
     if (phase !== 'main') return;
-    if (/^(fetch|xhr)$/.test(r.request().resourceType()) && /json/.test(r.headers()['content-type'] || '')) sawJson = true;
+    if (/^(fetch|xhr)$/.test(r.request().resourceType()) && /json/.test(r.headers()['content-type'] || '') && !notStressed(r.url(), config)) sawJson = true;
     const u = r.url();
     if (r.status() < 400 || !u.startsWith(origin) || /favicon|apple-touch-icon|\.map(\?|$)|__nextjs|_next\/webpack-hmr|\/@vite\//.test(u)) return;
     const type = r.request().resourceType();

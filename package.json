@@ -59,5 +59,8 @@
   "homepage": "https://github.com/ngocanhnckh/renderlint#readme",
   "bugs": {
     "url": "https://github.com/ngocanhnckh/renderlint/issues"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
   }
 }

@@ -10,6 +10,7 @@ import { runChecks } from './runner.js';
 import { mergeIssues, formatPretty, formatMarkdown, formatGithub } from './report.js';
 import { scanSources } from './scan.js';
 import { detectProject, detectWordPress, looksLikeWordPress, COMMON_PORTS } from './detect.js';
+import { resolveStorybook, storyIndex, storybookConfig } from './storybook.js';
 
 export { RULES, RULE_IDS } from './rules-meta.js';
 export { analyzerSource } from './analyzer/bundle.js';
@@ -174,7 +175,20 @@ export async function check(options = {}) {
   const config = normalize({ ...fileConfig, ...stripUndefined(options.config || {}), rules: { ...fileConfig.rules, ...((options.config || {}).rules || {}) } }, cwd);
   const started = Date.now();
   const targets = options.targets || (options.url ? [options.url] : []);
-  const { pages: urls, cleanup } = await resolveTargets(targets, config, cwd, log);
+  let urls, cleanup;
+  if (options.storybook) {
+    // Every story of a Storybook, each in its own iframe page (src/storybook.js).
+    const sb = await resolveStorybook(options.storybook.target, cwd, log);
+    cleanup = sb.close ? [sb.close] : [];
+    try {
+      const stories = await storyIndex(sb.base);
+      const variants = ['', ...((options.storybook.globals || config.storybook && config.storybook.globals) || [])];
+      log(`Storybook at ${sb.base}: ${stories.length} stor${stories.length === 1 ? 'y' : 'ies'}${variants.length > 1 ? ' × ' + variants.length + ' globals variants' : ''}`);
+      const r = storybookConfig(config, stories, sb.base, { globals: variants });
+      urls = r.urls;
+      Object.assign(config, r.config);
+    } catch (e) { for (const fn of cleanup) await Promise.resolve(fn()).catch(() => {}); throw e; }
+  } else ({ pages: urls, cleanup } = await resolveTargets(targets, config, cwd, log));
   // Make sure dev servers we started die with us (Ctrl+C, hook timeout, SIGTERM).
   const onSignal = (sig) => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } process.exit(sig === 'SIGINT' ? 130 : 143); };
   const onExit = () => { for (const fn of cleanup) { try { fn(); } catch { /* ignore */ } } };
@@ -185,7 +199,7 @@ export async function check(options = {}) {
     log(`Checking ${urls.length} page(s)${config.crawl ? ' (+ crawling links)' : ''} at ${config.viewports.map((v) => v.width).join('/')}px…`);
     const { issues: raw, pages } = await runChecks(browser, { urls, config, log });
     let scanned = [];
-    const doScan = options.scan !== undefined ? options.scan : config.scan && !targets.some((t) => /^https?:/.test(t));
+    const doScan = options.scan !== undefined ? options.scan : config.scan && !options.storybook && !targets.some((t) => /^https?:/.test(t));
     if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
     const issues = mergeIssues([...raw, ...scanned], config);
     const schemes = Array.from(new Set(raw.map((i) => i.scheme).filter(Boolean)));
