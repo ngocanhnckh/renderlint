@@ -265,7 +265,8 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
   // Signed in: tell the pages the app didn't show (a guard's redirect, 401/403, "Access denied") from checked ones.
   const detect = (multi || !!config.auth || !!given) && !replay && config.rules['page-not-shown'] !== 'off';
   // The route table read from the app's router at runtime: when its source named no routes.
-  const discover = config.crawl && config.routes !== false && !(coverage && coverage.routes.some((x) => x.source !== 'config'));
+  // The route table read from the app's router at runtime, too: it catches routes the source scan missed (route coverage decides how many of each are checked).
+  const discover = config.crawl && config.routes !== false;
   const listed = new Set(urls.map(normalizeUrl)); // pages asked for, as opposed to found by crawling
   const origin = new URL(urls[0]).origin;
   const pages = [];
@@ -332,9 +333,11 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
       return true;
     };
     const skipPath = (p) => LOGOUT.test(p) || (rconfig.auth && LOGIN_PATH.test(p)) || (config.exclude || []).some((x) => globMatch(x, p));
+    // a route from the app's router: route coverage decides, as for a link (a few instances per route)
+    const planOk = (href) => !coverage || visited.has(normalizeUrl(href)) || coverageSays(href) === 'check';
     for (const u of urls) enqueue(u, 'listed');
     for (const p of r.pages) enqueue(new URL(p, urls[0]).href, 'listed');
-    for (const u of seeds) if (!skipPath(new URL(u).pathname) && !destructive(u)) enqueue(u, fromParams(u) ? 'params' : 'route', { page: true });
+    for (const u of seeds) if (!skipPath(routeOf(u)) && !destructive(u)) enqueue(u, fromParams(u) ? 'params' : 'route', { page: true });
     // pages listed explicitly are all checked
     const maxPages = config.maxPages || (coverage && coverage.routes.length ? Math.max(12, queue.length + coverage.routes.length + 20) : Math.max(12, queue.length));
     // quick: route coverage's base check of the other instances of a route: narrowest viewport, light
@@ -478,7 +481,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
       log(`  ${found.framework} router: ${found.routes.filter((x) => x.page).length} page route(s)${r.name ? ' (role ' + r.name + ')' : ''}`);
       for (const p of pagePatterns(found, { skip: skipPath })) {
         if (isDynamic(p)) { dynamic.push(p); continue; }
-        if (!destructive(origin + found.prefix + p)) enqueue(origin + found.prefix + p, 'router', { page: true });
+        if (!destructive(origin + found.prefix + p) && planOk(origin + found.prefix + p)) enqueue(origin + found.prefix + p, 'router', { page: true });
       }
       for (const x of found.routes) if (x.lazy && !x.page && !roleCoverage.skipped.some((s) => s.route === x.path)) roleCoverage.skipped.push({ route: x.path, reason: 'lazy-loaded children renderlint could not load' });
     };
@@ -490,7 +493,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
       for (const pattern of todo) {
         const x = fillParams(pattern, { params: config.params || {}, links: Array.from(linkRoutes), data: [...jsonSeen, ...mockData] });
         if (x.missing) { if (!roleCoverage.skipped.some((s) => s.route === pattern)) roleCoverage.skipped.push({ route: pattern, reason: `no value for ${x.missing.map((m) => ':' + m).join(', ')} (set "params")` }); continue; }
-        for (const p of x.paths) if (!destructive(origin + routesFound.prefix + p) && enqueue(origin + routesFound.prefix + p, 'params', { page: true })) added = true;
+        for (const p of x.paths) if (!destructive(origin + routesFound.prefix + p) && planOk(origin + routesFound.prefix + p) && enqueue(origin + routesFound.prefix + p, 'params', { page: true })) added = true;
       }
       return added;
     };
@@ -528,7 +531,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
       }
     };
     const quickCheck = async (list) => {
-      for (const u of list) if (!destructive(u)) metasOf.push(startPage(u, null, true));
+      for (const u of list) if (!skipPath(routeOf(u)) && !destructive(u)) metasOf.push(startPage(u, null, true));
       await drain();
     };
     const finish = () => {

@@ -83,7 +83,9 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
     let p = u.pathname + (u.search || '');
     if (basePath && p.startsWith(basePath)) p = p.slice(basePath.length) || '/';
     const h = /^#!?\//.test(u.hash) ? u.hash : '';
-    return { path: p + h, routePath: hashRouter ? (h ? h.replace(/^#!?/, '') : '/') : h ? null : p };
+    // with a hash router, only the page that hosts it is its "/": another path is served by something else
+    const host = /^\/?([^/?]*\.html?)?(\?.*)?$/.test(p);
+    return { path: p + h, routePath: hashRouter ? (h ? h.replace(/^#!?/, '') : host ? '/' : null) : h ? null : p };
   };
   const outsideDecision = (path) => {
     if (excluded(path)) return 'skip';
@@ -148,7 +150,7 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
           }
         }
         // the first ones are checked as soon as they are known, the rest chosen for variety
-        for (const path of choose(r, per)) if (queue(r, path)) out.push(origin + basePath + path);
+        for (const path of choose(r, per)) if (queue(r, path)) out.push(origin + basePath + (r.hash ? '/#' + path : path));
       }
       return out;
     },

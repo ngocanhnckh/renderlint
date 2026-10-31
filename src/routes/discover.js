@@ -602,7 +602,10 @@ function vueRouter(cwd, aliases) {
       continue;
     }
     if (/vue-router\/auto-routes/.test(src)) return fileBasedVue(cwd);
-    return configRoutes(cwd, aliases, f, opts.props.routes, 'vue-router');
+    const routes = configRoutes(cwd, aliases, f, opts.props.routes, 'vue-router');
+    // createWebHashHistory(): every route lives in the URL's hash (/#/users)
+    if (/\bcreateWebHashHistory\s*\(/.test(src)) for (const r of routes) r.hash = true;
+    return routes;
   }
   return [];
 }
