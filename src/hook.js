@@ -40,7 +40,11 @@ async function incremental(cwd, check) {
   if (!map) return null;
   const plan = planIncremental(cwd, map);
   if (plan.mode === 'all') return null;
-  if (plan.mode === 'none') { updatePageMap(config.outputDir, map, plan, { issues: [] }); return { skip: true }; }
+  if (plan.mode === 'none') {
+    if (plan.failing.length) return null; // nothing rendered changed, but errors remain: report them with a full run
+    updatePageMap(config.outputDir, map, plan, { issues: [] });
+    return { skip: true };
+  }
   const result = await check({ cwd, log: () => {}, config: { pages: plan.paths, crawl: false, routes: false } });
   const stale = updatePageMap(config.outputDir, map, plan, result);
   // routes not re-checked that still had errors in the last run keep the hook blocking, as a full run would

@@ -1,7 +1,7 @@
 // Change-based selection for the agent hook: after a full run wrote .renderlint/page-map.json, an edit
 // re-checks only the routes whose pages render with the changed files (plus every route for the app
-// shell, config, global CSS through the root layout, or files we can't place), and the routes that
-// still had errors.
+// shell, config, global CSS through the root layout, or files we can't place). Routes that had errors
+// and are not affected keep them: the verdict is the one a full run would give.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { discoverRoutes } from './discover.js';
@@ -19,7 +19,7 @@ export function planIncremental(cwd, map) {
   const now = snapshot(cwd);
   const changed = diffSnapshots(map.snapshot || {}, now);
   const failing = map.routes.filter((r) => r.errors > 0);
-  if (!changed.length) return { mode: failing.length ? 'some' : 'none', paths: failing.flatMap((r) => r.checked), routes: failing.map((r) => r.pattern), reasons: [], changed, now };
+  if (!changed.length) return { mode: 'none', paths: [], routes: [], reasons: [], changed, now, failing };
   const d = discoverRoutes(cwd, { framework: map.framework });
   const g = buildGraph(cwd, { framework: map.framework, routes: d.routes, entries: shellEntries(cwd, map.framework) });
   const cl = routeClosures(g);
@@ -28,7 +28,6 @@ export function planIncremental(cwd, map) {
   const sel = affectedRoutes(g, changed, { closures: cl, previousRoutes: map.routes.map((r) => ({ ...r, files: r.files })) });
   if (sel.all) return { mode: 'all', paths: [], routes: [], reasons: sel.reasons, changed, now };
   const patterns = new Set(Array.from(sel.routes, (i) => d.routes[i].pattern));
-  for (const r of failing) patterns.add(r.pattern); // re-check what was failing: a fix there may come from a file we can't place
   const paths = [];
   const missing = [];
   for (const p of patterns) {
@@ -39,7 +38,7 @@ export function planIncremental(cwd, map) {
     else missing.push(p); // a new dynamic route: no instance known yet
   }
   if (missing.length) return { mode: 'all', paths: [], routes: [], reasons: [...sel.reasons, `new route(s) without known instances: ${missing.join(', ')}`], changed, now };
-  return { mode: paths.length ? 'some' : 'none', paths: Array.from(new Set(paths)), routes: Array.from(patterns), reasons: sel.reasons, changed, now };
+  return { mode: paths.length ? 'some' : 'none', paths: Array.from(new Set(paths)), routes: Array.from(patterns), reasons: sel.reasons, changed, now, failing };
 }
 
 // After an incremental run: new file state, and the errors of the routes that were re-checked.

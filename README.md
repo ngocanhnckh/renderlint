@@ -55,6 +55,7 @@ npx renderlint                              # check: exits 1 if any error is fou
 - [How it compares](#how-it-compares)
 - [Does it work?](#does-it-work)
 - [See it](#see-it)
+- [Every page of a big app](#every-page-of-a-big-app)
 - [Pages behind a login](#pages-behind-a-login)
 - [WordPress and Elementor](#wordpress-and-elementor)
 - [Make it impossible to ship defects](#make-it-impossible-to-ship-defects)
@@ -172,6 +173,20 @@ npx renderlint explain contrast                 # what a rule means and how to f
 The output is plain text that agents can read. `--json`, `--format md` and `--format github` (PR annotations) are also available. Every run writes `.renderlint/report.json`, `.renderlint/report.md` and annotated screenshots to `.renderlint/screens/` (`--out <dir>` to change).
 
 It doesn't care which framework you use. If it renders in a browser, renderlint can lint it: React, Next.js, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, Solid, Qwik, Remix, WordPress, plain HTML, and anything else.
+
+## Every page of a big app
+
+renderlint reads your app's routes from its source, without running it: Next.js (`app/` and `pages/`, route groups, parallel and intercepting routes), Nuxt, SvelteKit, Astro, React Router 7 and Remix (`routes.ts`, flat routes), TanStack Router, Angular (`Routes` arrays, lazy `loadChildren`), Vue Router and React Router configs. It adds `sitemap.xml` and build output, and fills dynamic routes such as `/products/:id` with real values: literal `generateStaticParams`/`getStaticPaths`, the build manifest, links it crawls, ids in your API's JSON lists, or `params` in the config. `npx renderlint routes` lists what it found.
+
+Hundreds of URLs become a few dozen routes. Every instance of a route gets a quick check (narrowest viewport, base rules), and two per route get the full check (every viewport, stress, sweep, data stress): on a 260-URL Next.js shop that found 97% of the per-page errors of checking every URL fully, in half the time (`coverage: { quick: "ends" }` adds the widest viewport to the quick check: 100%, in 71%). Every route ends up in the report with a status, so none is skipped silently:
+
+```
+◐ Coverage 412 URL(s), 38 route(s): 35 checked, 2 need a role, 1 need param values
+  needs a role /admin/users  app/admin/users/page.tsx — the page says "Access denied"
+  needs param values /reports/:id  app/reports/[id]/page.tsx — no value for :id (…set "params")
+```
+
+`--min-coverage 100` (or `coverage.min`) fails CI when routes go unchecked, `--coverage-baseline` when a route that was checked no longer is. The agent hook re-checks only the routes an edit can affect, from the import graph of each page (see [configuration](docs/configuration.md)).
 
 ## Pages behind a login
 
