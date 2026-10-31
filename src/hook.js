@@ -40,19 +40,25 @@ async function incremental(cwd, check) {
   if (!map) return null;
   const plan = planIncremental(cwd, map);
   if (plan.mode === 'all') return null;
-  if (plan.mode === 'none') {
-    if (plan.failing.length) return null; // nothing rendered changed, but errors remain: report them with a full run
+  if (plan.mode === 'none' && !plan.failing.length) {
     updatePageMap(config.outputDir, map, plan, { issues: [] });
     return { skip: true };
   }
+  // routes that still had errors are checked again too (only their instances), so the agent sees those errors
+  const affected = plan.routes.length;
+  const extra = plan.failing.filter((r) => !plan.routes.includes(r.pattern));
+  plan.paths = Array.from(new Set([...plan.paths, ...extra.flatMap((r) => r.checked)]));
+  plan.routes = [...plan.routes, ...extra.map((r) => r.pattern)];
   const result = await check({ cwd, log: () => {}, config: { pages: plan.paths, crawl: false, routes: false } });
   const stale = updatePageMap(config.outputDir, map, plan, result);
-  // routes not re-checked that still had errors in the last run keep the hook blocking, as a full run would
+  // routes not checked again that still had errors in the last run keep the hook blocking, as a full run would
   if (stale.length) {
     result.ok = false;
     result.stats.errors += stale.reduce((n, r) => n + r.errors, 0);
   }
-  const scope = ` (re-checked ${plan.routes.length} of ${map.routes.length} route(s) affected by ${plan.changed.length} changed file(s)` + (stale.length ? `; ${stale.map((r) => r.pattern).join(', ')} still had errors in the last full run` : '') + ')';
+  const scope = ` (re-checked ${affected} of ${map.routes.length} route(s) affected by ${plan.changed.length} changed file(s)` +
+    (extra.length ? `, and ${extra.map((r) => r.pattern).join(', ')}, which had errors in the last run` : '') +
+    (stale.length ? `; ${stale.map((r) => r.pattern).join(', ')} still had errors in the last run` : '') + ')';
   return { result, scope };
 }
 
