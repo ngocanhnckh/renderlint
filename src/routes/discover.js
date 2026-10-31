@@ -8,7 +8,7 @@
 // :name+ (one or more segments), :name* (zero or more).
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { stripComments, parseExpr, declarations, importMap, jsxElementsIn, literal } from './jsparse.js';
+import { stripComments, parseExpr, declarations, declaredNames, importMap, jsxElementsIn, literal } from './jsparse.js';
 import { loadAliases, resolveImport, rel } from './resolve.js';
 
 const read = (p) => { try { return readFileSync(p, 'utf8'); } catch { return ''; } };
@@ -439,7 +439,7 @@ function tanstack(cwd) {
 function makeReader(cwd, aliases) {
   const cache = new Map();
   const load = (file) => {
-    if (!cache.has(file)) { const src = stripComments(read(file)); cache.set(file, { src, decl: declarations(src), imports: importMap(src) }); }
+    if (!cache.has(file)) { const src = stripComments(read(file)); cache.set(file, { src, decl: declarations(src), names: declaredNames(src), imports: importMap(src) }); }
     return cache.get(file);
   };
   // resolve an identifier to { file, node }
@@ -462,7 +462,7 @@ function makeReader(cwd, aliases) {
   // the file a component reference points to (identifier import, lazy import(), JSX element)
   const componentFile = (file, node) => {
     if (!node) return null;
-    if (node.t === 'id') { const imp = load(file).imports[node.name.split('.')[0]]; return imp ? resolveImport(imp.from, file, cwd, aliases) : (load(file).decl[node.name] !== undefined ? file : null); }
+    if (node.t === 'id') { const imp = load(file).imports[node.name.split('.')[0]]; return imp ? resolveImport(imp.from, file, cwd, aliases) : (load(file).decl[node.name] !== undefined || load(file).names.has(node.name) ? file : null); }
     if (node.t === 'fn' || node.t === 'import') { const spec = node.t === 'import' ? node.spec : node.imports[0]; return spec ? resolveImport(spec, file, cwd, aliases) : null; }
     if (node.t === 'jsx') return componentFile(file, { t: 'id', name: node.name });
     if (node.t === 'call' && node.callee.t === 'id' && /lazy|defineAsyncComponent/.test(node.callee.name)) return componentFile(file, node.args[0]);
@@ -634,17 +634,25 @@ function fileBasedVue(cwd) {
 
 function reactRouterLib(cwd, aliases) {
   const files = sourceFiles(cwd, ['src', 'app']);
-  const out = [];
-  let hash = false;
+  let out = [];
+  // Hash or browser routing. With only a hash router in the source (<HashRouter> in main.tsx, <Routes> in
+  // App.tsx), every route is a hash route. With both, the hash router's routes are left out: which router the
+  // app mounts can't be told from the source, and a second, unused router (a demo entry, an old file) must not
+  // make pages get checked twice (/dashboard and /#/dashboard) or at URLs the app doesn't serve. The route
+  // table read from the running app's router adds whatever this leaves out.
+  let hashAny = false, browserAny = false;
   for (const f of files) {
     const raw = read(f);
     if (!/react-router/.test(raw)) continue;
     const src = stripComments(raw);
+    const fileHash = /<HashRouter\b|\bcreateHashRouter\s*\(/.test(src);
+    if (fileHash) hashAny = true;
+    if (/<BrowserRouter\b|\bcreateBrowserRouter\s*\(/.test(src)) browserAny = true;
+    const tag = (rs, h) => rs.map((r) => ({ ...r, _hash: h }));
     for (const m of src.matchAll(/\b(createBrowserRouter|createHashRouter|createMemoryRouter|useRoutes)\s*\(/g)) {
-      if (m[1] === 'createHashRouter') hash = true;
-      out.push(...configRoutes(cwd, aliases, f, parseExpr(src, m.index + m[0].length).node, 'react-router'));
+      const h = m[1] === 'createHashRouter' || (m[1] !== 'createBrowserRouter' && fileHash);
+      out.push(...tag(configRoutes(cwd, aliases, f, parseExpr(src, m.index + m[0].length).node, 'react-router'), h));
     }
-    if (/<HashRouter\b/.test(src)) hash = true;
     // <Routes><Route path="…" element={<Page/>}>…</Route></Routes>
     const R = makeReader(cwd, aliases);
     const visit = (el, prefix, layouts) => {
@@ -656,15 +664,19 @@ function reactRouterLib(cwd, aliases) {
       if (comp && (path !== null)) {
         const isLayout = el.children.length > 0;
         if (!isLayout || el.children.every((c) => !(c.attrs.index || (c.attrs.path && c.attrs.path.t === 'str' && c.attrs.path.v === '')))) {
-          if (!isLayout || path !== null) out.push({ ...mkRoute(cwd, rrPath(full), comp, layouts, 'react-router-jsx'), ...(isLayout ? { parentOf: true } : {}) });
+          if (!isLayout || path !== null) out.push({ ...mkRoute(cwd, rrPath(full), comp, layouts, 'react-router-jsx'), ...(isLayout ? { parentOf: true } : {}), _hash: fileHash });
         }
       }
       for (const c of el.children) visit(c, path === null ? prefix : full, comp ? [...layouts, comp] : layouts);
     };
     for (const el of jsxElementsIn(src, ['Routes'])) visit(el, '', []);
   }
+  if (hashAny && browserAny) out = out.filter((r) => !r._hash);
   const res = dedupe(out.filter((r) => !(r.parentOf && out.some((c) => c !== r && c.pattern === r.pattern))));
-  if (hash) for (const r of res) r.hash = true;
+  for (const r of res) {
+    if (hashAny && !browserAny) r.hash = true;
+    delete r._hash;
+  }
   return res;
 }
 

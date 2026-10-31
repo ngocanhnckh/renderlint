@@ -353,6 +353,13 @@ export function declarations(src) {
   return out;
 }
 
+// Names of the functions and classes a file declares (function Login() {…}, class Settings {…}).
+export function declaredNames(src) {
+  const out = new Set();
+  for (const m of src.matchAll(/(?:^|[;\n}])\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|class)\s+([A-Za-z_$][\w$]*)/g)) out.add(m[1]);
+  return out;
+}
+
 // Literal value of a node (strings, numbers, arrays and objects of them), or undefined.
 export function literal(node) {
   if (!node) return undefined;

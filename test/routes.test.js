@@ -207,6 +207,45 @@ export default function App() {
   assert.deepEqual(patterns(rr), ['/', '/app', '/app/orders/:orderId'], 'a layout route renders at its own path too');
 });
 
+test('React Router: a stray hash-router file does not double the browser routes; a hash-only app stays hash; components declared in the router file', () => {
+  const browserMain = `import { createBrowserRouter, RouterProvider } from 'react-router';
+import Dashboard from './pages/Dashboard';
+import Admin from './pages/Admin';
+const router = createBrowserRouter([{ path: '/dashboard', element: <Dashboard /> }, { path: '/admin', element: <Admin /> }]);
+export default function Main() { return <RouterProvider router={router} />; }
+`;
+  const hashDemo = `import { HashRouter, Routes, Route } from 'react-router';
+import Dashboard from './pages/Dashboard';
+import Demo from './pages/Demo';
+export default function Declarative() {
+  return <HashRouter><Routes><Route path="/dashboard" element={<Dashboard />} /><Route path="/demo" element={<Demo />} /></Routes></HashRouter>;
+}
+`;
+  const pages = { 'src/pages/Dashboard.jsx': P, 'src/pages/Admin.jsx': P, 'src/pages/Demo.jsx': P };
+  const mixed = discoverRoutes(tree({ 'package.json': pkg({ 'react-router': '7' }), 'src/main.jsx': browserMain, 'src/declarative.jsx': hashDemo, ...pages }));
+  const by = Object.fromEntries(mixed.routes.map((r) => [r.pattern, !!r.hash]));
+  assert.deepEqual(by, { '/admin': false, '/dashboard': false }, 'with a browser router in the source, a second (hash) router adds no routes: no /#/dashboard twin, no /#/demo the app may not serve');
+
+  const hashOnly = discoverRoutes(tree({
+    'package.json': pkg({ 'react-router-dom': '6' }),
+    'src/main.jsx': `import { HashRouter } from 'react-router-dom';\nimport App from './App';\ncreateRoot(el).render(<HashRouter><App /></HashRouter>);\n`,
+    'src/App.jsx': `import { Routes, Route } from 'react-router-dom';\nimport Dashboard from './pages/Dashboard';\nexport default function App() { return <Routes><Route path="/dashboard" element={<Dashboard />} /></Routes>; }\n`,
+    ...pages,
+  }));
+  assert.ok(hashOnly.routes.length && hashOnly.routes.every((r) => r.hash), 'with only a hash router, the <Routes> of another file are hash routes');
+
+  const inline = discoverRoutes(tree({
+    'package.json': pkg({ 'react-router': '7' }),
+    'src/main.jsx': `import { createBrowserRouter, RouterProvider } from 'react-router';
+function Login() { return null; }
+class Settings extends Object {}
+export function Users() { return null; }
+const router = createBrowserRouter([{ path: '/login', element: <Login /> }, { path: '/settings', Component: Settings }, { path: '/users', element: <Users /> }]);
+`,
+  }));
+  assert.deepEqual(patterns(inline), ['/login', '/settings', '/users'], 'components declared as functions or classes in the router file');
+});
+
 test('generateStaticParams that is not a literal yields no values (they come from the build manifest or links)', () => {
   assert.equal(staticParamsFrom('export function generateStaticParams() { return products.map((p) => ({ id: p.id })); }', 'generateStaticParams'), null);
 });
