@@ -9,7 +9,7 @@ import { RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
 import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
 
-const SETTLE_SCRIPT = async ({ autoScroll }) => {
+export const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const T = [performance.now()]; const mark = () => T.push(Math.round(performance.now() - T[0]));
   // Never mutate <html>/<body> attributes here: frameworks may still be hydrating.
@@ -50,13 +50,13 @@ const SETTLE_SCRIPT = async ({ autoScroll }) => {
 };
 
 // Hash-based routes (Angular withHashLocation, Vue/React hash routers: /#/accounts) are pages of their own.
-const hashRoute = (u) => (/^#!?\//.test(u.hash) ? u.hash : '');
+export const hashRoute = (u) => (/^#!?\//.test(u.hash) ? u.hash : '');
 
 // Installed in every frame before the page's own scripts: tracks pending setTimeout
 // timers, so a wait can end once nothing is scheduled, and provides __rlWaitQuiet(),
 // which resolves after `frames` frames in a row with no DOM mutation, no font loading and
 // no timer due before the deadline, or at the deadline (maxMs) whatever happens.
-const READY_INIT = () => {
+export const READY_INIT = () => {
   if (window.__rlWaitQuiet) return;
   const set = window.setTimeout, clear = window.clearTimeout, clearI = window.clearInterval;
   const pending = new Map(); // timer id -> due time
@@ -91,7 +91,7 @@ const READY_INIT = () => {
 // flight (one open for over 2s is a long-poll or a stream and doesn't count) and none for
 // 100ms, then __rlWaitQuiet() in the page (timers due within 500ms, DOM changes, fonts);
 // again if the page made requests meanwhile. At most maxMs.
-async function waitReady(page, net, maxMs) {
+export async function waitReady(page, net, maxMs) {
   const end = Date.now() + maxMs;
   const busy = () => { const now = Date.now(); for (const t of net.inflight.values()) if (now - t < 2000) return true; return now - net.last < 100; };
   while (Date.now() < end) {
@@ -104,7 +104,7 @@ async function waitReady(page, net, maxMs) {
   }
 }
 
-function trackNetwork(page) {
+export function trackNetwork(page) {
   const net = { inflight: new Map(), last: Date.now(), count: 0 };
   page.on('request', (r) => { if (/^(eventsource|websocket)$/.test(r.resourceType())) return; net.inflight.set(r, Date.now()); net.count++; net.last = Date.now(); });
   const done = (r) => { if (net.inflight.delete(r)) net.last = Date.now(); };
@@ -115,7 +115,7 @@ function trackNetwork(page) {
 // Writes a PNG screenshot of clip (page coordinates, beyond the viewport if needed) through
 // CDP with optimizeForSpeed: about a third cheaper to encode than Playwright's screenshot().
 // Prepares the page as screenshot({ animations: 'disabled', caret: 'hide' }) does.
-async function writeShot(page, path, clip) {
+export async function writeShot(page, path, clip) {
   let cdp;
   try {
     cdp = await page.context().newCDPSession(page);
@@ -198,7 +198,7 @@ const FINGERPRINT_SCRIPT = ({ template }) => {
   return { fp, skeleton: template && document.body ? id(shape(document.body)) : null };
 };
 
-function slugFor(url) {
+export function slugFor(url) {
   const u = new URL(url);
   const s = (u.pathname.replace(/\/+$/, '') || '/index').replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'index';
   const extra = u.search + hashRoute(u);
@@ -224,7 +224,9 @@ function wpGroup(u) {
   return null;
 }
 
-export async function runChecks(browser, { urls, config, log = () => {} }) {
+// session: an existing signed-in state ({ storageState, initScript }) instead of config.auth, e.g. a test's.
+// replay: the pages are re-opened from a test's state: one that lands elsewhere is skipped, not checked.
+export async function runChecks(browser, { urls, config, log = () => {}, session: given = null, replay = false }) {
   const viewports = config.viewports;
   const outDir = config.outputDir;
   if (config.screenshots) mkdirSync(join(outDir, 'screens'), { recursive: true });
@@ -241,8 +243,8 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
   };
 
   // Signed-in pages: log in (or set the storage the app's guards read) once, reuse the session everywhere.
-  let session = null;
-  if (config.auth) {
+  let session = given;
+  if (!session && config.auth) {
     const mock = config.mock || {};
     session = await authenticate(browser, urls[0], config, { log, routePage: Object.keys(mock).length ? (p) => p.route('**/*', (r) => handleRoute(r, { mock, stressData: false })) : null });
   }
@@ -281,7 +283,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
     const runs = [];
     const startScheme = (si) => {
       const scheme = schemes[si];
-      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
+      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, replay, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
         // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
         wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
         onSig: si === 0 ? sigs[vi].resolve : null, refSig: si > 0 ? sigs[vi].promise : null,
@@ -294,6 +296,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
       runs[si] = viewports.map((vp, vi) => slot(async () => {
         const t0 = Date.now();
         const res = await checkOne(browser, url, opts(vp, vi, true)).then((r) => {
+          if (r.skipped) log(`  ${pageInfo.path} @${vp.width}px: not replayed, ${r.skipped}`);
           // Without "auth", the sign-in page we were sent to is a page of its own: check it under its real name.
           if (r.landed && !config.auth && !state && si === 0) {
             const key = normalizeUrl(r.landed);
@@ -329,6 +332,7 @@ export async function runChecks(browser, { urls, config, log = () => {} }) {
         for (const [vi, { vp, res, ms }] of results[si].entries()) {
           // Same DOM, same layout, color-only CSS differences: the stress passes would find exactly what they found in the first scheme.
           if (res.stressReused) res.issues.push(...results[0][vi].res.issues.filter((i) => i.rule === 'fragile-layout' && !i.sweepWidth).map(cloneIssue));
+          if (res.skipped) { pageInfo.skipped = res.skipped; continue; }
           pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}), ...(res.stressReused ? { stressReused: true } : {}) });
           for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}) });
           if (res.error) issues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
@@ -462,7 +466,7 @@ function ignoreSelectorsFor(sel) {
 }
 
 // Runs at most n tasks at once, in the order they were queued.
-function limiter(n) {
+export function limiter(n) {
   let active = 0;
   const queue = [];
   const next = () => {
@@ -484,7 +488,7 @@ function deferred() {
 const cloneIssue = (i) => { const c = JSON.parse(JSON.stringify(i)); if (!c.sweepWidth) delete c.marker; return c; };
 
 // /about/, /about and /about/index.html are the same page.
-function normalizeUrl(u) { try { const x = new URL(u); x.hash = hashRoute(x).replace(/\/$/, ''); x.pathname = x.pathname.replace(/\/index\.html?$/, '/'); return x.href.replace(/\/$/, ''); } catch { return u; } }
+export function normalizeUrl(u) { try { const x = new URL(u); x.hash = hashRoute(x).replace(/\/$/, ''); x.pathname = x.pathname.replace(/\/index\.html?$/, '/'); return x.href.replace(/\/$/, ''); } catch { return u; } }
 function pathOf(url, origin) { const u = new URL(url); return u.origin === origin ? (u.pathname + u.search + hashRoute(u)) : url; }
 export function globMatch(pattern, str) {
   const re = new RegExp('^' + pattern.split('*').map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
@@ -499,7 +503,7 @@ const MQ_RECORDER = () => {
   window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
 };
 
-async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
+async function checkOne(browser, url, { replay, vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -579,6 +583,11 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     lap('settle');
     // Sent to a login page or identity provider: the page itself was never rendered, so don't lint the login form in its name.
     const redirect = loginRedirect(url, page.url(), await page.evaluate(() => Array.from(document.querySelectorAll('input[type=password]')).some((i) => i.getClientRects().length)).catch(() => false));
+    // Replaying a test's page: the test was there, so landing anywhere else (a sign-in page, a role guard's
+    // redirect, a page that needs in-memory state) means the state didn't carry over, not a defect.
+    if (replay && (redirect || normalizeUrl(page.url()) !== normalizeUrl(url))) {
+      return { issues: [], meta: null, screenshot: null, error: null, skipped: `landed on ${pathOf(page.url(), new URL(url).origin)} instead` };
+    }
     if (redirect && config.rules['auth-required'] !== 'off') {
       const what = new URL(url), asked = what.pathname + what.search + hashRoute(what);
       issues.length = 0;
@@ -689,32 +698,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
     }
 
     if (config.stress && !templateOf && !stressReused) {
-      const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
-      const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
-      const known = new Set(issues.map((i) => i.rule + '|' + i.selector));
-      const collect = (found, label, profile, severity) => {
-        for (const i of found) {
-          const key = i.rule + '|' + i.selector;
-          if (known.has(key)) continue;
-          known.add(key);
-          issues.push({ ...i, rule: 'fragile-layout', severity, message: `${label}: ${i.message}`, details: { ...(i.details || {}), stressedRule: i.rule, profile } });
-        }
-      };
-      const pct = Math.round((config.stress - 1) * 100);
-      for (const p of [
-        { id: 'declared', label: 'With the worst-case text declared on the element', severity: 'error' },
-        { id: 'longer', label: `With ~${pct}% longer text` },
-        { id: 'long-words', label: 'With a long unbreakable word (email, URL or ID)' },
-        { id: 'big-numbers', label: 'With bigger numbers (three more digits)' },
-      ]) {
-        if (p.id === 'longer' && config.stress <= 1) continue;
-        const n = await page.evaluate(([id, f]) => window.__renderlint.stress(id, f), [p.id, config.stress]);
-        if (!n) continue;
-        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
-        const sres = await page.evaluate((o) => window.__renderlint.analyze(o), stressOpts);
-        await page.evaluate(() => window.__renderlint.unstress());
-        collect(sres.issues, p.label, p.id, p.severity);
-      }
+      await stressPasses(page, issues, analyzeOpts, config);
       lap('stress');
     }
 
@@ -727,29 +711,7 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
       if (process.env.RENDERLINT_DEBUG) log(`    [${vp.width}] sweep widths: ${sweepWidths.join(', ')}`);
     }
     if (sweepWidths.length) {
-      const sweepRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) && config.rules[k] !== 'off' ? (config.rules[k] || RULES[k].severity) : 'off']));
-      const sweepOpts = { ...analyzeOpts, rules: sweepRules, contrastCandidates: false };
-      for (const w of sweepWidths) {
-        await page.setViewportSize({ width: w, height: vp.height });
-        // resize listeners, container queries, JS breakpoints (debounced ones too)
-        // (at most the 150ms this used to wait; ends once nothing is due or changing)
-        if (await page.evaluate(() => (window.__rlWaitQuiet ? window.__rlWaitQuiet(150, 2) : null)) === null) await page.waitForTimeout(150);
-        await page.evaluate(() => { window.__renderlint.finishAnimations(); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
-        const r = await page.evaluate((o) => window.__renderlint.analyze(o), sweepOpts);
-        const found = r.issues.map((i) => ({ ...i, sweepWidth: w, details: { ...(i.details || {}), sweep: true } }));
-        const shown = found.filter((i) => i.rect && effectiveSeverity(i, config) === 'error');
-        if (config.screenshots && shown.length && shown.some((i) => !marked.has(groupKey(i)) && !markedHere.has(groupKey(i)))) {
-          const shot = join(outDir, 'screens', `${slugFor(url)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
-          shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; markedHere.add(groupKey(i)); marked.add(groupKey(i)); });
-          await annotate(page, shown, config);
-          const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
-          const clip = { x: 0, y: 0, width: w, height: Math.min(config.maxScreenshotHeight, h) };
-          await writeShot(page, shot, clip);
-          await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
-        }
-        issues.push(...found);
-      }
-      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await sweepPasses(page, { widths: sweepWidths, vp, issues, analyzeOpts, config, outDir, url, scheme, marked, markedHere });
       lap('sweep');
     }
 
@@ -799,6 +761,65 @@ async function checkOne(browser, url, { vp, scheme, config, source, analyzeOpts,
   return { issues, meta, screenshot, error, templateOf, stressReused };
 }
 
+// Stress passes on a loaded page: rewrites its text (longer, long words, big numbers, declared
+// samples), re-runs the layout rules and restores the text. New findings become fragile-layout.
+export async function stressPasses(page, issues, analyzeOpts, config) {
+  const stressRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) ? (config.rules[k] === 'off' ? 'off' : 'error') : 'off']));
+  const stressOpts = { ...analyzeOpts, ignoreSelectors: ignoreSelectorsFor(analyzeOpts.ignoreSelectors), alsoIgnore: 'fragile-layout', rules: stressRules, contrastCandidates: false };
+  const known = new Set(issues.map((i) => i.rule + '|' + i.selector));
+  const collect = (found, label, profile, severity) => {
+    for (const i of found) {
+      const key = i.rule + '|' + i.selector;
+      if (known.has(key)) continue;
+      known.add(key);
+      issues.push({ ...i, rule: 'fragile-layout', severity, message: `${label}: ${i.message}`, details: { ...(i.details || {}), stressedRule: i.rule, profile } });
+    }
+  };
+  const pct = Math.round((config.stress - 1) * 100);
+  for (const p of [
+    { id: 'declared', label: 'With the worst-case text declared on the element', severity: 'error' },
+    { id: 'longer', label: `With ~${pct}% longer text` },
+    { id: 'long-words', label: 'With a long unbreakable word (email, URL or ID)' },
+    { id: 'big-numbers', label: 'With bigger numbers (three more digits)' },
+  ]) {
+    if (p.id === 'longer' && config.stress <= 1) continue;
+    const n = await page.evaluate(([id, f]) => window.__renderlint.stress(id, f), [p.id, config.stress]);
+    if (!n) continue;
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const sres = await page.evaluate((o) => window.__renderlint.analyze(o), stressOpts);
+    await page.evaluate(() => window.__renderlint.unstress());
+    collect(sres.issues, p.label, p.id, p.severity);
+  }
+}
+
+// Responsive sweep on a loaded page: layouts often fit at the tested widths and break in between
+// (1100px, 1366px…). Resizes in place, re-runs the layout rules at each width, then restores vp.
+export async function sweepPasses(page, { widths, vp, issues, analyzeOpts, config, outDir, url, scheme, marked, markedHere }) {
+  const sweepRules = Object.fromEntries(Object.keys(RULES).map((k) => [k, STRESSED_RULES.includes(k) && config.rules[k] !== 'off' ? (config.rules[k] || RULES[k].severity) : 'off']));
+  const sweepOpts = { ...analyzeOpts, rules: sweepRules, contrastCandidates: false };
+  for (const w of widths) {
+    await page.setViewportSize({ width: w, height: vp.height });
+    // resize listeners, container queries, JS breakpoints (debounced ones too)
+    // (at most the 150ms this used to wait; ends once nothing is due or changing)
+    if (await page.evaluate(() => (window.__rlWaitQuiet ? window.__rlWaitQuiet(150, 2) : null)) === null) await page.waitForTimeout(150);
+    await page.evaluate(() => { window.__renderlint.finishAnimations(); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
+    const r = await page.evaluate((o) => window.__renderlint.analyze(o), sweepOpts);
+    const found = r.issues.map((i) => ({ ...i, sweepWidth: w, details: { ...(i.details || {}), sweep: true } }));
+    const shown = found.filter((i) => i.rect && effectiveSeverity(i, config) === 'error');
+    if (config.screenshots && shown.length && shown.some((i) => !marked.has(groupKey(i)) && !markedHere.has(groupKey(i)))) {
+      const shot = join(outDir, 'screens', `${slugFor(url)}@${w}${scheme === 'dark' ? '-dark' : ''}.png`);
+      shown.forEach((i, n) => { i.marker = n + 1; i.screenshot = shot; markedHere.add(groupKey(i)); marked.add(groupKey(i)); });
+      await annotate(page, shown, config);
+      const h = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body.scrollHeight));
+      const clip = { x: 0, y: 0, width: w, height: Math.min(config.maxScreenshotHeight, h) };
+      await writeShot(page, shot, clip);
+      await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+    }
+    issues.push(...found);
+  }
+  await page.setViewportSize({ width: vp.width, height: vp.height });
+}
+
 // Stylesheets the page can't read (cross-origin): fetch them. Any color-scheme condition,
 // @import or var() in them could change layout per scheme, so it counts as "not paint-only".
 async function crossOriginPaintOnly(context, sheets, cache) {
@@ -812,7 +833,7 @@ async function crossOriginPaintOnly(context, sheets, cache) {
   return true;
 }
 
-async function confirmDeadLinks(page, dead, issues) {
+export async function confirmDeadLinks(page, dead, issues) {
   let client;
   try { client = await page.context().newCDPSession(page); } catch { return; }
   try {
@@ -843,7 +864,7 @@ export function effectiveSeverity(issue, config) {
   return issue.severity || (RULES[issue.rule] ? RULES[issue.rule].severity : 'error');
 }
 
-async function annotate(page, issues, config) {
+export async function annotate(page, issues, config) {
   const boxes = issues.map((i) => ({ rect: i.rect, n: i.marker, sev: effectiveSeverity(i, config), rule: i.rule, related: i.related && i.related.rect }));
   await page.evaluate((boxes) => {
     const root = document.createElement('div');

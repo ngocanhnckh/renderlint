@@ -447,6 +447,31 @@ const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'T
 const SKIP_IDS = /^(__renderlint|wpadminbar$|__next-build-watcher|__nuxt-devtools|nuxt-devtools|vue-devtools|__vconsole|svelte-inspector|react-query-devtools|tsqd-parent-container|webpack-dev-server-client-overlay)/;
 RL.isDevTool = (n) => SKIP_TAGS.has(n.tagName) || SKIP_IDS.test(n.id || '') || n.hasAttribute('data-nextjs-toast') || n.hasAttribute('data-nextjs-dialog-overlay') || n.hasAttribute('data-tsqd-container');
 
+// The open modal, if any: a <dialog> opened with showModal() (top layer), else the last visible
+// [aria-modal="true"] (portals render at the end of <body>, nested modals after their parent).
+// While one is open the rest of the page is inert and dimmed by its backdrop on purpose:
+// only the modal (and the elements around it) are checked.
+RL.modalRoot = function () {
+  let root = null;
+  try { root = document.querySelector('dialog:modal'); } catch (e) { /* :modal unsupported */ }
+  if (root) return root;
+  for (const el of document.querySelectorAll('[aria-modal="true"]')) if (!RL.isDevTool(el) && isVisible(el) && el.getClientRects().length) root = el;
+  return root;
+};
+// Is n outside the open modal (neither inside it nor one of its ancestors)?
+// (composed tree: shadow roots count as part of their host)
+const behindModal = (modal, n) => {
+  if (!modal) return false;
+  for (let e = n; e; e = e.parentNode || e.host) if (e === modal) return false;
+  for (let e = modal; e; e = e.parentNode || e.host) if (e === n) return false;
+  return true;
+};
+RL.behindModal = behindModal;
+RL.inScope = function () {
+  const modal = RL.modalRoot();
+  return modal ? (n) => !behindModal(modal, n) : () => true;
+};
+
 RL.allElements = function () {
   const out = [];
   const walk = (root) => {
@@ -464,10 +489,11 @@ RL.allElements = function () {
 RL.collectText = function () {
   const items = [];
   const range = document.createRange();
+  const modal = RL.modalRoot();
   const visit = (root) => {
     const it = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: (n) => {
-        if (n.nodeType === 1) return RL.isDevTool(n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
+        if (n.nodeType === 1) return RL.isDevTool(n) || behindModal(modal, n) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP;
         return /\S/.test(n.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
       },
     });

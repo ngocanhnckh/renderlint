@@ -271,7 +271,8 @@ RL.focusCheck = function (limit) {
   style.textContent = '*,*::before,*::after{transition:none!important;animation-play-state:paused!important}';
   document.head.appendChild(style);
   const props = ['outlineStyle', 'outlineWidth', 'outlineColor', 'boxShadow', 'borderTopColor', 'borderBottomColor', 'borderBottomWidth', 'backgroundColor', 'color', 'textDecorationLine', 'transform', 'filter', 'opacity'];
-  const els = RL.allElements().filter((el) => RL.isInteractive(el) && RL.isVisible(el) && !RL.isDisabled(el) && el.tabIndex >= 0 && !RL.isIgnored(el, 'focus-indicator'));
+  const scope = RL.inScope();
+  const els = RL.allElements().filter((el) => scope(el) && RL.isInteractive(el) && RL.isVisible(el) && !RL.isDisabled(el) && el.tabIndex >= 0 && !RL.isIgnored(el, 'focus-indicator'));
   const seenSig = new Set();
   let n = 0;
   const prev = document.activeElement;

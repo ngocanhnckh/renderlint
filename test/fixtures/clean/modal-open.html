@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A page with a modal dialog open</title>
+<!-- The state an e2e test (or a "states" click) leaves the page in: a dialog open over the page.
+     The page behind it is dimmed by the backdrop and covered by the dialog on purpose: only the
+     dialog is checked. Both kinds: an ARIA modal in a portal, and a native <dialog> opened with showModal(). -->
+<style>
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,sans-serif;color:#1f2933;background:#fff}
+main{max-width:720px;margin:0 auto;padding:24px 20px}
+.btn{display:inline-block;background:#1d4ed8;color:#fff;border:0;border-radius:6px;padding:10px 16px;font:inherit;min-height:40px}
+.row{display:flex;gap:12px}
+.row .btn{flex:none}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.6);display:grid;place-items:center;padding:16px}
+.panel{background:#fff;border-radius:10px;padding:20px;width:min(440px,100%);display:grid;gap:12px}
+.panel label{display:grid;gap:4px;font-size:14px}
+.panel textarea{font:inherit;padding:8px;border:1px solid #9aa5b1;border-radius:6px}
+.actions{display:flex;gap:8px;justify-content:flex-end}
+.secondary{background:#e4e7eb;color:#1f2933}
+dialog{border:0;border-radius:10px;padding:20px;width:min(380px,90vw)}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+</style></head><body>
+<main>
+  <h1>Desk lamp</h1>
+  <p>A warm, dimmable desk lamp with a weighted base and a long, flexible arm.</p>
+  <p><strong>$39.50</strong> · 12 in stock</p>
+  <div class="row"><button class="btn">Write a review</button><button class="btn">Add to cart</button></div>
+</main>
+<div class="backdrop">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="t">
+    <h2 id="t">Review the desk lamp</h2>
+    <label>Your review<textarea rows="4"></textarea></label>
+    <p>Reviews are checked by our team before they are published.</p>
+    <div class="actions"><button class="btn secondary">Cancel</button><button class="btn">Send review</button></div>
+  </div>
+</div>
+<dialog id="native"><p>Native dialogs are modal too.</p><button class="btn" autofocus>OK</button></dialog>
+<script>document.getElementById('native').showModal();</script>
+</body></html>

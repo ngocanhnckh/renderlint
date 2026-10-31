@@ -32,6 +32,8 @@
   "exports": {
     ".": "./src/index.js",
     "./vite": "./src/integrations/vite.js",
+    "./playwright": "./src/integrations/playwright.js",
+    "./playwright/reporter": "./src/integrations/playwright-reporter.js",
     "./client": "./dist/client.js",
     "./analyzer": "./dist/analyzer.js",
     "./package.json": "./package.json"
