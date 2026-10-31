@@ -34,6 +34,7 @@
     "./vite": "./src/integrations/vite.js",
     "./client": "./dist/client.js",
     "./analyzer": "./dist/analyzer.js",
+    "./server-mock": "./src/server-mock.cjs",
     "./package.json": "./package.json"
   },
   "bin": {

@@ -30,6 +30,8 @@ export const DEFAULTS = {
   states: [],              // extra UI states to check: [{ name, page, click, hover, fill, press, waitFor, mock, run }]
   auth: null,              // signed-in pages: { login: '/login', user: '${RENDERLINT_USER}', password: '${RENDERLINT_PASSWORD}' } or { storage: { sessionStorage: { token: 'test' } } }
   mock: {},                // API responses to serve instead: { "**/api/orders*": "fixtures/orders.json" | { status, json } | data }
+  roles: null,             // check the app as each role: { admin: { auth, mock, pages }, viewer: { … } }
+  serverMock: true,        // when renderlint starts the server ("serve"), "mock" answers the server's own requests too (SSR)
   scan: true,              // static source scan (emoji, placeholder copy) in addition to rendering
   scanDirs: undefined,
   contrastLevel: 'AA',
@@ -101,6 +103,7 @@ export function normalize(c, cwd = process.cwd()) {
   if (out.sweep.some((w) => !(w >= 200 && w <= 4000))) throw new Error(`renderlint: "sweep" must be true, false or a list of widths (got ${JSON.stringify(c.sweep)})`);
   out.mock = resolveMocks(c.mock, cwd, 'mock');
   out.auth = normalizeAuth(c.auth);
+  out.roles = normalizeRoles(c.roles, cwd);
   if (!Array.isArray(out.states)) throw new Error('renderlint: "states" must be an array of { name, page, click, … }');
   out.states = out.states.map((st, i) => {
     if (!st || typeof st !== 'object' || !st.name) throw new Error(`renderlint: states[${i}] needs a "name"`);
@@ -110,6 +113,22 @@ export function normalize(c, cwd = process.cwd()) {
   if (out.dedupe === 'false' || out.dedupe === 'off') out.dedupe = false;
   if (![true, false, 'template'].includes(out.dedupe)) throw new Error(`renderlint: "dedupe" must be true, false or "template" (got ${JSON.stringify(c.dedupe)})`);
   if (!['error', 'warn', 'never'].includes(out.failOn)) throw new Error(`renderlint: "failOn" must be error | warn | never`);
+  return out;
+}
+
+// roles: { admin: { auth?, mock?, pages? } }. A role without "auth" uses the top-level one ("auth": null: signed out);
+// its mocks go over the top-level ones, in the browser and on the server.
+function normalizeRoles(roles, cwd) {
+  if (roles === undefined || roles === null || roles === false) return null;
+  if (typeof roles !== 'object' || Array.isArray(roles) || !Object.keys(roles).length) throw new Error('renderlint: "roles" must map role names to { auth, mock, pages }, e.g. { "admin": { "pages": ["/admin"] } }');
+  const out = {};
+  for (const [name, r] of Object.entries(roles)) {
+    if (!/^[A-Za-z0-9_.-]+$/.test(name)) throw new Error(`renderlint: role name "${name}" may only use letters, digits, ".", "_" and "-"`);
+    if (!r || typeof r !== 'object') throw new Error(`renderlint: roles.${name} must be an object: { auth, mock, pages }`);
+    const pages = r.pages === undefined ? [] : typeof r.pages === 'string' ? r.pages.split(',') : r.pages;
+    if (!Array.isArray(pages)) throw new Error(`renderlint: roles.${name}.pages must be a list of paths`);
+    out[name] = { ...r, pages, mock: resolveMocks(r.mock, cwd, `roles.${name}.mock`), ...('auth' in r ? { auth: normalizeAuth(r.auth) } : {}) };
+  }
   return out;
 }
 

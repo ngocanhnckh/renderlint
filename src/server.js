@@ -104,8 +104,8 @@ export function startCommand(cmd, { cwd = process.cwd(), env = {}, log = () => {
   };
 }
 
-export async function startAndWait(cmd, { url, cwd, timeout = 120000, log } = {}) {
-  const handle = startCommand(cmd, { cwd, log });
+export async function startAndWait(cmd, { url, cwd, timeout = 120000, log, env } = {}) {
+  const handle = startCommand(cmd, { cwd, log, env });
   const start = Date.now();
   let target = url;
   while (!target) {
