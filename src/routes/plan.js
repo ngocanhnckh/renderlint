@@ -64,7 +64,11 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
   const per = opts.perRoute;
   const excluded = (p) => (config.exclude || []).some((g) => globMatch(g, p)) || (opts.ignore || []).some((g) => globMatch(g, p));
   const queued = new Set();
-  const queue = (r, path) => { if (queued.has(path)) return false; if (r.checked.length >= per) return false; queued.add(path); r.checked.push(path); return true; };
+  // tiered (coverage.quick, the default): 1 instance per route is checked fully while crawling, every other
+  // known instance gets the quick check, then perRoute - 1 more are chosen from what the quick check measured
+  const first = opts.quick ? 1 : per;
+  const queue = (r, path) => { if (queued.has(path)) return false; if (r.checked.length >= first) return false; queued.add(path); r.checked.push(path); return true; };
+  const quickQueued = new Set();
   const api = new Map(); // route pattern -> values seen in API lists
   const shapes = new Map(); // URL shape (ids as :id) -> checked, for URLs outside the routes
 
@@ -79,7 +83,9 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
   const outsideDecision = (path) => {
     if (excluded(path)) return 'skip';
     if (queued.has('outside:' + path)) return 'candidate';
-    const shape = path.replace(/[?#].*$/, '').split('/').map((x) => (ID_LIKE.test(x) ? ':id' : x)).join('/');
+    const ids = (x) => x.split('/').map((seg) => (ID_LIKE.test(seg) ? ':id' : seg)).join('/');
+    const [main, hash = ''] = path.split('#');
+    const shape = ids(main.replace(/\?.*$/, '')) + '#' + ids(hash.replace(/\?.*$/, ''));
     const n = shapes.get(shape) || 0;
     if (n >= per) return 'candidate';
     shapes.set(shape, n + 1);
@@ -147,8 +153,41 @@ export async function createCoverage({ cwd, base, config, log = () => {}, discov
       const m = routePath !== null ? matchRoute(routes, routePath) : null;
       const r = m ? m.route : null;
       const status = classify(path, res, r);
-      if (r) r.results.push({ path: routePath, ...status });
+      if (r) r.results.push({ path: routePath, ...status, quick: !!res.quick, features: res.features });
       else (cov.outsideResults = cov.outsideResults || new Map()).set(path, status);
+    },
+    // instances not checked fully yet: the quick check (at most opts.quickMax per run)
+    pendingQuick() {
+      const out = [];
+      for (const r of routes) {
+        if (excluded(r.pattern)) continue;
+        for (const path of r.candidates.keys()) {
+          if (queued.has(path) || quickQueued.has(path) || excluded(path)) continue;
+          if (quickQueued.size >= opts.quickMax) return out;
+          quickQueued.add(path);
+          out.push(origin + basePath + (r.hash ? '/#' + path : path));
+        }
+      }
+      for (const [p] of outside) {
+        if (queued.has('outside:' + p) || quickQueued.has(p) || excluded(p) || quickQueued.size >= opts.quickMax) continue;
+        quickQueued.add(p);
+        out.push(origin + basePath + p);
+      }
+      return out;
+    },
+    // after the quick pass: the instances most unlike those checked fully, per route
+    varietyPicks() {
+      const out = [];
+      for (const r of routes) {
+        if (excluded(r.pattern) || r.checked.length >= per) continue;
+        const seen = new Map();
+        for (const x of r.results) if (x.status === 'checked' && x.features && !seen.has(x.path)) seen.set(x.path, { path: x.path, features: x.features });
+        for (const path of chooseByFeatures(Array.from(seen.values()), per - r.checked.length, r.checked)) {
+          r.checked.push(path);
+          out.push(origin + basePath + (r.hash ? '/#' + path : path));
+        }
+      }
+      return out;
     },
     summary() { return summarize(cov); },
   };
@@ -165,6 +204,8 @@ export function normalizeCoverage(config) {
     min: c.min !== undefined ? +c.min : undefined,
     ignore: c.ignore || [],
     baseline: c.baseline,
+    quick: c.quick === false ? false : c.quick === 'ends' ? 'ends' : true,
+    quickMax: Math.max(0, +(c.quickMax || 2000)),
   };
 }
 
@@ -193,6 +234,36 @@ export function choose(r, n) {
   return picked.slice(0, n);
 }
 
+// Instances to check fully after the quick pass, chosen from what the quick pass measured: first the
+// most extreme instance (longest unbroken word, most text, overflow, broken images…), then one with a
+// layout skeleton not seen yet, then the farthest from those picked. `have`: already checked fully.
+const FEATURES = ['maxWord', 'maxText', 'textTotal', 'elements', 'overflowX', 'height', 'broken'];
+export function chooseByFeatures(list, n, have = []) {
+  // list: [{ path, features }]
+  const pool = list.filter((x) => x.features && !have.includes(x.path));
+  if (!pool.length || n <= 0) return [];
+  const all = list.filter((x) => x.features);
+  const lo = {}, hi = {};
+  for (const k of FEATURES) { lo[k] = Math.min(...all.map((x) => x.features[k] || 0)); hi[k] = Math.max(...all.map((x) => x.features[k] || 0)); }
+  const vec = (x) => FEATURES.map((k) => (hi[k] > lo[k] ? ((x.features[k] || 0) - lo[k]) / (hi[k] - lo[k]) : 0));
+  const sum = (v) => v.reduce((a, b) => a + b, 0);
+  const picked = all.filter((x) => have.includes(x.path));
+  const out = [];
+  const pick = (x) => { out.push(x.path); picked.push(x); };
+  pick(pool.slice().sort((a, b) => sum(vec(b)) - sum(vec(a)))[0]);
+  for (const x of pool) { if (out.length >= n) break; if (!picked.some((p) => p.features.skeleton === x.features.skeleton)) pick(x); }
+  while (out.length < n && out.length < pool.length) {
+    let best = null, bd = -1;
+    for (const x of pool) {
+      if (out.includes(x.path)) continue;
+      const d = Math.min(...picked.map((p) => vec(p).reduce((s, v, i) => s + (v - vec(x)[i]) ** 2, 0)));
+      if (d > bd) { bd = d; best = x; }
+    }
+    pick(best);
+  }
+  return out;
+}
+
 function classify(path, res, route) {
   if (res.error) return { status: 'error', reason: res.error };
   if (res.authRequired) return { status: 'needs-auth', reason: 'sent to sign-in (' + res.authRequired + ')' };
@@ -217,16 +288,17 @@ function summarize(cov) {
   for (const r of cov.routes) {
     for (const p of r.candidates.keys()) urls.add(p);
     let status, reason;
-    const ok = r.results.filter((x) => x.status === 'checked');
+    const ok = r.results.filter((x) => x.status === 'checked' && !x.quick);
+    const okQuick = new Set(r.results.filter((x) => x.status === 'checked').map((x) => x.path));
     if (excluded(r.pattern)) { status = 'excluded'; reason = 'coverage.ignore'; }
-    else if (ok.length) status = 'checked';
+    else if (okQuick.size) status = 'checked';
     else if (r.results.length) {
       // the most telling reason across instances
       const best = r.results.slice().sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status))[0];
       status = best.status; reason = best.reason;
     } else if (r.dynamic && !r.candidates.size) { status = 'needs-params'; reason = `no value for ${r.params.map((p) => ':' + p).join(', ')} (no link, sitemap entry, API list or build manifest named one; set "params")`; }
     else { status = 'not-checked'; reason = r.checked.length ? 'page limit (maxPages) reached' : 'excluded by "exclude"'; }
-    list.push({ pattern: r.pattern, file: r.file, status, reason, instances: r.candidates.size, checked: ok.map((x) => x.path), tried: r.results.length, guards: r.guards, sources: Array.from(new Set(Array.from(r.candidates.values(), (c) => c.source))) });
+    list.push({ pattern: r.pattern, file: r.file, status, reason, instances: r.candidates.size, checked: Array.from(new Set(ok.map((x) => x.path))), quickChecked: okQuick.size, tried: r.results.length, guards: r.guards, sources: Array.from(new Set(Array.from(r.candidates.values(), (c) => c.source))) });
   }
   // URLs that no discovered route serves (rewrites, a CMS, a site without source)
   const outsidePaths = Array.from(cov.outside.keys());

@@ -225,7 +225,7 @@ function wpGroup(u) {
 }
 
 export async function runChecks(browser, { urls, config, log = () => {}, coverage = null }) {
-  const viewports = config.viewports;
+  const viewports = config.viewports, allViewports = viewports, baseConfig = config;
   const outDir = config.outputDir;
   if (config.screenshots) mkdirSync(join(outDir, 'screens'), { recursive: true });
   const source = analyzerSource();
@@ -271,23 +271,31 @@ export async function runChecks(browser, { urls, config, log = () => {}, coverag
   // Findings already marked on a written screenshot. The report points each finding to its
   // first screenshot, so a later one is written only when it marks something new.
   const marked = new Set();
-  const startPage = (url, state) => {
-    const pageInfo = { url, path: pathOf(url, origin) + (state ? ` [state: ${state.name}]` : ''), runs: [] };
+  // quick: route coverage's base check of the other instances of a route: narrowest viewport, light
+  // scheme, no stress, sweep, data stress or focus pass (per-instance content defects show up here).
+  const quickConfig = { ...config, stress: false, stressData: false };
+  let fullStarted = 0;
+  const startPage = (url, state, quick = false) => {
+    const pageInfo = { url, path: pathOf(url, origin) + (state ? ` [state: ${state.name}]` : ''), runs: [], ...(quick ? { quick: true } : {}) };
     const k = pages.length;
     pages.push(pageInfo);
+    if (!state && !quick) fullStarted++;
+    // quick: the narrowest viewport; coverage.quick: "ends" adds the widest (desktop-only parts of a page)
+    const viewports = !quick ? allViewports : coverage && coverage.opts.quick === 'ends' && allViewports.length > 1 ? [allViewports[0], allViewports[allViewports.length - 1]] : allViewports.slice(0, 1);
+    const config = quick ? quickConfig : baseConfig;
     const decisions = viewports.map(() => deferred());
-    if (skeletons && !state) skeletons.forEach((list) => { list[k] = deferred(); });
-    const template = (vi, si) => (!skeletons || state ? null : si > 0 ? { decision: decisions[vi] } : {
+    if (skeletons && !state && !quick) skeletons.forEach((list) => { list[k] = deferred(); });
+    const template = (vi, si) => (!skeletons || state || quick ? null : si > 0 ? { decision: decisions[vi] } : {
       decision: decisions[vi], publish: skeletons[vi][k].resolve,
       decide: async (h) => { for (let j = 0; j < k; j++) if (skeletons[vi][j] && await skeletons[vi][j].promise === h) return pages[j].path; return null; },
     });
-    const schemes = config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
+    const schemes = quick ? ['light'] : config.colorSchemes === 'auto' ? (darkSeen && state ? ['light', 'dark'] : ['light']) : config.colorSchemes.slice();
     const metas = viewports.map(() => deferred()); // first scheme's analysis meta per viewport (null on error)
     const sigs = viewports.map(() => deferred()); // first scheme's layout signature per viewport
     const runs = [];
     const startScheme = (si) => {
       const scheme = schemes[si];
-      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || si > 0 ? [] : config.sweep, viewports, focus: !state && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
+      const opts = (vp, vi, dedupe) => ({ vp, scheme, config, source, analyzeOpts, outDir, state, marked, session, crawled: !state && !listed.has(normalizeUrl(url)), sweep: state || quick || si > 0 ? [] : config.sweep, viewports, focus: !state && !quick && si === 0 && vi === 0 && config.rules['focus-indicator'] !== 'off', log, cssCache,
         onJson: !state && si === 0 && vi === 0 ? onJson : null, probe: !state && si === 0 && vi === 0 && !!coverage,
         // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
         wantSig: si === 0 ? (m) => (config.colorSchemes === 'auto' ? m.darkModeCss : schemes.length > 1) : null,
@@ -296,7 +304,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, coverag
         onMeta: si === 0 ? (m) => {
           metas[vi].resolve(m);
           // dark mode starts as soon as the first light run has seen dark-mode CSS
-          if (config.colorSchemes === 'auto' && m.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; startScheme(schemes.length - 1); }
+          if (!quick && config.colorSchemes === 'auto' && m.darkModeCss && !schemes.includes('dark')) { schemes.push('dark'); darkSeen = true; startScheme(schemes.length - 1); }
         } : null });
       runs[si] = viewports.map((vp, vi) => slot(async () => {
         const t0 = Date.now();
@@ -312,7 +320,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, coverag
           if (si > 0) return;
           metas[vi].resolve(null);
           sigs[vi].resolve(null); // no signature (error, stress off, shared): later schemes run their own stress passes
-          if (skeletons && !state) { skeletons[vi][k].resolve(null); decisions[vi].resolve(null); }
+          if (skeletons && !state && !quick) { skeletons[vi][k].resolve(null); decisions[vi].resolve(null); }
         });
         log(`  ${pageInfo.path} @${vp.width}px ${scheme}: ${res.issues.length} finding(s) in ${Date.now() - t0}ms${res.stressReused ? ' (+ stress findings of ' + schemes[0] + ': same layout)' : ''}${res.reuse ? ' (renders like ' + res.reuse.path + ': later passes shared)' : res.templateOf ? ' (same template as ' + res.templateOf + ': base checks only)' : ''}`);
         return { vp, res, ms: Date.now() - t0 };
@@ -334,7 +342,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, coverag
         const first = results[0][0].res;
         pageInfo.status = { httpStatus: first.httpStatus, finalUrl: first.finalUrl, authRequired: first.landed || (first.issues.some((i) => i.rule === 'auth-required') ? 'sign-in page' : null), denied: first.denied, error: first.error, features: first.features };
         if (first.resources) pageInfo.resources = first.resources;
-        coverage.onResult(url, pageInfo.status);
+        coverage.onResult(url, { ...pageInfo.status, quick });
       }
       const issues = [];
       for (let si = 0; si < schemes.length; si++) {
@@ -353,36 +361,57 @@ export async function runChecks(browser, { urls, config, log = () => {}, coverag
     return metas;
   };
 
-  const metasOf = [];
-  for (let k = 0; ; k++) {
-    while (queue.length && pages.length < maxPages) metasOf.push(startPage(queue.shift(), null));
-    if (k >= metasOf.length) break;
-    for (const d of metasOf[k]) {
-      const meta = await d.promise;
-      if (!config.crawl || !meta) continue;
-      for (const link of meta.links) {
-        let u;
-        try { u = new URL(link); } catch { continue; }
-        if (u.origin !== origin || NAV_SKIP.test(u.pathname) || LOGOUT.test(u.pathname + u.hash)) continue;
-        if (config.auth && LOGIN_PATH.test(u.pathname + hashRoute(u))) continue; // signed in: the login page only redirects
-        u.hash = hashRoute(u);
-        const key = normalizeUrl(u.href);
-        if (visited.has(key)) continue;
-        if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
-        if (coverage) {
-          // a few instances per route; the others are counted as instances, not checked
-          if (coverage.onLink(u.href) !== 'check') { visited.add(key); continue; }
-        }
-        if (meta.platform && meta.platform.wordpress) {
-          if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
-          const g = wpGroup(u);
-          if (g && (groups.set(g, (groups.get(g) || 0) + 1).get(g)) > 2) continue;
-        }
-        visited.add(key);
-        queue.push(u.href);
+  const takeLinks = (meta) => {
+    for (const link of meta.links) {
+      let u;
+      try { u = new URL(link); } catch { continue; }
+      if (u.origin !== origin || NAV_SKIP.test(u.pathname) || LOGOUT.test(u.pathname + u.hash)) continue;
+      if (config.auth && LOGIN_PATH.test(u.pathname + hashRoute(u))) continue; // signed in: the login page only redirects
+      u.hash = hashRoute(u);
+      const key = normalizeUrl(u.href);
+      if (visited.has(key)) continue;
+      if ((config.exclude || []).some((p) => globMatch(p, u.pathname))) continue;
+      if (coverage) {
+        // a few instances per route are checked fully; the others are counted, and quick-checked
+        if (coverage.onLink(u.href) !== 'check') { visited.add(key); continue; }
       }
-      if (queue.length && pages.length < maxPages) metasOf.push(startPage(queue.shift(), null));
+      if (meta.platform && meta.platform.wordpress) {
+        if (WP_SKIP.test(u.pathname) || WP_SKIP_QUERY.test(u.search)) continue;
+        const g = wpGroup(u);
+        if (g && (groups.set(g, (groups.get(g) || 0) + 1).get(g)) > 2) continue;
+      }
+      visited.add(key);
+      queue.push(u.href);
     }
+  };
+  const metasOf = [];
+  let k = 0;
+  // Checks the queue and every page found from it (pages start as soon as their URL is known).
+  const drain = async () => {
+    for (; ; k++) {
+      while (queue.length && fullStarted < maxPages) metasOf.push(startPage(queue.shift(), null));
+      if (k >= metasOf.length) break;
+      for (const d of metasOf[k]) {
+        const meta = await d.promise;
+        if (!config.crawl || !meta) continue;
+        takeLinks(meta);
+        if (queue.length && fullStarted < maxPages) metasOf.push(startPage(queue.shift(), null));
+      }
+    }
+  };
+  await drain();
+  if (coverage && coverage.opts.quick) {
+    // Route coverage, tiered: every other known instance of each route gets the quick check (their links
+    // count too), then the most different instances by what that measured get the full check.
+    for (let round = 0; round < 10; round++) {
+      const pending = coverage.pendingQuick();
+      if (!pending.length) break;
+      for (const u of pending) { visited.add(normalizeUrl(u)); metasOf.push(startPage(u, null, true)); }
+      await drain();
+    }
+    for (const p of pages) if (p.quick && p.done) await p.done.catch(() => {});
+    const picks = coverage.varietyPicks();
+    if (picks.length) { queue.push(...picks); await drain(); }
   }
   // UI states: once every page's light-mode analysis is in (it decides whether they get dark mode too).
   for (const st of config.states || []) startPage(st.page ? new URL(st.page, urls[0]).href : urls[0], st);
