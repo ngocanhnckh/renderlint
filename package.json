@@ -32,6 +32,8 @@
   "exports": {
     ".": "./src/index.js",
     "./vite": "./src/integrations/vite.js",
+    "./playwright": "./src/integrations/playwright.js",
+    "./playwright/reporter": "./src/integrations/playwright-reporter.js",
     "./client": "./dist/client.js",
     "./analyzer": "./dist/analyzer.js",
     "./package.json": "./package.json"
@@ -60,5 +62,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "msw": "^2.7.0"
   }
 }

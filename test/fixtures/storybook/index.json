@@ -1,0 +1,13 @@
+{
+  "v": 5,
+  "entries": {
+    "badge--docs": { "type": "docs", "id": "badge--docs", "name": "Docs", "title": "Badge", "importPath": "./Badge.stories.jsx", "tags": ["dev", "autodocs"] },
+    "badge--short": { "type": "story", "id": "badge--short", "name": "Short", "title": "Badge", "importPath": "./Badge.stories.jsx", "tags": ["dev", "test"] },
+    "badge--long": { "type": "story", "id": "badge--long", "name": "Long status", "title": "Badge", "importPath": "./Badge.stories.jsx", "tags": ["dev", "test"] },
+    "table--wide": { "type": "story", "id": "table--wide", "name": "Wide", "title": "Table", "importPath": "./Table.stories.jsx", "tags": ["dev", "test"] },
+    "pages--pricing": { "type": "story", "id": "pages--pricing", "name": "Pricing", "title": "Pages", "importPath": "./Pricing.stories.jsx", "tags": ["dev", "test"] },
+    "menu--open": { "type": "story", "id": "menu--open", "name": "Open", "title": "Menu", "importPath": "./Menu.stories.jsx", "tags": ["dev", "test"] },
+    "list--broken": { "type": "story", "id": "list--broken", "name": "Broken", "title": "List", "importPath": "./List.stories.jsx", "tags": ["dev", "test"] },
+    "list--skipped": { "type": "story", "id": "list--skipped", "name": "Skipped", "title": "List", "importPath": "./List.stories.jsx", "tags": ["dev", "test", "skip-renderlint"] }
+  }
+}

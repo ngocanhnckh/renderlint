@@ -1,0 +1,13 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="expect" content="contrast"><title>t</title>
+<!-- While a modal is open only the modal is checked: its own defects are still found. -->
+<style>*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,sans-serif;color:#1f2933;background:#fff}
+main{padding:24px}
+.backdrop{position:fixed;inset:0;background:rgba(15,23,42,.6);display:grid;place-items:center;padding:16px}
+.panel{background:#fff;border-radius:10px;padding:20px;width:min(440px,100%)}
+.hint{color:#c0c4ca;font-size:14px}</style></head><body>
+<main><h1>Orders</h1><p>Three orders are waiting to be shipped today.</p></main>
+<div class="backdrop"><div class="panel" role="dialog" aria-modal="true" aria-label="Cancel order">
+  <h2>Cancel this order?</h2>
+  <p class="hint">The customer gets an email and their card is refunded within five days.</p>
+</div></div>
+</body></html>

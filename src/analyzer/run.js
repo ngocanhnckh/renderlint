@@ -31,7 +31,7 @@ RL.analyze = function (options) {
 
   const ctx = {
     texts: RL.collectText(),
-    elements: RL.allElements(),
+    elements: RL.allElements().filter(RL.inScope()),
     issues: [],
     errors: [],
     report(issue) {
