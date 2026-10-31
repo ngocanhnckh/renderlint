@@ -42,6 +42,38 @@ export default defineConfig({
 - **`vite build`**: renders `dist/` in all viewports and throws (build fails) when error-level defects are found. Set `RENDERLINT_SKIP=1` to bypass once.
 - Works for SPA builds (an `index.html` in `outDir`). For SSR frameworks use the CLI against a preview server (table above).
 
+## Playwright Test
+
+Your e2e tests already sign in as each role, click through dialogs and multi-step flows, and mock the API. renderlint can check every state they reach, in the test's own browser page:
+
+```ts
+// tests/fixtures.ts
+import { test as base } from '@playwright/test';
+import { withRenderlint } from 'renderlint/playwright';
+export const test = withRenderlint(base);   // then import { test } from './fixtures' in your specs
+
+// playwright.config.ts
+reporter: [['list'], ['renderlint/playwright/reporter']],
+```
+
+- **At the end of every passing test**, the page is checked as the test left it (a dialog open, step 2 of a wizard), in place: each viewport by resizing the page, dark mode by emulation, with the stress and sweep passes. Then the page is put back: size, color scheme, scroll, text and focus. States identical to one already checked (ten tests that end on the dashboard) are checked once per run, across workers.
+- **Every URL a test visited** is re-opened at the end of the worker in fresh contexts with the test's cookies, localStorage, sessionStorage and the JSON responses the test received (from your backend or your own `page.route` mocks), and checked like the CLI does: real viewport contexts, touch on phones, and the data stress. A URL that lands somewhere else (state that lived only in memory, a role guard) is skipped with a note, not reported.
+- **Mid-test**: `test('…', async ({ page, renderlint }) => { …; await renderlint('review dialog'); … })`. Without the fixture: `import { renderlint } from 'renderlint/playwright'; await renderlint(page, 'name')`.
+- **The reporter** merges every worker's findings into one report (`.renderlint/report.json`, `report.md`, screenshots), prints it after the run, and fails the run on errors (`failOn`). The tests themselves still pass unless you set `failTests: true`.
+- Options (`withRenderlint(base, { … })` or `test.use({ renderlintOptions: { … } })`): `auto: 'visits' | 'end' | false`, `role` (name in the report, and what identical states are grouped by; default: the project name), `failTests`, `checkFailed`, `replayMocks`, and any renderlint config key (`viewports`, `rules`, `ignore`, `stress`, `sweep`…). `renderlint.config.*` is read too.
+- Pages on other origins than `baseURL` (a payment page, an identity provider) are not checked.
+- Each in-place check adds a couple of seconds to the test (3 viewports, stress and sweep); the fixture extends the test's timeout by up to two minutes for it.
+
+## Storybook
+
+```bash
+npx storybook build && npx renderlint storybook            # storybook-static/
+npx renderlint storybook http://localhost:6006              # a running Storybook
+npx renderlint storybook --globals theme:dark --stories "button--*,Forms/*"
+```
+
+Every story in Storybook's `index.json` (7 and later) is checked as a page of its own (`iframe.html?id=…&viewMode=story`), with the data, mocks, loaders and play functions the story sets up: renderlint waits for the play function to finish, so a menu it opens is what gets checked. Docs entries and stories tagged `skip-renderlint` are skipped. `--globals` checks every story again with those globals (themes, locales; repeatable). A story that throws is reported with its error. Component stories (layout `padded` or `centered`) are a component alone on an empty canvas, so the page-level rules (`viewport-overflow`, `accidental-scrollbar`) only apply to `fullscreen` stories.
+
 ## Live overlay in any app
 
 ```js

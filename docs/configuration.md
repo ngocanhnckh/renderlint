@@ -23,6 +23,7 @@ renderlint looks for `renderlint.config.js`, `renderlint.config.mjs`, `renderlin
 | `stressData` | `true` | When a page fetched JSON, reload it once with every string in the API responses lengthened and re-check. CLI: `--no-stress-data`. |
 | `states` | `[]` | UI states that don't render on load: `[{ name, page?, click?, hover?, fill?, press?, waitFor?, delay?, mock?, run? }]`. Each is checked like a page. |
 | `mock` | `{}` | Serve these API responses instead of the real ones: `{ "**/api/orders*": "fixtures/orders.json" }`, `{ status, json }`, or the data itself. |
+| `mockFrom` | `[]` | Answer the API from what the project already has: its MSW handlers (`"src/mocks/handlers.ts"`, msw 2.x; TypeScript is compiled with the project's esbuild) or a HAR recording (`"recordings/app.har"`: only its JSON responses, matched by method and URL, then without the query, then by path on any host). Explicit `mock` entries win. Data stress and state mocks apply to these responses too. With `mockFrom`, an API request none of them answers that then fails (4xx/5xx other than 401/403) is a `broken-resource` warning, so a page checked without its data is not passed silently. |
 | `scan` | `true` | Static scan of source files (emoji, lorem ipsum) in `src/`, `app/`, `pages/`, `components/`… |
 | `scanDirs` | auto | Directories for the static scan. |
 | `contrastLevel` | `"AA"` | `"AA"` (4.5:1 / 3:1) or `"AAA"` (7:1 / 4.5:1). |
@@ -87,6 +88,14 @@ export default {
 ```
 
 A state without `page` uses the first entry page. `run: async (page) => {}` (JS config) handles anything else.
+
+When a dialog is open (`aria-modal="true"`, or a `<dialog>` opened with `showModal()`), only the dialog is checked: the page behind it is inert and dimmed by the backdrop on purpose.
+
+If your end-to-end tests already open these states, let them do it instead: see [Playwright Test](integrations.md#playwright-test). For API data the project already has, see `mockFrom` above:
+
+```json
+{ "mockFrom": ["src/mocks/handlers.ts"] }
+```
 
 ## Example: authenticated dashboard
 
