@@ -201,6 +201,12 @@ export const RULES = {
     summary: 'An icon next to a single line of text sits visibly above or below the text\'s center (an inline SVG on the baseline, or a larger icon next to small text).',
     fix: 'Lay the icon and text out with `display: inline-flex; align-items: center; gap: 6px`, and give the icon `flex-shrink: 0`.',
   },
+  'native-dialog': {
+    severity: 'error',
+    category: 'polish',
+    summary: 'The app uses the browser\'s own alert(), confirm() or prompt() box: a grey system dialog that blocks the page, ignores the app\'s design and can\'t be styled or translated. Found when one opens while a page is checked, and in source code (`window.confirm(…)`, `alert(…)`), which also catches the ones behind a click. The browser\'s "Leave site?" prompt from `beforeunload` is not flagged.',
+    fix: 'Use the app\'s own UI: a toast or snackbar for notices ("Saved"), an inline message next to the field for validation errors, and a modal dialog component for confirmations ("Delete this project?") and for asking for a value (the <dialog> element, Radix / shadcn AlertDialog, Headless UI Dialog, Angular Material MatDialog, Vuetify v-dialog…). If one is really intended, add `// renderlint-ignore native-dialog` on the line above.',
+  },
   'page-error': {
     severity: 'error',
     category: 'runtime',

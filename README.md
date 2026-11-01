@@ -68,7 +68,7 @@ Not sure what your app needs (a login, roles, server rendering, hundreds of page
 
 ## What it catches
 
-37 rules, tuned so that a finding is almost always a real defect.
+39 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -83,6 +83,7 @@ Not sure what your app needs (a login, roles, server rendering, hundreds of page
 | Broken or stretched images, giant unsized SVG icons | `broken-image`, `image-distortion`, `oversized-icon` |
 | A dropdown arrow on the border, a checkbox floating above its label, an icon over the placeholder, a squashed input | `dropdown-arrow`, `checkbox-layout`, `input-icon-overlap`, `squashed-control` |
 | An input and its button at different heights, an icon sitting higher than its text | `control-height-mismatch`, `icon-misaligned` |
+| `alert("Saved!")`, `confirm("Delete?")`: the browser's grey system box instead of the app's own toast or modal | `native-dialog` (when one opens, and in source, so the ones behind a click are caught too) |
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No viewport meta, a pointless 3px scrollbar, `href="#"` links | `missing-viewport-meta`, `accidental-scrollbar`, `dead-link` |
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |

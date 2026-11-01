@@ -39,6 +39,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`squashed-control`](#squashed-control) | error | An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom. |
 | [`control-height-mismatch`](#control-height-mismatch) | warn | Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up. |
 | [`icon-misaligned`](#icon-misaligned) | warn | An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text). |
+| [`native-dialog`](#native-dialog) | error | The app uses the browser's own alert(), confirm() or prompt() box: a grey system dialog that blocks the page, ignores the app's design and can't be styled or translated. Found when one opens while a page is checked, and in source code (`window.confirm(…)`, `alert(…)`), which also catches the ones behind a click. The browser's "Leave site?" prompt from `beforeunload` is not flagged. |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
 | [`auth-required`](#auth-required) | error | A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). Any other page the app didn't show is `page-not-shown`. |
 | [`page-not-shown`](#page-not-shown) | warn | Signed in, the app did not show a page renderlint was asked to check or found (in a link or the app's routes), so it was not checked: a guard redirected elsewhere, the server answered HTTP 401/403, or "Access denied" / "Page not found" was rendered in its place. With several roles, a page one role sees and another does not. An error for a page you listed that no role could see, and for a page in a role's own `pages`. Not flagged: the home page forwarding, a section's default child, trailing slashes, locale prefixes, and a redirect every role takes the same way. |
@@ -182,6 +183,14 @@ A short button label breaks onto multiple lines.
 An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text).
 
 **How to fix:** Lay the icon and text out with `display: inline-flex; align-items: center; gap: 6px`, and give the icon `flex-shrink: 0`.
+
+### native-dialog
+
+**Default:** error
+
+The app uses the browser's own alert(), confirm() or prompt() box: a grey system dialog that blocks the page, ignores the app's design and can't be styled or translated. Found when one opens while a page is checked, and in source code (`window.confirm(…)`, `alert(…)`), which also catches the ones behind a click. The browser's "Leave site?" prompt from `beforeunload` is not flagged.
+
+**How to fix:** Use the app's own UI: a toast or snackbar for notices ("Saved"), an inline message next to the field for validation errors, and a modal dialog component for confirmations ("Delete this project?") and for asking for a value (the <dialog> element, Radix / shadcn AlertDialog, Headless UI Dialog, Angular Material MatDialog, Vuetify v-dialog…). If one is really intended, add `// renderlint-ignore native-dialog` on the line above.
 
 ## Content
 

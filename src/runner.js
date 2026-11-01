@@ -734,6 +734,27 @@ export function globMatch(pattern, str) {
   return re.test(str);
 }
 
+// Wraps alert/confirm/prompt to log the caller's location just before the native dialog opens.
+const DIALOG_TRACE = () => {
+  if (window.__renderlint_dialogs) return;
+  window.__renderlint_dialogs = true;
+  const debug = console.debug.bind(console);
+  for (const name of ['alert', 'confirm', 'prompt']) {
+    const orig = window[name];
+    if (typeof orig !== 'function') continue;
+    window[name] = { [name](...args) {
+      let at = '';
+      try {
+        const frames = String(new Error().stack || '').split('\n').slice(2);
+        const f = frames.find((l) => /https?:\/\//.test(l)) || '';
+        at = (/\((.*)\)\s*$/.exec(f) || /at (.*)$/.exec(f) || [, ''])[1].trim();
+      } catch { /* no stack */ }
+      debug('[renderlint:dialog] ' + at);
+      return orig.apply(this, args);
+    } }[name];
+  }
+};
+
 // Records the media queries the page's JS asks about (useMediaQuery, matchMedia breakpoints) for the sweep.
 const MQ_RECORDER = () => {
   const mm = window.matchMedia;
@@ -757,6 +778,7 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     await context.addCookies([[RUN_COOKIE, run], config.role && [ROLE_COOKIE, config.role.name], state && Object.keys(state.mock || {}).length && [STATE_COOKIE, state.name]]
       .filter(Boolean).map(([name, value]) => ({ name, value: encodeURIComponent(value), url: at })));
   }
+  if (config.rules['native-dialog'] !== 'off') await context.addInitScript(DIALOG_TRACE);
   if (discover) await context.addInitScript(NG_ROUTES_HOOK);
   if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
@@ -780,7 +802,28 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     consoleSeen.add(msg);
     issues.push({ rule: 'console-error', severity: 'error', message: 'Uncaught error: ' + msg, details: { stack: String(err && err.stack || '').split('\n').slice(0, 6).join('\n') } });
   });
+  // alert(), confirm() and prompt(): a native browser dialog in place of the app's own UI. The wrapper
+  // (DIALOG_TRACE) logs where it was called just before the dialog opens; confirm and prompt are answered
+  // "Cancel", so checking never goes ahead with what they guard (a delete, discarding a form).
+  let dialogAt = null;
+  const dialogsSeen = new Set();
+  if (config.rules['native-dialog'] !== 'off') {
+    page.on('dialog', async (d) => {
+      const type = d.type();
+      if (type === 'beforeunload') { await d.accept().catch(() => {}); return; } // the browser's own "Leave site?" prompt is fine
+      const at = dialogAt; dialogAt = null;
+      await d.dismiss().catch(() => {});
+      const text = d.message().replace(/\s+/g, ' ').trim();
+      if (phase !== 'main' || dialogsSeen.has(type + text)) return;
+      dialogsSeen.add(type + text);
+      const shown = text ? `: "${text.length > 120 ? text.slice(0, 117) + '…' : text}"` : '';
+      issues.push({ rule: 'native-dialog', severity: 'error',
+        message: `The page opened a browser ${type}() dialog${shown}${at ? ` (called at ${at.replace(origin, '')})` : ''}. Use the app's own toast, modal or inline message instead.`,
+        details: { type, text, ...(at ? { at } : {}) } });
+    });
+  }
   page.on('console', (m) => {
+    if (m.type() === 'debug' && m.text().startsWith('[renderlint:dialog] ')) { dialogAt = m.text().slice(20) || null; return; }
     if (m.type() !== 'error' || config.rules['console-error'] === 'off' || phase !== 'main') return;
     const text = m.text();
     if (/Failed to load resource|favicon|net::ERR_|Download the React DevTools|\[vite\]|\[HMR\]/i.test(text)) return;

@@ -40,6 +40,7 @@ The first version published to npm, as `@ngocanhnckh/renderlint`.
 ### Other changes
 
 - WordPress and Elementor: local site detection, crawling, PHP template scan, Elementor widget names and editor links.
+- New rule `native-dialog`: `alert()`, `confirm()` and `prompt()`, when one opens while a page is checked (with where it was called; confirm and prompt are answered Cancel) and in source files, so the ones behind a click are caught too. A `useConfirm()` hook, a component's own `confirm()` method and Angular/Vue template bindings are not flagged.
 - Form-control rules: dropdown arrows, checkboxes, input icons and control heights. `viewport-overflow` also catches text that runs past the viewport out of a box that fits.
 - Speed: pages are checked side by side, and identical renderings share their checks. Contrast is computed without pixels on a flat background, and the sweep covers both sides of each breakpoint.
 - Destructive links (delete, cancel, unsubscribe…) and log-out links are never followed. A literal password in the config is reported.
