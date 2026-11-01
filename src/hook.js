@@ -120,7 +120,9 @@ async function runHook() {
   }
   process.stderr.write(
     `renderlint found ${result.stats.errors} UI defect(s) in the rendered app${scope}. You are not done: fix every error below (in the source code), ` +
-    'then finish. If one is genuinely intentional, mark that element with data-renderlint-ignore="<rule>" and data-renderlint-reason="…".\n\n' +
+    'then finish. Each finding says what to change; "How to fix" at the end has more. Don\'t silence a finding to get done: ' +
+    'only if the user wants it that way, mark the element with data-renderlint-ignore="<rule>" and data-renderlint-reason="…", ' +
+    'or, for a finding at a source line, put `// renderlint-ignore <rule> -- <reason>` on the line above.\n\n' +
     formatPretty(result, { maxPerRule: 8, cwd }) + '\n');
   return 2;
 }

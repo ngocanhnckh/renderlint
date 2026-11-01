@@ -38,8 +38,8 @@ test('a confirm() behind a click: flagged with where it was called, answered Can
   const hits = res.issues.filter((i) => i.rule === 'native-dialog');
   assert.equal(hits.length, 1, JSON.stringify(res.issues, null, 1));
   assert.equal(hits[0].severity, 'error');
-  assert.match(hits[0].message, /browser confirm\(\) dialog: "Delete this project\? This cannot be undone\."/);
-  assert.match(hits[0].message, /called at .*index\.html:\d+:\d+/);
+  assert.match(hits[0].message, /confirm\(\) "Delete this project\? This cannot be undone\." opened the browser.s native dialog/);
+  assert.match(hits[0].message, /called at .*index\.html:\d+:\d+\. Replace it with the app.s own confirmation modal/);
   assert.ok(!res.issues.some((i) => i.rule === 'page-error'), JSON.stringify(res.issues, null, 1));
 });
 

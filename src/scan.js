@@ -2,6 +2,7 @@
 // including on routes the renderer never visits. Reports file:line.
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join, relative, extname } from 'node:path';
+import { dialogAdvice } from './rules-meta.js';
 
 const EXTS = new Set(['.html', '.htm', '.jsx', '.tsx', '.js', '.ts', '.mjs', '.vue', '.svelte', '.astro', '.mdx', '.hbs', '.ejs', '.njk', '.liquid', '.php', '.erb', '.css', '.scss']);
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', '.next', '.nuxt', '.output', '.svelte-kit', '.astro', 'coverage', '.renderlint', '.turbo', '.vercel', '.cache', 'vendor', '__tests__', '__mocks__', 'test', 'tests', 'e2e', 'cypress', 'playwright', '.storybook', 'storybook-static']);
@@ -150,7 +151,7 @@ export function scanSources({ cwd = process.cwd(), dirs, rules = {}, wordpress =
         }
         if (dialogs && !ignored('native-dialog')) {
           const d = nativeDialog(line, own, template, script);
-          if (d) issues.push({ rule: 'native-dialog', file: relative(cwd, file), line: i + 1, column: d.col + 1, message: `Native browser dialog: ${d.name}(). Use the app's own ${d.name === 'alert' ? 'toast or inline message' : 'modal dialog'} instead.`, text: line.trim().slice(0, 100) });
+          if (d) issues.push({ rule: 'native-dialog', file: relative(cwd, file), line: i + 1, column: d.col + 1, message: `${d.name}() opens the browser's native dialog. ${dialogAdvice(d.name)}`, text: line.trim().slice(0, 100) });
         }
         if (rules['placeholder-text'] !== 'off' && /\blorem ipsum\b/i.test(line) && !ignored('placeholder-text')) {
           issues.push({ rule: 'placeholder-text', severity: 'warn', file: relative(cwd, file), line: i + 1, column: line.search(/lorem ipsum/i) + 1, message: 'Placeholder "lorem ipsum" copy in source.', text: line.trim().slice(0, 100) });

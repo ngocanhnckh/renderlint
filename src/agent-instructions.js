@@ -13,7 +13,7 @@ This project uses **renderlint** to catch visual UI defects that type checks and
 1. After any change to UI code (components, pages, styles, templates), run \`${cmd}\` and fix **every error** before you say the task is done. Re-run until it reports \`0 errors\`. Treat it like a failing build.
 2. Fix root causes in the layout. Do not hide symptoms: no \`overflow: hidden\` on the page to mask horizontal scrolling, no deleting content or shrinking text to dodge a rule.
 3. Never use emoji as icons or decoration. Use an SVG icon library (e.g. lucide / heroicons / phosphor / tabler packages for your framework).
-4. If a finding is genuinely intentional, mark that element with \`data-renderlint-ignore="<rule>"\` plus \`data-renderlint-reason="why"\` (or CSS \`--renderlint-ignore: <rule>;\`). Use this rarely; it is reviewed like an \`eslint-disable\`.
+4. If a finding is genuinely intentional, mark that element with \`data-renderlint-ignore="<rule>"\` plus \`data-renderlint-reason="why"\` (or CSS \`--renderlint-ignore: <rule>;\`); for a finding at a source line, a \`// renderlint-ignore <rule> -- why\` comment on the line above. Use this rarely; it is reviewed like an \`eslint-disable\`.
 5. Annotated screenshots of every finding are written to \`.renderlint/screens/\`. Look at them when a finding is unclear. \`${cmd} explain <rule>\` describes any rule.
 ${skills ? skillsBlock(skills) : ''}
 **Get it right the first time**

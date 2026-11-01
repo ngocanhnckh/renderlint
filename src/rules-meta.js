@@ -241,6 +241,14 @@ export const RULES = {
 
 export const RULE_IDS = Object.keys(RULES);
 
+// What to put in place of a native dialog, in the finding itself, so an agent reading one line knows the change to make.
+export function dialogAdvice(type) {
+  const reuse = 'Use the toast/dialog component the project already has (search for one: sonner, react-hot-toast, a components/ui/dialog, MatDialog / MatSnackBar, ElMessageBox…) before adding a library.';
+  if (type === 'alert') return `Replace it with the app's own toast or snackbar ("Saved"), or with an inline message next to the field for a form error. ${reuse}`;
+  if (type === 'prompt') return `Replace it with the app's own modal (or inline form) with a text input, and continue when it is submitted. ${reuse}`;
+  return `Replace it with the app's own confirmation modal and continue only when the user confirms there (e.g. \`if (await confirmDialog({ title: 'Delete this project?', confirmLabel: 'Delete' }))\`, an AlertDialog with Cancel / Delete). ${reuse}`;
+}
+
 export const IGNORE_HELP =
   'If a finding is intentional, mark the element: data-renderlint-ignore="<rule>" (space-separated, or empty for all rules), ' +
   'or in CSS: --renderlint-ignore: <rule>; — both apply to the element and its descendants. Add data-renderlint-reason="…" to explain why.';

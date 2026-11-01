@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
 import { measureDropdowns } from './controls.js';
-import { RULES } from './rules-meta.js';
+import { dialogAdvice, RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
 import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
 import { loadMockSources, answerFrom } from './mock-sources.js';
@@ -818,7 +818,7 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
       dialogsSeen.add(type + text);
       const shown = text ? `: "${text.length > 120 ? text.slice(0, 117) + '…' : text}"` : '';
       issues.push({ rule: 'native-dialog', severity: 'error',
-        message: `The page opened a browser ${type}() dialog${shown}${at ? ` (called at ${at.replace(origin, '')})` : ''}. Use the app's own toast, modal or inline message instead.`,
+        message: `${type}()${shown ? ' ' + shown.slice(2) : ''} opened the browser's native dialog${at ? `, called at ${at.replace(origin, '')}` : ''}${at ? '' : ` (search the source for ${type}( )`}. ${dialogAdvice(type)}`,
         details: { type, text, ...(at ? { at } : {}) } });
     });
   }
