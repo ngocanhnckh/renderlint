@@ -3,7 +3,7 @@
 <p align="center"><b>A linter for the rendered UI.</b> It opens your app in a real browser, finds the visual defects coding agents ship, and fails the build until they're fixed.</p>
 
 <p align="center">
-  <a href="https://gitlab.com/anhnn.a05/renderlint/-/pipelines"><img src="https://gitlab.com/anhnn.a05/renderlint/badges/master/pipeline.svg" alt="CI"></a>
+  <a href="https://github.com/ngocanhnckh/renderlint/actions/workflows/ci.yml"><img src="https://github.com/ngocanhnckh/renderlint/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/node-%3E%3D18.17-brightgreen.svg" alt="Node >= 18.17">
   <img src="https://img.shields.io/badge/framework-any-8b5cf6.svg" alt="Any framework">
@@ -49,8 +49,20 @@ Not sure what your app needs (a login, roles, server rendering, hundreds of page
 ✖ 4 error(s), 2 warning(s) · screenshots in .renderlint/screens
 ```
 
+## What's new in 0.2.0
+
+- **Every page, every role.** Routes are read from your source (Next.js, Nuxt, SvelteKit, Astro, React Router / Remix, TanStack Router, Angular, Vue Router) and from the running router, and dynamic routes like `/products/:id` are filled with real ids. With `roles`, each page is checked as admin, viewer and so on, all at once. A coverage report gives every route a status, so no page is skipped silently. [More](#every-page-of-a-big-app)
+- **Pages behind a login, with no backend.** Set the token your route guard reads and mock the API, or log in through the real form. Server-rendered apps (Next.js, Nuxt, SvelteKit, Remix, Angular SSR) get the same `mock` on the server, so `middleware.ts` and loaders run too. A page that only showed the login form or "Access denied" is reported, never passed. [More](#pages-behind-a-login)
+- **No more `alert()` and `confirm()`.** The new `native-dialog` rule flags the browser's grey system boxes, both when one opens and in source (so the ones behind a click are caught too), and says what to use instead: a toast, an inline message or the app's own modal.
+- **Skills for coding agents.** `init` installs three Claude Code skills: setting up every page and role, fixing findings, and Playwright and Storybook. Each finding says what to change, so the agent can fix it without asking. [More](docs/agents.md)
+- **Playwright and Storybook.** `withRenderlint(test)` checks each state your e2e tests reach (dialogs open, step 2 of a wizard). `renderlint storybook` checks every story. [Playwright](docs/playwright.md) · [Storybook](docs/storybook.md)
+- **About twice as fast.** Pages are checked side by side, identical pages share their checks, and contrast on a flat background needs no screenshot.
+
+Everything else is in the [changelog](CHANGELOG.md).
+
 ## Contents
 
+- [What's new in 0.2.0](#whats-new-in-020)
 - [What it catches](#what-it-catches)
 - [Content you didn't render](#content-you-didnt-render)
 - [How it compares](#how-it-compares)
@@ -335,4 +347,4 @@ npm run build:client      # regenerate dist/ (browser bundle) after changing src
 node bin/renderlint.js test/fixtures/defects/contrast.html --no-crawl
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed.
+See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed. Mirror: [gitlab.com/anhnn.a05/renderlint](https://gitlab.com/anhnn.a05/renderlint).

@@ -57,11 +57,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.com/anhnn.a05/renderlint.git"
+    "url": "git+https://github.com/ngocanhnckh/renderlint.git"
   },
-  "homepage": "https://gitlab.com/anhnn.a05/renderlint#readme",
+  "homepage": "https://github.com/ngocanhnckh/renderlint#readme",
   "bugs": {
-    "url": "https://gitlab.com/anhnn.a05/renderlint/-/issues"
+    "url": "https://github.com/ngocanhnckh/renderlint/issues"
   },
   "publishConfig": {
     "access": "public"

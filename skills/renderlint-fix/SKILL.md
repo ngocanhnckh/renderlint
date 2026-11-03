@@ -57,4 +57,4 @@ When a field has a known limit, tell renderlint so it tests exactly that, and fa
 <span data-renderlint-sample="Aleksandra Wiśniewska-Kowalczyk">{user.name}</span>
 ```
 
-Details: [docs/rules.md](https://gitlab.com/anhnn.a05/renderlint/-/blob/master/docs/rules.md).
+Details: [docs/rules.md](https://github.com/ngocanhnckh/renderlint/blob/master/docs/rules.md).
