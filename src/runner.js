@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
-import { measureDropdowns } from './controls.js';
+import { measureDropdowns, checkMenus } from './controls.js';
 import { dialogAdvice, RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
 import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
@@ -373,6 +373,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
         const opts = (vp, vi, dedupe) => {
           const first = !state && si === 0 && vi === 0;
           return { vp, scheme, config, replay, sources, source, analyzeOpts, outDir, state, marked, session, serverLog, crawled: !state && !listed.has(key) && !own.has(key), sweep: state || quick || si > 0 ? [] : config.sweep, viewports, focus: first && !quick && config.rules['focus-indicator'] !== 'off', log, cssCache,
+            menus: !state && !quick && !replay && si === 0 && config.menus !== false && config.rules['popup-obscured'] !== 'off',
             detect: detect && !state, discover: discover && first && !quick && !routesFound,
             onJson: first ? onJson : null, probe: first && !!coverage,
             // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
@@ -441,7 +442,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
             if (res.stressReused) res.issues.push(...results[0][vi].res.issues.filter((i) => i.rule === 'fragile-layout' && !i.sweepWidth).map(cloneIssue));
             if (res.skipped) { pageInfo.skipped = res.skipped; continue; }
             pageInfo.runs.push({ viewport: vp.width, scheme, ms, issues: res.issues.length, screenshot: res.screenshot, error: res.error, ...(res.notShown ? { notShown: res.notShown } : {}), ...(res.reuse ? { sharedWith: res.reuse.path } : {}), ...(res.templateOf ? { templateOf: res.templateOf } : {}), ...(res.stressReused ? { stressReused: true } : {}) });
-            for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}), ...(r.name ? { role: r.name } : {}) });
+            for (const is of res.issues) issues.push({ ...is, page: pageInfo.path, url, viewport: is.sweepWidth || vp.width, scheme, screenshot: is.sweepWidth || is.ownShot ? is.screenshot : res.screenshot, ...(state ? { state: state.name } : {}), ...(r.name ? { role: r.name } : {}) });
             if (res.server && res.server.length && !pageInfo.server) pageInfo.server = res.server;
             if (res.error) issues.push({ rule: 'page-error', severity: 'error', message: 'renderlint could not load or analyze this page: ' + res.error, page: pageInfo.path, url, viewport: vp.width, scheme });
           }
@@ -763,7 +764,7 @@ const MQ_RECORDER = () => {
   window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
 };
 
-async function checkOne(browser, url, { replay, sources = [], vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, log, session, serverLog, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig, onJson, probe, detect, discover }) {
+async function checkOne(browser, url, { replay, sources = [], vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, menus, log, session, serverLog, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig, onJson, probe, detect, discover }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -976,6 +977,31 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
       if (cands.length) issues.push(...await measureDropdowns(page, cands));
     }
     lap('dropdowns');
+
+    // Open each menu, dropdown and popover trigger, and check that what it opens can be seen.
+    if (menus && !dupOf) {
+      const shot = config.screenshots ? async (issue, n) => {
+        const file = join(outDir, 'screens', `${slugFor(url, config.role && config.role.name)}@${vp.width}-menu${n + 1}.png`);
+        issue.marker = 1;
+        issue.ownShot = true;
+        await annotate(page, [issue], config);
+        const rs = [issue.rect, issue.related && issue.related.rect].filter(Boolean);
+        const top = Math.max(0, Math.min(...rs.map((r) => r.y)) - 160), bottom = Math.max(...rs.map((r) => r.y + r.h)) + 160;
+        await writeShot(page, file, { x: 0, y: top, width: vp.width, height: Math.min(1600, Math.max(200, bottom - top)) });
+        await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+        return file;
+      } : null;
+      const m = await checkMenus(page, { shot });
+      issues.push(...m.issues);
+      if (m.disturbed) {
+        // a menu that wouldn't close, or a trigger that navigated: start again from a fresh load
+        await page.goto(url, { waitUntil: 'load', timeout: config.timeout });
+        await waitReady(page, net, 4000);
+        await page.evaluate(SETTLE_SCRIPT, { autoScroll: config.autoScroll });
+        await page.evaluate(source);
+      }
+    }
+    lap('menus');
     const extra = issues.slice(iExtra);
 
     if (focus) {
@@ -989,7 +1015,7 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
 
     if (config.screenshots) {
       // Mark errors (or warnings when there are no errors) so the screenshot stays readable.
-      const visible = issues.filter((i) => i.rect && effectiveSeverity(i, config) !== 'off');
+      const visible = issues.filter((i) => i.rect && !i.ownShot && effectiveSeverity(i, config) !== 'off'); // an open menu has its own screenshot
       const errs = visible.filter((i) => effectiveSeverity(i, config) === 'error');
       const shown = errs.length ? errs : visible;
       if (shown.some((i) => !marked.has(groupKey(i)))) {

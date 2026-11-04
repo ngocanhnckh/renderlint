@@ -1,0 +1,35 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="no-warn" content="popup-obscured"><title>Menus that are fine</title>
+<style>body{font-family:sans-serif;margin:0;padding:16px;color:#111;background:#fff;max-width:640px}
+.card{position:relative;border:1px solid #ccc;background:#fff;border-radius:8px;padding:12px 16px;margin-bottom:16px}
+.dd{position:relative;display:inline-block}
+button{font:inherit;padding:8px 14px;background:#f3f4f6;color:#111;border:1px solid #bbb;border-radius:6px}
+[role=menu],[role=listbox]{position:absolute;top:100%;left:0;z-index:50;margin:4px 0 0;padding:4px;list-style:none;background:#fff;border:1px solid #bbb;border-radius:6px;min-width:180px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+[role=menuitem],[role=option]{display:block;padding:8px 10px;color:#111;text-decoration:none}
+[hidden]{display:none!important}
+.long{max-height:120px;overflow-y:auto}
+.portal{position:absolute;z-index:100}</style></head><body>
+<h1>Settings</h1>
+<div class="card"><p style="margin:0 0 8px">Account</p>
+  <div class="dd"><button aria-haspopup="menu" aria-expanded="false" aria-controls="a1">Account actions</button>
+  <ul role="menu" id="a1" hidden><li><a role="menuitem" href="#">Edit profile</a></li><li><a role="menuitem" href="#">Security</a></li><li><a role="menuitem" href="#">Sign-in history</a></li></ul></div></div>
+<div class="card"><p style="margin:0 0 8px">Country</p>
+  <div class="dd"><button aria-haspopup="listbox" aria-expanded="false" aria-controls="c1">Choose a country</button>
+  <ul role="listbox" id="c1" class="long" hidden><li role="option">Austria</li><li role="option">Belgium</li><li role="option">Croatia</li><li role="option">Denmark</li><li role="option">Estonia</li><li role="option">Finland</li><li role="option">France</li><li role="option">Germany</li><li role="option">Greece</li><li role="option">Hungary</li></ul></div></div>
+<div class="card" style="overflow:hidden"><p style="margin:0 0 8px">Workspace (menu in a portal)</p>
+  <button aria-haspopup="menu" aria-expanded="false" aria-controls="p1" id="pt">Workspace actions</button></div>
+<ul role="menu" id="p1" class="portal" hidden><li><a role="menuitem" href="#">Rename workspace</a></li><li><a role="menuitem" href="#">Leave workspace</a></li></ul>
+<div class="card"><details class="dd"><summary>More filters</summary><div style="position:absolute;top:100%;left:0;z-index:5;background:#fff;border:1px solid #bbb;padding:8px;width:200px"><label><input type="checkbox"> Archived</label></div></details></div>
+<div class="card"><label>Sort <select><option>Newest</option><option>Oldest</option></select></label></div>
+<div class="card" style="height:140px"><p>Notes</p></div>
+<script>document.getElementById('pt').addEventListener('click', () => { const r = document.getElementById('pt').getBoundingClientRect(); const m = document.getElementById('p1'); m.style.left = (r.left + scrollX) + 'px'; m.style.top = (r.bottom + scrollY + 4) + 'px'; }, true);</script>
+<script>
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[aria-haspopup]");
+  document.querySelectorAll("[aria-haspopup][aria-expanded=true]").forEach((o) => { if (o !== t) { o.setAttribute("aria-expanded", "false"); document.getElementById(o.getAttribute("aria-controls")).hidden = true; } });
+  if (!t) return;
+  const m = document.getElementById(t.getAttribute("aria-controls"));
+  const open = t.getAttribute("aria-expanded") !== "true";
+  t.setAttribute("aria-expanded", String(open)); m.hidden = !open;
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll("[aria-haspopup][aria-expanded=true]").forEach((o) => { o.setAttribute("aria-expanded", "false"); document.getElementById(o.getAttribute("aria-controls")).hidden = true; }); });
+</script></body></html>

@@ -39,6 +39,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`squashed-control`](#squashed-control) | error | An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom. |
 | [`control-height-mismatch`](#control-height-mismatch) | warn | Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up. |
 | [`icon-misaligned`](#icon-misaligned) | warn | An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text). |
+| [`popup-obscured`](#popup-obscured) | error | An open dropdown, menu, listbox or popover can't be seen: it is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `&lt;details>`) to check, and checks menus already open in `states` and Playwright tests. |
 | [`native-dialog`](#native-dialog) | error | The app uses the browser's own alert(), confirm() or prompt() box: a grey system dialog that blocks the page, ignores the app's design and can't be styled or translated. Found when one opens while a page is checked, and in source code (`window.confirm(…)`, `alert(…)`), which also catches the ones behind a click. The browser's "Leave site?" prompt from `beforeunload` is not flagged. |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
 | [`auth-required`](#auth-required) | error | A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). Any other page the app didn't show is `page-not-shown`. |
@@ -139,6 +140,14 @@ Boxes that are laid out side by side (cards, buttons, images) overlap each other
 Text or a control is hidden underneath another opaque element (fixed header covering the hero, absolutely positioned image over a button).
 
 **How to fix:** Offset content below fixed/sticky headers (padding-top / scroll-margin), fix z-index stacking, or reposition the covering element.
+
+### popup-obscured
+
+**Default:** error
+
+An open dropdown, menu, listbox or popover can't be seen: it is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `<details>`) to check, and checks menus already open in `states` and Playwright tests.
+
+**How to fix:** Render the menu outside the clipping container: in a portal or the top layer (Radix / shadcn `Portal`, Headless UI `anchor`, MUI Popper / Menu (portal by default), Angular CDK Overlay, the `popover` attribute, Floating UI with `strategy: "fixed"` outside transformed ancestors). Or remove `overflow: hidden` from the ancestor. For "drawn underneath": raising the menu's own z-index doesn't help while an ancestor starts a stacking context (z-index on a positioned card, transform, filter, opacity < 1); give that ancestor the higher z-index while the menu is open, or portal the menu out.
 
 ## Color
 

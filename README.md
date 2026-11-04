@@ -53,6 +53,7 @@ Not sure what your app needs (a login, roles, server rendering, hundreds of page
 
 - **Every page, every role.** Routes are read from your source (Next.js, Nuxt, SvelteKit, Astro, React Router / Remix, TanStack Router, Angular, Vue Router) and from the running router, and dynamic routes like `/products/:id` are filled with real ids. With `roles`, each page is checked as admin, viewer and so on, all at once. A coverage report gives every route a status, so no page is skipped silently. [More](#every-page-of-a-big-app)
 - **Pages behind a login, with no backend.** Set the token your route guard reads and mock the API, or log in through the real form. Server-rendered apps (Next.js, Nuxt, SvelteKit, Remix, Angular SSR) get the same `mock` on the server, so `middleware.ts` and loaders run too. A page that only showed the login form or "Access denied" is reported, never passed. [More](#pages-behind-a-login)
+- **Menus you can't see.** renderlint opens each dropdown, menu and combobox on the page and checks that its options can be seen. It catches a menu drawn underneath the next card (and names the ancestor whose z-index traps it), and one cut off by a card's `overflow: hidden` or a table's scroll box. Tested on Radix, Headless UI and Bootstrap.
 - **No more `alert()` and `confirm()`.** The new `native-dialog` rule flags the browser's grey system boxes, both when one opens and in source (so the ones behind a click are caught too), and says what to use instead: a toast, an inline message or the app's own modal.
 - **Skills for coding agents.** `init` installs three Claude Code skills: setting up every page and role, fixing findings, and Playwright and Storybook. Each finding says what to change, so the agent can fix it without asking. [More](docs/agents.md)
 - **Playwright and Storybook.** `withRenderlint(test)` checks each state your e2e tests reach (dialogs open, step 2 of a wizard). `renderlint storybook` checks every story. [Playwright](docs/playwright.md) · [Storybook](docs/storybook.md)
@@ -80,7 +81,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 
 ## What it catches
 
-39 rules, tuned so that a finding is almost always a real defect.
+40 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -90,6 +91,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 | Elements overlap when the window shrinks, instead of wrapping | `element-overlap`, `viewport-overflow`, `content-overflow` |
 | Chart and diagram labels collide or get cut off | `text-overlap`, `text-clipped` (works on SVG charts) |
 | A fixed header covers the hero, or a decoration covers a button | `obscured-content` |
+| A dropdown or menu that opens behind the next card, or gets cut off by its card or a table's scroll box (z-index, `overflow: hidden`) | `popup-obscured` (renderlint opens each menu to check) |
 | 🚀✨✅ emoji instead of a proper icon set | `emoji` (rendered DOM and source files) |
 | `undefined`, `NaN`, `[object Object]`, `Invalid Date`, lorem ipsum | `placeholder-text` |
 | Broken or stretched images, giant unsized SVG icons | `broken-image`, `image-distortion`, `oversized-icon` |

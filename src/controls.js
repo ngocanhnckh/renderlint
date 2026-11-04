@@ -61,3 +61,46 @@ export async function measureDropdowns(page, candidates) {
   }
   return out;
 }
+
+// Opens each menu trigger on the page (two per repeated kind, at most `max`) and checks that the
+// menu, dropdown or popover it opens can be seen (popup-obscured). Closes it again with Escape, or by
+// clicking the trigger. `disturbed`: a menu stayed open or a click navigated, so the page needs a reload.
+export async function checkMenus(page, { max = 8, shot } = {}) {
+  const url = page.url();
+  let triggers;
+  try { triggers = await page.evaluate((m) => window.__renderlint.menuTriggers(m), max); } catch { return { issues: [], disturbed: false }; }
+  const issues = [];
+  let disturbed = false;
+  const still = (sel) => page.evaluate((s) => window.__renderlint.menuStillOpen(s), sel).catch(() => false);
+  // a frame for the framework to render the menu, then its enter animation jumped to the end
+  const settle = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => setTimeout(() => {
+    window.__renderlint.finishAnimations();
+    requestAnimationFrame(() => requestAnimationFrame(r));
+  }, 40))));
+  for (const sel of triggers) {
+    try {
+      await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' }); }, sel);
+      await page.click(sel, { timeout: 1500 });
+    } catch { continue; } // covered or detached: other rules report a covered control
+    if (page.url() !== url) { disturbed = true; break; }
+    await settle().catch(() => {});
+    const r = await page.evaluate((s) => window.__renderlint.checkMenu(s), sel).catch(() => null);
+    if (r && r.issue) {
+      if (shot) r.issue.screenshot = await shot(r.issue, issues.length).catch(() => undefined);
+      issues.push(r.issue);
+    }
+    await page.keyboard.press('Escape').catch(() => {});
+    if (await still(sel)) await settle().catch(() => {}); // an exit animation, or a framework that closes on the next frame
+    if (await still(sel)) {
+      await page.click(sel, { timeout: 1000 }).catch(() => {});
+      await settle().catch(() => {});
+      if (await still(sel)) { disturbed = true; break; }
+    }
+    if (page.url() !== url) { disturbed = true; break; }
+  }
+  await page.evaluate(() => {
+    for (const e of document.querySelectorAll('[data-rl-menu],[data-rl-was-open]')) { e.removeAttribute('data-rl-menu'); e.removeAttribute('data-rl-was-open'); }
+    window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+  }).catch(() => {});
+  return { issues, disturbed };
+}

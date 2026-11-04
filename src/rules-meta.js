@@ -201,6 +201,12 @@ export const RULES = {
     summary: 'An icon next to a single line of text sits visibly above or below the text\'s center (an inline SVG on the baseline, or a larger icon next to small text).',
     fix: 'Lay the icon and text out with `display: inline-flex; align-items: center; gap: 6px`, and give the icon `flex-shrink: 0`.',
   },
+  'popup-obscured': {
+    severity: 'error',
+    category: 'overlap',
+    summary: 'An open dropdown, menu, listbox or popover can\'t be seen: it is cut off by a container\'s `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `<details>`) to check, and checks menus already open in `states` and Playwright tests.',
+    fix: 'Render the menu outside the clipping container: in a portal or the top layer (Radix / shadcn `Portal`, Headless UI `anchor`, MUI Popper / Menu (portal by default), Angular CDK Overlay, the `popover` attribute, Floating UI with `strategy: "fixed"` outside transformed ancestors). Or remove `overflow: hidden` from the ancestor. For "drawn underneath": raising the menu\'s own z-index doesn\'t help while an ancestor starts a stacking context (z-index on a positioned card, transform, filter, opacity < 1); give that ancestor the higher z-index while the menu is open, or portal the menu out.',
+  },
   'native-dialog': {
     severity: 'error',
     category: 'polish',

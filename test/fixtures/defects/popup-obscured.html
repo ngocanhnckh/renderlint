@@ -1,0 +1,37 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="expect" content="popup-obscured"><title>Menus that can't be seen</title>
+<style>body{font-family:sans-serif;margin:0;padding:16px;color:#111;background:#fff;max-width:640px}
+.card{position:relative;border:1px solid #ccc;background:#fff;border-radius:8px;padding:12px 16px;margin-bottom:16px}
+.dd{position:relative;display:inline-block}
+button{font:inherit;padding:8px 14px;background:#f3f4f6;color:#111;border:1px solid #bbb;border-radius:6px}
+[role=menu],[role=listbox]{position:absolute;top:100%;left:0;z-index:50;margin:4px 0 0;padding:4px;list-style:none;background:#fff;border:1px solid #bbb;border-radius:6px;min-width:180px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+[role=menuitem],[role=option]{display:block;padding:8px 10px;color:#111;text-decoration:none}
+[hidden]{display:none!important}
+.clip{overflow:hidden;height:72px}
+.stack{z-index:1}.stack + .stack{z-index:2}
+.table-wrap{overflow:auto;border:1px solid #ccc;border-radius:8px}
+table{border-collapse:collapse;width:100%}td{padding:8px 12px;border-top:1px solid #eee}</style></head><body>
+<h1>Projects</h1>
+<div class="card clip"><p style="margin:0 0 8px">Billing</p>
+  <div class="dd"><button aria-haspopup="menu" aria-expanded="false" aria-controls="m1">Billing actions</button>
+  <ul role="menu" id="m1" hidden><li><a role="menuitem" href="#">Download invoice</a></li><li><a role="menuitem" href="#">Change plan</a></li><li><a role="menuitem" href="#">Update card</a></li></ul></div></div>
+<div class="card stack"><p style="margin:0 0 8px">Team</p>
+  <div class="dd"><button aria-haspopup="menu" aria-expanded="false" aria-controls="m2">Team actions</button>
+  <ul role="menu" id="m2" hidden><li><a role="menuitem" href="#">Invite people</a></li><li><a role="menuitem" href="#">Manage roles</a></li><li><a role="menuitem" href="#">Export members</a></li></ul></div></div>
+<div class="card stack" style="height:160px"><p>Usage this month</p></div>
+<div class="table-wrap"><table><tbody>
+<tr><td>Alpha</td><td><div class="dd"><button aria-haspopup="menu" aria-expanded="false" aria-controls="r1">Row actions</button><ul role="menu" id="r1" hidden><li><a role="menuitem" href="#">Rename</a></li><li><a role="menuitem" href="#">Archive</a></li></ul></div></td></tr>
+<tr><td>Beta</td><td>active</td></tr>
+<tr><td>Gamma</td><td><div class="dd"><button aria-haspopup="menu" aria-expanded="false" aria-controls="r3">Row actions</button><ul role="menu" id="r3" hidden><li><a role="menuitem" href="#">Rename</a></li><li><a role="menuitem" href="#">Archive</a></li></ul></div></td></tr>
+</tbody></table></div>
+<p style="height:300px"></p>
+<script>
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("[aria-haspopup]");
+  document.querySelectorAll("[aria-haspopup][aria-expanded=true]").forEach((o) => { if (o !== t) { o.setAttribute("aria-expanded", "false"); document.getElementById(o.getAttribute("aria-controls")).hidden = true; } });
+  if (!t) return;
+  const m = document.getElementById(t.getAttribute("aria-controls"));
+  const open = t.getAttribute("aria-expanded") !== "true";
+  t.setAttribute("aria-expanded", String(open)); m.hidden = !open;
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.querySelectorAll("[aria-haspopup][aria-expanded=true]").forEach((o) => { o.setAttribute("aria-expanded", "false"); document.getElementById(o.getAttribute("aria-controls")).hidden = true; }); });
+</script></body></html>
