@@ -20,6 +20,14 @@ const run = (target, config = {}) => check({
 });
 const dump = (res) => res.issues.map((i) => `${i.severity} ${i.rule}: ${i.message} @ ${i.selector}`).join('\n');
 
+test('Elementor atomic (v4) elements: data-id and data-e-type without .elementor-element', async () => {
+  const res = await run(join(here, 'fixtures/elementor-atomic/index.html'), { viewports: [1280] });
+  const overflow = res.issues.find((i) => i.rule === 'text-overflow');
+  assert.ok(overflow, dump(res));
+  assert.deepEqual({ ...overflow.source.elementor, edit: undefined }, { id: 'a1b2c3d4', type: 'e-heading', doc: 12, docType: 'page', edit: undefined });
+  assert.match(formatPretty(res), /in Elementor e-heading a1b2c3d4 in page #12/);
+});
+
 test('Elementor findings name the widget, its page and the editor link', async () => {
   const res = await run(join(here, 'fixtures/defects/elementor.html'));
   const overflow = res.issues.find((i) => i.rule === 'text-overflow');

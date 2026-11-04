@@ -1,0 +1,4 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>display: contents</title>
+<!-- A column made display: contents keeps its border and background in computed style, but draws no box (issue #4). -->
+<style>body{margin:0;font:16px sans-serif;color:#111;background:#fff}.row{display:flex;flex-wrap:wrap;padding:0 16px;gap:16px}.col{display:contents;border-right:1px solid #999;background:#f3f3f3}.awards{display:flex;flex-direction:column;max-width:402px}.awards h2{margin:0 0 8px}.badges{display:flex;gap:16px;flex-wrap:wrap}.badges div{width:90px;height:68px;background:#ccc}</style></head>
+<body><main><div class="row"><div class="col"><div class="awards"><h2>Awards</h2><div class="badges"><div></div><div></div><div></div></div></div></div></div></main></body></html>

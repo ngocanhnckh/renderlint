@@ -165,6 +165,23 @@ function hasClickHandler(el) {
 }
 RL.hasClickHandler = hasClickHandler;
 
+// Bootstrap 4/5 and similar toggles: one delegated handler on document serves every
+// [data-toggle] link, so no listener on the link proves it is live. A toggle whose target
+// exists on the page (data-target, data-bs-target, aria-controls, or the dropdown menu next to it) is.
+function togglesTarget(el) {
+  const toggle = el.getAttribute('data-bs-toggle') || el.getAttribute('data-toggle');
+  if (!toggle) return false;
+  for (const attr of ['data-bs-target', 'data-target']) {
+    const sel = el.getAttribute(attr);
+    if (!sel) continue;
+    try { if (document.querySelector(sel)) return true; } catch (e) { /* not a selector */ }
+  }
+  const ids = (el.getAttribute('aria-controls') || '').split(/\s+/).filter(Boolean);
+  if (ids.some((id) => document.getElementById(id))) return true;
+  if (/^dropdown$/i.test(toggle) && el.parentElement && el.parentElement.querySelector(':scope > .dropdown-menu')) return true;
+  return false;
+}
+
 RL.rule({
   id: 'dead-link',
   run(ctx) {
@@ -173,7 +190,7 @@ RL.rule({
       const href = el.getAttribute('href');
       const dead = href === null ? !el.hasAttribute('name') && !el.id && RL.cs(el).cursor === 'pointer'
         : href.trim() === '' || href.trim() === '#' || /^javascript:\s*(void\(0\)|;)?\s*;?$/i.test(href.trim());
-      if (!dead || hasClickHandler(el) || el.getAttribute('role') === 'button' && hasClickHandler(el)) continue;
+      if (!dead || hasClickHandler(el) || togglesTarget(el) || el.getAttribute('role') === 'button' && hasClickHandler(el)) continue;
       ctx.report({
         rule: 'dead-link', el, needsListenerCheck: true,
         message: 'Link goes nowhere (href=' + JSON.stringify(href) + ') and has no click handler.',

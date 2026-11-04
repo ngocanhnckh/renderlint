@@ -82,6 +82,7 @@ RL.isOutOfFlow = isOutOfFlow;
 function boundarySides(el) {
   if (el === document.body || el === document.documentElement) return null;
   const s = cs(el);
+  if (s.display === 'contents') return null; // no box is drawn: its border and background never show
   const bg = RL.parseColor(s.backgroundColor);
   if ((s.backgroundImage && s.backgroundImage !== 'none') || (bg && bg.a > 0.05) ||
     (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow))) return { x: true, y: true, top: true, right: true, bottom: true, left: true };
@@ -101,6 +102,7 @@ RL.boundarySides = boundarySides;
 function hasVisibleBoundary(el) {
   if (el === document.body || el === document.documentElement) return false;
   const s = cs(el);
+  if (s.display === 'contents') return false; // no box: the nearest ancestor that draws one is the boundary
   if (s.backgroundImage && s.backgroundImage !== 'none') return true;
   const bg = RL.parseColor(s.backgroundColor);
   if (bg && bg.a > 0.05) return true;
@@ -348,13 +350,20 @@ RL.platform = function () {
 
 const ELEMENTOR_DOC = { 'wp-page': 'page', 'wp-post': 'post', header: 'header template', footer: 'footer template', popup: 'popup', 'single-post': 'single post template', 'single-page': 'single page template', single: 'single template', archive: 'archive template', 'loop-item': 'loop item template', section: 'saved section', container: 'saved container', page: 'saved page' };
 
+// An Elementor widget or container: the classic ones have .elementor-element; the atomic (v4)
+// ones have .e-atomic-element, or data-element_type / data-e-type, inside an Elementor document.
+function isElementorElement(n) {
+  if (n.classList.contains('elementor-element') || n.classList.contains('e-atomic-element')) return true;
+  return !!((n.dataset.element_type || n.dataset.eType) && n.closest('[data-elementor-id]'));
+}
+
 // Best-effort mapping from a DOM node back to the component / source file.
 RL.sourceOf = function (el) {
   const out = {};
   for (let n = el, depth = 0; n && depth < 40; n = parentOf(n), depth++) {
     if (n.nodeType !== 1) continue;
     // Elementor: the widget or container, and the document it belongs to (page, header/footer template, popup)
-    if (n.classList.contains('elementor-element') && n.dataset.id && !out.elementor) {
+    if (!out.elementor && n.dataset.id && isElementorElement(n)) {
       const wt = n.dataset.widget_type;
       out.elementor = { id: n.dataset.id, type: wt ? wt.split('.')[0] : (n.dataset.element_type || n.dataset.eType || 'element') };
     }

@@ -1,0 +1,9 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="no-warn" content="dead-link"><title>Bootstrap toggles</title>
+<!-- Bootstrap 4/5 toggles: one delegated click handler on document, so the links have none of their own (issue #3). -->
+<style>body{margin:0;padding:24px;font:16px sans-serif;color:#111;background:#fff}a{color:#1d4ed8;display:inline-block;padding:12px 4px}.modal,.collapse,.dropdown-menu{display:none}.show{display:block}</style></head>
+<body><nav><a href="#" data-toggle="modal" data-target="#contact" class="btn">Book a call</a>
+<a href="#" data-bs-toggle="offcanvas" data-bs-target=".menu-panel">Menu</a>
+<a href="#" data-bs-toggle="collapse" aria-controls="faq">FAQ</a>
+<span class="dropdown"><a href="#" data-bs-toggle="dropdown">Account</a><span class="dropdown-menu"><a href="/settings">Settings</a></span></span></nav>
+<div id="contact" class="modal" role="dialog" aria-label="Contact"><p>Form</p></div><div class="menu-panel"></div><div id="faq" class="collapse"><p>Answers</p></div>
+<script>document.addEventListener('click',function(e){var a=e.target.closest('[data-toggle],[data-bs-toggle]');if(!a)return;e.preventDefault();var t=a.getAttribute('data-target')||a.getAttribute('data-bs-target');if(t)document.querySelector(t).classList.add('show');});</script></body></html>

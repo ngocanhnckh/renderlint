@@ -46,6 +46,12 @@ The first version published to npm, as `@ngocanhnckh/renderlint`.
 - Destructive links (delete, cancel, unsubscribe…) and log-out links are never followed. A literal password in the config is reported.
 - React Router: a hash router file next to a browser router no longer doubles every page (`/dashboard` and `/#/dashboard`). Components declared in the router file are found.
 
+### Fixes
+
+- A `display: contents` element is never a container boundary: it draws no box, even when its CSS has a border or background (#4).
+- `dead-link`: a Bootstrap 4/5 toggle (`data-toggle` / `data-bs-toggle`) whose target is on the page is live, even though its click handler is delegated to `document` (#3).
+- Elementor atomic (v4) elements are mapped to their widget and editor link: they have `data-id` and `data-e-type` but no `elementor-element` class (#2).
+
 ### Docs
 
 - New pages: getting started, a page per framework, roles and coverage, server mocks, Playwright, Storybook, security, and coding agents.
