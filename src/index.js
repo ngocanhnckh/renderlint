@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, basename } from 'node:path';
 import { loadConfig, normalize, DEFAULTS } from './config.js';
-import { launchBrowser } from './browser.js';
+import { launchBrowser, reachApp } from './browser.js';
 import { serveStatic, startAndWait, waitForUrl, probe } from './server.js';
 import { runChecks } from './runner.js';
 import { mergeIssues, formatPretty, formatMarkdown, formatGithub } from './report.js';
@@ -208,7 +208,8 @@ export async function check(options = {}) {
   process.once('SIGINT', onSignal); process.once('SIGTERM', onSignal); process.once('exit', onExit);
   let browser;
   try {
-    browser = options.browser || await launchBrowser({ log });
+    browser = options.browser || await launchBrowser({ log, cdp: config.cdp });
+    await reachApp(browser, base || urls[0], { log });
     log(`Checking ${urls.length} page(s)${config.crawl ? ' (+ crawling links)' : ''} at ${config.viewports.map((v) => v.width).join('/')}px…`);
     // Route coverage: every route of the app (source, sitemap, build output), a few instances per dynamic route.
     const coverage = staticFiles || options.storybook ? null : await startCoverage({ cwd, base, config, log, pagesGiven: false });

@@ -39,6 +39,7 @@ The first version published to npm, as `@ngocanhnckh/renderlint`.
 
 ### Other changes
 
+- `--cdp <url>` (or `RENDERLINT_CDP`, `cdp` in config): use a Chromium that is already running instead of launching one. Scrollbars are hidden on each page, only renderlint's own contexts are closed, and a browser that can't reach this machine gets the local site's requests from renderlint (#1).
 - WordPress and Elementor: local site detection, crawling, PHP template scan, Elementor widget names and editor links.
 - New rule `native-dialog`: `alert()`, `confirm()` and `prompt()`, when one opens while a page is checked (with where it was called; confirm and prompt are answered Cancel) and in source files, so the ones behind a click are caught too. A `useConfirm()` hook, a component's own `confirm()` method and Angular/Vue template bindings are not flagged.
 - Form-control rules: dropdown arrows, checkboxes, input icons and control heights. `viewport-overflow` also catches text that runs past the viewport out of a box that fits.

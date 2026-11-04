@@ -108,6 +108,20 @@ jobs:
         with: { name: renderlint, path: .renderlint }
 ```
 
+## A shared browser over CDP
+
+In containers without a browser of their own (coding agents in a sandbox, a slim CI image), point renderlint at a Chromium that is already running, such as `chromedp/headless-shell` or a Chrome started with `--remote-debugging-port=9222`:
+
+```bash
+npx renderlint --cdp http://chrome:9222        # or RENDERLINT_CDP=http://chrome:9222
+```
+
+- renderlint opens its own browser contexts there, each with its own viewport, and closes only those. The browser keeps running for whoever else uses it.
+- Launch flags don't reach a running browser, so renderlint hides scrollbars on each page itself (otherwise a 768px viewport lays out at about 752px).
+- That browser usually can't reach `localhost` on the machine running renderlint, which is where renderlint serves a build or starts your dev server. renderlint checks this first, and if it can't, renderlint fetches that site's requests itself and hands them to the browser. Nothing needs to be exposed. A dev server's live-reload websocket isn't connected; checking doesn't need it.
+- Start the browser without the SwiftShader GL flags (`--use-gl=angle --use-angle=swiftshader`, the `chromedp/headless-shell` default). With them, the pixel captures for `contrast` can differ and give false findings. renderlint warns when it can see those flags.
+- `--concurrency` contexts are opened at once (3–6 by default). Lower it if the browser is shared by several agents.
+
 ## Watch mode
 
 ```bash

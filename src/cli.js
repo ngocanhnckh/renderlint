@@ -37,6 +37,7 @@ Options
   --stress [factor]      longer-text stress factor (default 1.5); --no-stress to disable
   --sweep 1024,1366      extra widths to check between the viewports (default: 13 widths, 320–1920); --no-sweep to disable
   --no-stress-data       don't reload pages with longer API data
+  --cdp <url>            use a running Chromium over CDP (http://host:9222) instead of launching one; or RENDERLINT_CDP
   --concurrency <n>      browser contexts (page × viewport × color scheme) checked at once
   --dedupe template|off  share checks between pages that render alike (default: identical renderings only)
   --fail-on error|warn|never
@@ -80,7 +81,7 @@ export async function main(argv) {
       'no-screenshots': { type: 'boolean' }, 'no-stress': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' }, out: { type: 'string' },
       globals: { type: 'string', multiple: true }, stories: { type: 'string' },
-      sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' },
+      sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' }, cdp: { type: 'string' },
       'no-routes': { type: 'boolean' }, 'per-route': { type: 'string' }, 'min-coverage': { type: 'string' }, 'coverage-baseline': { type: 'string' },
   };
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options });
@@ -104,7 +105,7 @@ export async function main(argv) {
     colorSchemes: values.dark && values.light ? ['light', 'dark'] : values.dark ? ['light', 'dark'] : values.light ? ['light'] : undefined,
     failOn: values['fail-on'], screenshots: values['no-screenshots'] ? false : undefined, outputDir: values.out,
     sweep: values['no-sweep'] ? false : values.sweep, stressData: values['no-stress-data'] ? false : undefined,
-    concurrency: values.concurrency ? +values.concurrency : undefined, dedupe: values.dedupe,
+    concurrency: values.concurrency ? +values.concurrency : undefined, dedupe: values.dedupe, cdp: values.cdp,
     routes: values['no-routes'] ? false : undefined,
     ...(values['per-route'] || values['min-coverage'] || values['coverage-baseline'] ? { coverage: { perRoute: values['per-route'] ? +values['per-route'] : undefined, min: values['min-coverage'] ? +values['min-coverage'] : undefined, baseline: values['coverage-baseline'] } } : {}),
   };
@@ -165,7 +166,7 @@ async function watch(argv) {
   const targets = argv.filter((a) => !a.startsWith('-'));
   const { config } = await loadConfig(cwd);
   const resolved = await resolveTargets(targets, normalize(config), cwd, (m) => console.error(m));
-  const browser = await launchBrowser();
+  const browser = await launchBrowser({ cdp: normalize(config).cdp });
   let running = false, again = false, timer;
   const run = async () => {
     if (running) { again = true; return; }
