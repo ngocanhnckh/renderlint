@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Report</title><link rel="stylesheet" href="_style.css"></head>
+<body><main><h1>Report</h1>
+<div class="card" id="report" style="min-height:420px"><div class="bone"></div><div class="bone"></div><div class="bone"></div></div>
+</main>
+<script>
+// the report waits on a slow request (mocked with a 4.5s delay in the test)
+fetch('slow.json').then((r) => r.json()).then((d) => {
+  document.getElementById('report').innerHTML = '<p style="font-size:20px">' + d.summary + '</p>';
+});
+</script>
+</body></html>

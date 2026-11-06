@@ -10,16 +10,17 @@ import { PNG } from 'pngjs';
 export const WAIT_MS = 1000;   // how long into the wait we look: past a deliberate spinner delay (~400ms), at the point users notice
 const MOTION_GAP = 250;         // a second frame, to see things move (canvas or JS spinners the DOM doesn't name)
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isData = (req) => /^(fetch|xhr)$/.test(req.resourceType());
 
 // One route on the page that can hold, fail or mock its fetch/XHR requests. mode: 'pass' (default),
 // 'hold' (keep them until release()), 'fail' (answer HTTP 500). mockMutations: answer non-GET
-// requests with 200 {} instead of sending them, so the UX pass never changes the app's data.
-export async function requestControl(page, { mockMutations = false } = {}) {
-  const ctl = { mode: 'pass', held: [], log: [], mockMutations, waiters: [] };
+// requests with 200 {} instead of sending them, so the UX pass never changes the app's data;
+// mockIf(url): also answer these (GET requests to /delete, /logout… URLs).
+export async function requestControl(page, { mockMutations = false, mockIf = null } = {}) {
+  const ctl = { mode: 'pass', held: [], log: [], mockMutations };
   const answer = async (route, req) => {
-    if (ctl.mockMutations && req.method() !== 'GET' && req.method() !== 'HEAD') {
+    if (ctl.mockMutations && ((req.method() !== 'GET' && req.method() !== 'HEAD') || (mockIf && mockIf(req.url())))) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }).catch(() => {});
     }
     return route.fallback().catch(() => {});

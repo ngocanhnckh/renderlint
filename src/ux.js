@@ -10,33 +10,40 @@
 // error-feedback when its data fails to load.
 // Requests that change data (POST, PUT, PATCH, DELETE) are answered by renderlint with 200 {} and
 // never reach the server, unless "ux": { "mutations": "allow" }.
-import { requestControl, lookWhileWaiting, lookAfterData, blankWhileWaiting, freshContent, pixelDiff, viewportPng, describeRequests, quoteSample, sampleOf, writeComparison, writeMarked, WAIT_MS } from './waiting.js';
+import { sleep, requestControl, lookWhileWaiting, lookAfterData, blankWhileWaiting, freshContent, pixelDiff, viewportPng, describeRequests, quoteSample, sampleOf, writeComparison, writeMarked, WAIT_MS } from './waiting.js';
 import { looksDestructive } from './runner.js';
 
 export const FREEZE_MS = 500;      // a click answered later than this reads as a hang (INP "poor" starts at 500ms)
 export const SLOW_LCP_MS = 4000;   // Core Web Vitals: LCP over 4s is "poor"
 
-// Installed on the page in UX mode: long tasks, interaction latency (Event Timing), LCP, layout shifts.
+// Installed on the page in UX mode: long tasks, interaction latency (Event Timing), LCP, uncaught errors.
 export const UX_PERF = () => {
   if (window.__rlUx) return;
-  const ux = (window.__rlUx = { longtasks: [], events: [], lcp: 0, cls: 0, errors: [] });
+  const ux = (window.__rlUx = { longtasks: [], events: [], lcp: 0, errors: [] });
   const watch = (type, fn, extra) => { try { new PerformanceObserver((l) => l.getEntries().forEach(fn)).observe({ type, buffered: true, ...(extra || {}) }); } catch (e) { /* unsupported */ } };
   watch('longtask', (e) => ux.longtasks.push({ start: e.startTime, d: e.duration }));
   watch('event', (e) => { if (e.interactionId) ux.events.push({ name: e.name, start: e.startTime, d: e.duration }); }, { durationThreshold: 16 });
   watch('largest-contentful-paint', (e) => { ux.lcp = e.startTime; });
-  watch('layout-shift', (e) => { if (!e.hadRecentInput) ux.cls += e.value; });
   addEventListener('unhandledrejection', (e) => { ux.errors.push({ at: performance.now(), msg: 'Unhandled promise rejection: ' + String(e.reason && (e.reason.message || e.reason)).slice(0, 160) }); });
   addEventListener('error', (e) => { ux.errors.push({ at: performance.now(), msg: 'Uncaught error: ' + String(e.message).slice(0, 160) }); });
 };
 
 // actions where a second click is a mistake, not a second like or a second item
 const SUBMIT_LABEL = /\b(save|submit|send|pay|purchase|checkout|check out|place order|order now|confirm|create|register|sign ?up|book|publish|post|apply|transfer|donate|subscribe|invite|upload)\b/i;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// buttons whose real effect can't be undone: skipped when writes are allowed to reach the server
+const DESTRUCTIVE_LABEL = /\b(delete|remove|destroy|erase|wipe|deactivate|disable account|close account|unsubscribe|revoke|cancel (subscription|plan|order|account|membership)|refund|reset)\b/i;
 const secs = (ms) => (ms / 1000).toFixed(1).replace(/\.0$/, '') + 's';
 const today = () => new Date().toISOString().slice(0, 10);
 
-// Test data for a form field, from its type, name, label and autocomplete.
+// Test data for a form field, from its type, name, label and autocomplete; a value that matches
+// the field's pattern= when there is one.
 export function testValue(f) {
+  const v = guessValue(f);
+  if (!f.pattern) return v;
+  let re; try { re = new RegExp(`^(?:${f.pattern})$`, 'u'); } catch { return v; }
+  return [v, '12345', '123456', 'ABCDE', 'abcde', 'Test123', 'AB12 3CD', '1'].find((x) => re.test(x)) || v;
+}
+function guessValue(f) {
   const k = `${f.type} ${f.name} ${f.label} ${f.autocomplete}`.toLowerCase();
   const fit = (v) => (f.minLength && v.length < f.minLength ? v + 'x'.repeat(f.minLength - v.length) : v);
   if (f.type === 'email' || /e-?mail/.test(k)) return 'test.user@example.com';
@@ -84,7 +91,35 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
   const issues = [];
   let shots = 0;
   const shotFile = () => (shotBase ? `${shotBase}${++shots}.png` : null);
-  const ctl = await requestControl(page, { mockMutations: opt.mutations !== 'allow' });
+  const allowWrites = opt.mutations === 'allow';
+
+  // ---- the page, loaded as a user gets it: before renderlint routes any request (routing turns the HTTP cache off)
+  const loadData = [];
+  const onLoadReq = (r) => { if (/^(fetch|xhr)$/.test(r.resourceType()) && r.method() === 'GET') loadData.push({ method: 'GET', url: r.url() }); };
+  page.on('request', onLoadReq);
+  let perf = null;
+  try {
+    await page.goto(url, { waitUntil: 'load', timeout: config.timeout });
+    await waitReady();
+    // the main content can come with data that takes a while: wait for it (bounded) before reading LCP
+    await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
+    perf = await page.evaluate(() => window.__rlUx && { lcp: window.__rlUx.lcp, longtasks: window.__rlUx.longtasks }).catch(() => null);
+  } finally { page.off('request', onLoadReq); }
+  if (perf) {
+    if (on('slow-render') && perf.lcp > SLOW_LCP_MS) {
+      issues.push({ rule: 'slow-render', severity: 'warn', selector: 'body',
+        message: `The page's main content appeared only after ${secs(perf.lcp)} (Largest Contentful Paint, on a reload from the local server). Over 4s is rated poor and users start leaving after about 3s. A development server is slower than production, so confirm it on a production build, then find what holds it back: a request waterfall (one request waiting for another), a large script bundle loaded before anything renders (split it, load routes lazily), or data fetched in the browser that the server could send with the page.`,
+        details: { lcpMs: Math.round(perf.lcp) } });
+    }
+    const long = perf.longtasks.filter((t) => t.d >= FREEZE_MS).sort((a, b) => b.d - a.d)[0];
+    if (on('ui-freeze') && long) {
+      issues.push({ rule: 'ui-freeze', severity: 'warn', selector: 'body',
+        message: `While loading, the page froze for ${secs(long.d)} (one task blocked the main thread from ${secs(long.start)}): no click, scroll or typing gets a response meanwhile. Find the work in the Performance panel and split it up: render long lists virtualized or in pages, move heavy computation to a Web Worker, or yield between chunks (await scheduler.yield() / setTimeout).`,
+        details: { blockedMs: Math.round(long.d), atMs: Math.round(long.start) } });
+    }
+  }
+
+  const ctl = await requestControl(page, { mockMutations: !allowWrites, mockIf: allowWrites ? null : (u) => looksDestructive(u) });
   const fresh = async () => {
     ctl.mode = 'pass';
     await page.goto(url, { waitUntil: 'load', timeout: config.timeout });
@@ -92,27 +127,9 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
     await page.evaluate(source);
   };
   try {
-    // ---- the page: a warm reload, as a returning user gets it
-    ctl.log.length = 0;
     await fresh();
-    // the main content can come with data that takes a while: wait for it (bounded) before reading LCP
-    await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
-    const loadData = ctl.log.filter((r) => r.method === 'GET').slice();
-    const perf = await page.evaluate(() => window.__rlUx && { lcp: window.__rlUx.lcp, cls: window.__rlUx.cls, longtasks: window.__rlUx.longtasks }).catch(() => null);
-    if (perf) {
-      if (on('slow-render') && perf.lcp > SLOW_LCP_MS) {
-        issues.push({ rule: 'slow-render', severity: 'warn', selector: 'body',
-          message: `The page's main content appeared only after ${secs(perf.lcp)} (Largest Contentful Paint, on a reload from the local server, with the browser cache warm). Over 4s is rated poor and users start leaving after about 3s. Find what holds it back: a request waterfall (one request waiting for another), a large script bundle loaded before anything renders (split it, load routes lazily), or data fetched in the browser that the server could send with the page.`,
-          details: { lcpMs: Math.round(perf.lcp) } });
-      }
-      const long = perf.longtasks.filter((t) => t.d >= FREEZE_MS).sort((a, b) => b.d - a.d)[0];
-      if (on('ui-freeze') && long) {
-        issues.push({ rule: 'ui-freeze', severity: 'warn', selector: 'body',
-          message: `While loading, the page froze for ${secs(long.d)} (one task blocked the main thread from ${secs(long.start)}): no click, scroll or typing gets a response meanwhile. Find the work in the Performance panel and split it up: render long lists virtualized or in pages, move heavy computation to a Web Worker, or yield between chunks (await scheduler.yield() / setTimeout).`,
-          details: { blockedMs: Math.round(long.d), atMs: Math.round(long.start) } });
-      }
-    }
     const normal = await page.evaluate(() => window.__renderlint.waitSnap()).catch(() => null);
+    const toldNormal = await page.evaluate(() => window.__renderlint.errorShown()).catch(() => []);
     const normalShot = await viewportPng(page).catch(() => null);
 
     // ---- the page's data fails to load
@@ -122,7 +139,7 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
       await waitReady();
       await page.evaluate(source);
       const failed = await page.evaluate(() => window.__renderlint.waitSnap()).catch(() => null);
-      const told = await page.evaluate(() => window.__renderlint.errorShown()).catch(() => []);
+      const told = (await page.evaluate(() => window.__renderlint.errorShown()).catch(() => [])).filter((t) => !toldNormal.includes(t));
       ctl.mode = 'pass';
       const missing = failed ? freshContent(failed, normal) : [];
       if (failed && !told.length && missing.length) {
@@ -140,7 +157,8 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
     const actions = await page.evaluate((m) => window.__renderlint.uxActions(m), opt.maxActions).catch(() => []);
     log(`  ux: ${actions.length} action(s) on ${url.replace(origin, '') || '/'}`);
     for (const act of actions) {
-      if (act.href && looksDestructive(act.href)) continue;
+      if (act.href && looksDestructive(new URL(act.href, url).href)) { log(`  ux: skipped "${act.label}" (looks destructive)`); continue; }
+      if (allowWrites && DESTRUCTIVE_LABEL.test(act.label)) { log(`  ux: skipped "${act.label}" (writes reach the server)`); continue; }
       try { await checkAction(act); } catch (e) { log(`  ux: skipped "${act.label}": ${String(e && e.message || e).split('\n')[0]}`); }
     }
   } finally {
@@ -196,6 +214,8 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
       }
       const left = clickAt + WAIT_MS - Date.now();
       if (left > 0) await sleep(left);
+      // renderlint's own work in the page starts here: long tasks after this are not the app's
+      const tLook = await page.evaluate(() => performance.now()).catch(() => Infinity);
       if (reacted === 'navigation' || page.url() !== startUrl && !(await sameDocument(page))) { ctl.release(); return; }
       const look = await lookWhileWaiting(page);
       const held = ctl.held.slice();
@@ -203,9 +223,9 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
       await waitReady();
       const after = await lookAfterData(page);
       const perf = await page.evaluate((t) => ({
-        events: window.__rlUx ? window.__rlUx.events.filter((e) => e.start >= t - 5) : [],
-        longtasks: window.__rlUx ? window.__rlUx.longtasks.filter((e) => e.start >= t - 5) : [],
-      }), t0).catch(() => ({ events: [], longtasks: [] }));
+        events: window.__rlUx ? window.__rlUx.events.filter((e) => e.start >= t[0] - 5 && e.start < t[1]) : [],
+        longtasks: window.__rlUx ? window.__rlUx.longtasks.filter((e) => e.start >= t[0] - 5 && e.start < t[1]) : [],
+      }), [t0, tLook]).catch(() => ({ events: [], longtasks: [] }));
       const rect = at.rect;
       const base = { selector: at.selector, text: at.text, source: at.source, rect };
 
@@ -263,19 +283,36 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
     await page.evaluate((k) => window.__renderlint.uxMark(k), act.key);
     const before = await viewportPng(page);
     const t0 = await page.evaluate(() => performance.now());
-    ctl.fail();
-    await page.locator('[data-rl-ux="1"]').first().click({ timeout: 2000, noWaitAfter: true }).catch(() => {});
-    await sleep(300);
-    await waitReady();
-    ctl.mode = 'pass';
-    const snap = await page.evaluate(() => window.__renderlint.waitSnap()).catch(() => null);
-    const told = await page.evaluate(() => window.__renderlint.errorShown()).catch(() => []);
-    if (!snap || told.some((t) => !told0.includes(t))) return;
+    // told: an error the user saw, even briefly: new error text or an alert, or a native alert() (which native-dialog reports)
+    let told = false;
+    const onDialog = () => { told = true; };
+    page.on('dialog', onDialog);
+    let snap = null;
+    try {
+      ctl.fail();
+      await page.locator('[data-rl-ux="1"]').first().click({ timeout: 2000, noWaitAfter: true }).catch(() => {});
+      const newError = async () => (await page.evaluate(() => window.__renderlint.errorShown()).catch(() => [])).some((t) => !told0.includes(t));
+      // a toast can come and go: look a few times while the failure plays out
+      for (const end = Date.now() + 2500; !told && Date.now() < end;) {
+        if (await newError()) told = true;
+        else await sleep(150);
+      }
+      if (!told) {
+        await waitReady();
+        if (await newError()) told = true;
+      }
+      ctl.mode = 'pass';
+      if (!told) snap = await page.evaluate(() => window.__renderlint.waitSnap()).catch(() => null);
+    } finally {
+      ctl.mode = 'pass';
+      page.off('dialog', onDialog);
+    }
+    if (told || !snap) return;
     const errs = await page.evaluate((t) => (window.__rlUx ? window.__rlUx.errors.filter((e) => e.at >= t).map((e) => e.msg) : []), t0).catch(() => []);
     const stuck = snap.ind.length > 0;
+    const reqs = describeRequests(held, origin);
     const shot = shotFile();
     if (shot) await writeComparison(page, shot, before, await viewportPng(page), [base.rect && { ...base.rect, y: base.rect.y - (await page.evaluate(() => scrollY)) }].filter(Boolean), [`Before clicking "${act.label}"`, `${reqs} failed (HTTP 500): ${stuck ? 'still loading' : 'no error shown'}`], 1).catch(() => {});
-    const reqs = describeRequests(held, origin);
     issues.push({ rule: 'error-feedback', severity: 'warn', ...base, ...(shot ? { screenshot: shot, ownShot: true } : {}),
       message: `When ${reqs} fails after clicking ${what} (renderlint answered HTTP 500), ${stuck ? 'the page keeps showing its loading state forever' : 'nothing on the page says so'}: the user thinks it worked, or waits. Catch the failure and show it: an inline error or a toast with what went wrong and a way to retry, and re-enable the control.${errs.length ? ` The failure is also unhandled in the code: ${errs[0]}.` : ''}`,
       details: { requests: held.map((r) => r.method + ' ' + r.url), action: act.label, stuck, ...(errs.length ? { unhandled: errs } : {}) } });

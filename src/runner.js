@@ -642,6 +642,7 @@ async function handleRoute(route, routes) {
       let body = spec.file ? readFileSync(spec.file, 'utf8') : spec.body !== undefined ? (typeof spec.body === 'string' ? spec.body : JSON.stringify(spec.body)) : JSON.stringify(spec.json !== undefined ? spec.json : spec.data);
       const isJson = spec.file ? /\.json$/i.test(spec.file) : typeof spec.body !== 'string';
       if (routes.stressData && isJson) { try { body = JSON.stringify(stressJson(JSON.parse(body), routes.stressData)); } catch { /* not JSON */ } }
+      if (spec.delay > 0) await new Promise((r) => setTimeout(r, Math.min(+spec.delay, 30000))); // a slow API
       return await route.fulfill({ status: spec.status || 200, headers: { 'content-type': isJson ? 'application/json' : 'text/plain', ...(spec.headers || {}) }, body });
     }
     if (routes.sources && routes.sources.length && /^(fetch|xhr|eventsource|other)$/.test(req.resourceType())) {

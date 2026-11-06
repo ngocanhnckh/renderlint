@@ -2265,7 +2265,7 @@ RL.menuStillOpen = function (sel) {
 // the container it went into (the nearest element already there at the first look); the runner
 // compares what each of those areas showed while waiting.
 
-const LOADING_RE = /\b(loading|fetching|please wait|saving|submitting|processing|updating|refreshing|syncing|signing in|uploading|searching)\b|…$|\.\.\.$/i;
+const LOADING_RE = /\b(loading|fetching|please wait|saving|submitting|processing|updating|refreshing|syncing|signing in|uploading|searching)\b|\b\w+ing\b.*(…|\.\.\.)$|\bwait\b.*(…|\.\.\.)$/i; // "Crunching numbers…", not "More…"
 const NAME_RE = /skelet|spinner|\bspin\b|loader|loading|shimmer|placeholder|progress|pulse|busy/i;
 const ERROR_RE = /\b(error|failed|failure|couldn['’]?t|could not|can['’]?t|cannot|unable|went wrong|try again|retry|problem|unavailable|offline|timed? ?out|denied|invalid)\b/i;
 
@@ -2379,7 +2379,6 @@ RL.waitSnap = function (mode) {
   return out;
 };
 RL.waitMutations = () => waitMuts;
-RL.WAIT_ERROR_RE = ERROR_RE;
 // text on screen now that reads like an error message, or an alert
 RL.errorShown = function () {
   RL.resetCaches();
