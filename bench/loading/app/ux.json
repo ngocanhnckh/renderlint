@@ -1,0 +1,62 @@
+[
+ {
+  "id": "u-err-good-load",
+  "rule": "error-feedback",
+  "expect": "ok",
+  "desc": "load failure -> \"Couldn't load orders\" + Retry"
+ },
+ {
+  "id": "u-err-bad-load-stuck",
+  "rule": "error-feedback",
+  "expect": "flag",
+  "desc": "load failure is ignored: the spinner spins forever"
+ },
+ {
+  "id": "u-err-bad-load-empty",
+  "rule": "error-feedback",
+  "expect": "flag",
+  "desc": "load failure -> empty table, no message"
+ },
+ {
+  "id": "u-err-good-save",
+  "rule": "error-feedback",
+  "expect": "ok",
+  "desc": "Save failure -> toast \"Couldn't save\""
+ },
+ {
+  "id": "u-err-bad-save",
+  "rule": "error-feedback",
+  "expect": "flag",
+  "desc": "Save shows \"Saving...\" then silently resets on failure"
+ },
+ {
+  "id": "u-dead-bad",
+  "rule": "dead-control",
+  "expect": "flag",
+  "desc": "\"Export CSV\" button with an empty handler"
+ },
+ {
+  "id": "u-dead-good-copy",
+  "rule": "dead-control",
+  "expect": "ok",
+  "desc": "\"Copy link\" changes to \"Copied!\""
+ },
+ {
+  "id": "u-double-bad",
+  "rule": "double-submit",
+  "expect": "flag",
+  "desc": "\"Place order\" stays enabled while pending"
+ },
+ {
+  "id": "u-shift-bad",
+  "rule": "layout-shift",
+  "expect": "flag",
+  "desc": "a 240px promo banner is inserted above the table after data arrives"
+ },
+ {
+  "id": "u-slow-bad",
+  "rule": "slow-render",
+  "expect": "flag",
+  "desc": "main content waits on a 2.5s request chained after a 2.5s request"
+ }
+]

@@ -45,6 +45,8 @@ export const DEFAULTS = {
   concurrency: Math.min(6, Math.max(3, availableParallelism() >> 1)), // browser contexts (page × viewport × color scheme) checked in parallel
   dedupe: true,            // pages that render identically share the contrast/stress/sweep results; 'template' also skips stress/sweep on pages built like an earlier one; false: off
   menus: true,             // open each menu / dropdown trigger on the page and check that what opens can be seen (popup-obscured)
+  loading: true,           // reload each page with its data requests held (a slow network) and check it shows a loading state (loading-state)
+  ux: false,               // the UX pass (--ux): click every kind of button, tab, link and form on each page and check how it responds; or { maxActions, mutations: 'mock' | 'allow' }
   cdp: null,               // "http://host:9222": use a running Chromium over CDP instead of launching one (also RENDERLINT_CDP)
   timeout: 30000,
   serverTimeout: 120000,

@@ -59,6 +59,38 @@ renderlint later gained a width sweep (13 widths from 320 to 1920px), more stres
 
   The same change sweeps both sides of each breakpoint the page uses. It found 4 more real defects, for example a price cut off at 901px just above a `max-width: 900px` breakpoint.
 
+## Loading states and `--ux`
+
+The loading checks were designed by measurement. We wrote a benchmark of dashboard pages and tried several ways to detect a missing loading state, scoring each on how many broken pages it caught and how many correct pages it flagged by mistake.
+
+**The benchmark.** There are 75 pages on a Vite + React 19 app whose API answers in 60ms, like a dev machine:
+- **41 pages we wrote.** They cover page loads, clicks, React Router transitions and main-thread freezes, built with hooks, TanStack Query, Suspense, React Router loaders and plain HTML with `fetch`.
+- **24 blind pages.** A separate agent wrote them without seeing the detector, using its own styles: class components, `useReducer`, XHR, a hand-written SWR hook, canvas and MUI-style SVG spinners, skeletons with inline styles only, an NProgress-style bar, modals, drawers and accordions that fetch.
+- **10 pages for the other `--ux` checks:** error handling, dead buttons, double submits, layout shift and slow renders.
+
+Each page is labelled "should be flagged", "fine" or "ambiguous". Ambiguous pages, such as stat cards that show `0` or `—` until the numbers arrive, aren't scored.
+
+**How detection works.** Every method holds the page's fetch/XHR requests, looks at the page while it waits, releases the requests, and finds the content the data brought in. Content counts as new when it is text, an image or a painted box that wasn't on screen before. It is grouped by the container it went into. The methods differ in what counts as "the user saw something meanwhile":
+
+| Method | Own set: caught · false alarms | Blind set: caught · false alarms |
+|---|---|---|
+| Loading words and ARIA only (`aria-busy`, `role=progressbar`, "Loading…") | 13/13 · 12 | 12/12 · 3 |
+| Pixels only (anything moving, or a non-blank area) | 13/13 · 3 | 12/12 · 3 |
+| DOM: the above plus running CSS animations, loader-like class names, and placeholder boxes that disappear when the data arrives | 13/13 · 0 | 12/12 · 1 |
+| **DOM + motion on screen (shipped)** | **13/13 · 0** | **12/12 · 0** |
+
+- **The DOM method's one blind miss:** an NProgress-style bar animated from JavaScript, with no CSS animation and no telling class name. Comparing two frames 250ms apart catches it, along with canvas spinners.
+- **Pixels alone fall short:** on their own they flagged a small "Loading…" line and static grey skeleton cards, because the area around them was still mostly empty.
+
+**When to look.** We look at the page 1s into the wait. Looking at 400ms gave the same scores for the shipped method, but the DOM-only method then flagged a page that deliberately shows its spinner only after 400ms, a common way to avoid a flash on fast responses. One second is also Nielsen's limit for keeping the user's flow.
+
+**renderlint itself on the benchmark:**
+- **Default run at 375px.** It flagged all 13 broken page loads (7 in our set, 6 in the blind set) and nothing on the other 52 pages. Broken clicks are left to `--ux`, because the default run doesn't click. It costs about 2.5s per page that loads data in the browser, and nothing on pages that don't.
+- **`--ux` at 1280px.** It caught every broken click and route change: 6 in our set and 6 in the blind set. That includes React Router loaders with no pending UI, a TanStack Query mutation with no pending state, and modals and accordions that open only after their fetch. It caught both main-thread freezes (1.2s on load and 1.5s on a click). Apart from `error-feedback` (next point), it flagged nothing on the pages labelled fine.
+- **The one layout-shift miss at 375px:** a promo banner added above the table measured CLS 0.093 there, just under the 0.1 threshold. At 1280px it measured 0.11 and was flagged.
+- **What `--ux` adds:** `error-feedback` on 11 pages that show a loading state but never handle a failed request. When their request fails, they keep spinning forever, show an empty table, or even show "Settings saved", because the code never checks `response.ok`. We checked these against the source, and they are real.
+- **Cost:** `--ux` takes 5–15s per page on the benchmark, about 3 page loads per action, at most 12 actions per page.
+
 ## What we learned
 
 - **Frontier models mostly get layout right but fail contrast all the time.** In every Opus baseline, almost all the defects were WCAG contrast failures: muted gray captions, orange-600 labels on white, white text on light accent colors, chart axis ticks, text on gradients. They're hard to see on a good monitor and easy to miss in review. Once the agent had numbers (`2.66:1, needs 4.5:1 — #ffffff on #459bf4`) and a suggested color, it fixed them in one pass.

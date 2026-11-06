@@ -37,6 +37,9 @@ Options
   --stress [factor]      longer-text stress factor (default 1.5); --no-stress to disable
   --sweep 1024,1366      extra widths to check between the viewports (default: 13 widths, 320–1920); --no-sweep to disable
   --no-stress-data       don't reload pages with longer API data
+  --no-loading           don't reload pages with their API requests held to check loading states
+  --ux                   deep UX pass: click every kind of button, tab, link and form (test data) on each page and
+                         check how it responds: feedback, freezes over 500ms, failed requests, double submits
   --cdp <url>            use a running Chromium over CDP (http://host:9222) instead of launching one; or RENDERLINT_CDP
   --concurrency <n>      browser contexts (page × viewport × color scheme) checked at once
   --dedupe template|off  share checks between pages that render alike (default: identical renderings only)
@@ -81,7 +84,7 @@ export async function main(argv) {
       'no-screenshots': { type: 'boolean' }, 'no-stress': { type: 'boolean' }, 'no-scan': { type: 'boolean' }, config: { type: 'string' }, quiet: { type: 'boolean', short: 'q' },
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' }, out: { type: 'string' },
       globals: { type: 'string', multiple: true }, stories: { type: 'string' },
-      sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' }, cdp: { type: 'string' },
+      sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' }, cdp: { type: 'string' }, 'no-loading': { type: 'boolean' }, ux: { type: 'boolean' },
       'no-routes': { type: 'boolean' }, 'per-route': { type: 'string' }, 'min-coverage': { type: 'string' }, 'coverage-baseline': { type: 'string' },
   };
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options });
@@ -106,6 +109,7 @@ export async function main(argv) {
     failOn: values['fail-on'], screenshots: values['no-screenshots'] ? false : undefined, outputDir: values.out,
     sweep: values['no-sweep'] ? false : values.sweep, stressData: values['no-stress-data'] ? false : undefined,
     concurrency: values.concurrency ? +values.concurrency : undefined, dedupe: values.dedupe, cdp: values.cdp,
+    loading: values['no-loading'] ? false : undefined, ux: values.ux ? true : undefined,
     routes: values['no-routes'] ? false : undefined,
     ...(values['per-route'] || values['min-coverage'] || values['coverage-baseline'] ? { coverage: { perRoute: values['per-route'] ? +values['per-route'] : undefined, min: values['min-coverage'] ? +values['min-coverage'] : undefined, baseline: values['coverage-baseline'] } } : {}),
   };

@@ -1,0 +1,146 @@
+[
+ {
+  "id": "x-bad-swr-blank",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "hand-written SWR hook; card renders data && table, blank card until data"
+ },
+ {
+  "id": "x-bad-class-component",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "class component, componentDidMount fetch; heading and empty list until data"
+ },
+ {
+  "id": "x-bad-xhr",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "XMLHttpRequest fills innerHTML of an empty div; nothing shown meanwhile"
+ },
+ {
+  "id": "x-bad-waterfall",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "me then Promise.all(stats, orders); page is only a title, blank for both stages"
+ },
+ {
+  "id": "x-bad-fade-in",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "table card at opacity 0 until data arrives, then fades in; nothing visible while waiting"
+ },
+ {
+  "id": "x-bad-reducer-idle",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "useReducer with pending status but pending renders nothing; blank card"
+ },
+ {
+  "id": "x-bad-search-button",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "Search button fetches; old hint text stays and nothing changes until results arrive"
+ },
+ {
+  "id": "x-bad-accordion",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "accordion fetches on expand and only opens after data arrives; click shows no change"
+ },
+ {
+  "id": "x-bad-modal",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "'View account details' opens the modal only after the fetch resolves"
+ },
+ {
+  "id": "x-bad-pagination",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "Next page: page number and rows change only after the response; no feedback"
+ },
+ {
+  "id": "x-bad-rq-mutation",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "TanStack useMutation; button not disabled and no pending text, success text after"
+ },
+ {
+  "id": "x-bad-drawer",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "drawer opens at once but its body is empty until orders arrive (header only)"
+ },
+ {
+  "id": "x-good-svg-circular",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "hand-written MUI-style indeterminate SVG circular progress while loading"
+ },
+ {
+  "id": "x-good-canvas-spinner",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "canvas spinner drawn with requestAnimationFrame while stats load"
+ },
+ {
+  "id": "x-good-inline-skeleton",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "static grey placeholder blocks with inline styles only, no class names"
+ },
+ {
+  "id": "x-good-overlay",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "Reload shows a full-screen translucent backdrop with 'Please wait...' (also on initial load)"
+ },
+ {
+  "id": "x-good-nprogress",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "hand-written NProgress-like top bar driven by setInterval on tab switch; tab content stale meanwhile"
+ },
+ {
+  "id": "x-good-modal-loading",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "modal opens immediately with 'Fetching your details...' then shows data"
+ },
+ {
+  "id": "x-good-accordion-skeleton",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "accordion opens at once with inline-style grey placeholder bars until data"
+ },
+ {
+  "id": "x-good-loadmore-label",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "Show more button disables and reads 'Loading more...'"
+ },
+ {
+  "id": "x-good-rq-mutation",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "useMutation isPending disables button and shows 'Archiving...'"
+ },
+ {
+  "id": "x-good-result-unused",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "fetches /api/stats but the result is not displayed; static content, nothing waits on data"
+ },
+ {
+  "id": "x-hard-select-refetch",
+  "kind": "click",
+  "expect": "hard",
+  "desc": "dropdown changes value instantly and refetches; the old table stays unchanged (no loading UI) until data"
+ },
+ {
+  "id": "x-hard-dash-placeholders",
+  "kind": "load",
+  "expect": "hard",
+  "desc": "stat values show an em dash placeholder until data arrives; cards themselves visible"
+ }
+]

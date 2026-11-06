@@ -4,3 +4,5 @@ node_modules/
 .DS_Store
 /test/.tmp/
 /test/.tmp-pw-*/
+/bench/loading/experiment/obs*.json
+/bench/loading/experiment/shots*/
