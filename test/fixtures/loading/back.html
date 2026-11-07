@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Workspace</title><link rel="stylesheet" href="_style.css"></head>
+<body><nav class="card"><a href="/reports" data-mode="push">Reports</a> <a href="/billing" data-mode="push-only">Billing</a> <a href="/team" data-mode="replace">Team</a></nav>
+<main id="view"></main>
+<script>
+const views = {
+  home: '<h1>Workspace</h1><p>Welcome back, Ada.</p><p>3 projects are active.</p><p>2 invoices are due this week.</p><p>Your plan renews on May 1.</p>',
+  reports: '<h1>Reports</h1><p>Revenue this month: $48,210.</p><p>Orders: 1,204.</p><p>Refunds: under 2%.</p><p>Top region: Pacific Northwest.</p>',
+  billing: '<h1>Billing</h1><p>Plan: Pro, billed monthly.</p><p>Card ending 4242.</p><p>Next invoice: $49.</p><p>Billing email: ada@example.com.</p>',
+  team: '<h1>Team</h1><p>Ada Byrne, owner.</p><p>Kenji Mori, editor.</p><p>Lena Fox, viewer.</p><p>2 seats left.</p>',
+};
+const render = () => { const k = location.pathname.replace(/^\//, ''); document.getElementById('view').innerHTML = views[k] || views.home; };
+let listening = true;
+for (const a of document.querySelectorAll('nav a')) a.onclick = (e) => {
+  e.preventDefault();
+  const mode = a.dataset.mode;
+  if (mode === 'replace') history.replaceState(null, '', a.getAttribute('href')); else history.pushState(null, '', a.getAttribute('href'));
+  listening = mode !== 'push-only'; // after Billing the app stops following history changes
+  render();
+};
+addEventListener('popstate', () => { if (listening) render(); });
+render();
+</script>
+</body></html>

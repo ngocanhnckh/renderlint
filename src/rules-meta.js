@@ -249,6 +249,24 @@ export const RULES = {
     summary: 'Content jumps around while the page loads (Cumulative Layout Shift over 0.1, the Core Web Vitals limit for "good"): text and buttons move as data and images arrive, so users lose their place or click the wrong thing. Measured while the loading-state check holds the page\'s data for a second and releases it.',
     fix: 'Reserve the space before the content arrives: a skeleton the size of the content, width and height (or aspect-ratio) on images, video and embeds, min-height on areas filled by data, and no banners inserted above existing content.',
   },
+  'empty-state': {
+    severity: 'warn',
+    category: 'ux',
+    summary: 'With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [] }`; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone.',
+    fix: 'Render an empty state where the content would be: a short message ("No orders yet") and, when the user can add one, the action that does it ("Create order"). Guard code that assumes at least one record (items[0].name, reduce() with no initial value, a chart with no points).',
+  },
+  'dialog-focus': {
+    severity: 'warn',
+    category: 'ux',
+    summary: 'A dialog opened by a click doesn\'t handle focus as users expect (WAI-ARIA dialog pattern, WCAG 2.4.3): focus stays on the page behind it, Escape doesn\'t close it, or when it closes focus drops to the top of the page instead of returning to the control that opened it. Checked by `--ux` on dialogs (`<dialog>`, `role=dialog` / `alertdialog`, `aria-modal`) its clicks open.',
+    fix: 'Use a dialog that manages focus: the `<dialog>` element opened with `showModal()`, or Radix / Headless UI / MUI / Angular CDK dialogs. By hand: focus the first field (or the close button) on open, close on Escape, and on close call `.focus()` on the element that opened it.',
+  },
+  'back-navigation': {
+    severity: 'warn',
+    category: 'ux',
+    summary: 'After an in-app link (a client-side route change), the browser\'s Back button doesn\'t bring the previous page back: the route change replaced the history entry, so Back skips the page, or the address changes back while the page keeps showing the new one (the app ignores popstate). Checked by `--ux` on in-app links that change the route.',
+    fix: 'Navigate with the router\'s own links and push navigation (`<Link>`, `router.push`, `navigate(path)`); keep `replace` for redirects. If you change the URL with `history.pushState` yourself, render the matching view on `popstate`.',
+  },
   'popup-obscured': {
     severity: 'error',
     category: 'overlap',

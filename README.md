@@ -52,7 +52,8 @@ Not sure what your app needs (a login, roles, server rendering, hundreds of page
 ## What's new in 0.2.0
 
 - **Pages that look frozen.** renderlint slows each page's API requests down, as a slow network would, and flags every area that stays blank while it waits: no spinner, no skeleton, no "Loading…". It also flags content that jumps when the data arrives. [More](#loading-states-and-the-ux-pass)
-- **A deep UX pass: `--ux`.** It clicks every kind of button, tab, link and form on each page (filling forms with test data), the way a user would. It reports clicks that get no response for a second, failures nobody is told about (it answers the requests with HTTP 500), forms that submit twice, buttons that do nothing, and freezes over 500ms. Writes never reach your server. [More](#loading-states-and-the-ux-pass)
+- **A deep UX pass: `--ux`.** It clicks every kind of button, tab, link, filter dropdown and form on each page (filling forms with test data), the way a user would. It reports clicks that get no response for a second, failures nobody is told about (it answers the requests with HTTP 500), forms that submit twice, buttons that do nothing, and freezes over 500ms. Writes never reach your server. [More](#loading-states-and-the-ux-pass)
+- **Empty lists, dialogs and the Back button.** `--ux` also loads each page as a brand-new account would see it (every list empty) and flags lists that are just blank, spinners that never stop and pages that crash. It checks that dialogs take focus, close on Escape and hand focus back, and that Back after an in-app link really goes back. [More](#loading-states-and-the-ux-pass)
 - **Every page, every role.** Routes are read from your source (Next.js, Nuxt, SvelteKit, Astro, React Router / Remix, TanStack Router, Angular, Vue Router) and from the running router, and dynamic routes like `/products/:id` are filled with real ids. With `roles`, each page is checked as admin, viewer and so on, all at once. A coverage report gives every route a status, so no page is skipped silently. [More](#every-page-of-a-big-app)
 - **Pages behind a login, with no backend.** Set the token your route guard reads and mock the API, or log in through the real form. Server-rendered apps (Next.js, Nuxt, SvelteKit, Remix, Angular SSR) get the same `mock` on the server, so `middleware.ts` and loaders run too. A page that only showed the login form or "Access denied" is reported, never passed. [More](#pages-behind-a-login)
 - **Menus you can't see.** renderlint opens each dropdown, menu and combobox on the page and checks that its options can be seen. It catches a menu drawn underneath the next card (and names the ancestor whose z-index traps it), and one cut off by a card's `overflow: hidden` or a table's scroll box. Tested on Radix, Headless UI and Bootstrap.
@@ -84,7 +85,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 
 ## What it catches
 
-48 rules, tuned so that a finding is almost always a real defect.
+51 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -103,6 +104,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 | `alert("Saved!")`, `confirm("Delete?")`: the browser's grey system box instead of the app's own toast or modal | `native-dialog` (when one opens, and in source, so the ones behind a click are caught too) |
 | A dashboard card that stays blank while its data loads, then pops in; content that jumps when it arrives | `loading-state`, `layout-shift` (renderlint holds the requests for a second to see) |
 | With `--ux`: a click that seems to do nothing for a second, a failed save nobody is told about, a form that submits twice, a dead button, a 2-second freeze | `action-feedback`, `error-feedback`, `double-submit`, `dead-control`, `ui-freeze`, `slow-render` |
+| With `--ux`: a new account sees an empty table with no message (or a crash), a modal that ignores Escape and loses focus, a Back button that doesn't go back | `empty-state`, `dialog-focus`, `back-navigation` |
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No viewport meta, a pointless 3px scrollbar, `href="#"` links | `missing-viewport-meta`, `accidental-scrollbar`, `dead-link` |
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
@@ -114,11 +116,26 @@ All rules, their defaults and fix guidance: [docs/rules.md](docs/rules.md). `npx
 
 On a fast dev machine the API answers in 50ms, so a page with no loading state looks fine. On a phone on a train, the same page sits blank for three seconds and looks broken. renderlint shows you that page.
 
+<table>
+<tr>
+<td width="50%"><img src="docs/images/demo-ui-freeze.gif" alt="renderlint --ux clicks Generate report; the page freezes for 1.5 seconds; renderlint prints a ui-freeze warning naming the button"><br><sub><code>ui-freeze</code>: the click blocks the page for 1.5s.</sub></td>
+<td width="50%"><img src="docs/images/demo-loading-state.gif" alt="The page's API requests are held for a second and the page shows nothing; then the data arrives and renderlint prints a loading-state warning"><br><sub><code>loading-state</code>: nothing on screen while the data loads.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/demo-error-feedback.gif" alt="renderlint fills the form with test data and clicks Save changes; it answers the request with HTTP 500 and the page says nothing"><br><sub><code>error-feedback</code>: the save fails and nobody is told.</sub></td>
+<td width="50%"><img src="docs/images/demo-empty-state.gif" alt="renderlint answers the orders request with an empty list; the page shows table headers and nothing else"><br><sub><code>empty-state</code>: a new account sees an empty table, no message.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/demo-dialog-focus.gif" alt="renderlint clicks Invite member, a modal opens; focus stays behind it and Escape does not close it"><br><sub><code>dialog-focus</code>: the modal ignores Escape and keyboard focus.</sub></td>
+<td width="50%"></td>
+</tr>
+</table>
+
 **Every run:** each page that loads data in the browser is reloaded with its `fetch`/XHR requests held for one second. renderlint looks at the page, releases the requests, and finds the areas the data filled. An area that showed nothing meanwhile is a `loading-state` warning. Any loading sign on the page counts: a skeleton, a spinner (including canvas and SVG ones, and spinners with hashed class names), a progress bar, "Loading…" text, `aria-busy`, or anything moving on screen.
 
 ![renderlint's screenshot of a dashboard: while the orders request is held, the Recent orders card is empty (boxed in red); once the data arrives, the table fills it](docs/images/ux-loading-state.png)
 
-**`--ux`:** on each page, every kind of button, tab, in-app link and form (filled with test data) is clicked on a fresh load, one of each repeated kind:
+**`--ux`:** on each page, every kind of button, tab, in-app link, filter dropdown and form (filled with test data) is used on a fresh load, one of each repeated kind:
 
 | What happens | Rule | Threshold |
 |---|---|---|
@@ -130,6 +147,9 @@ On a fast dev machine the API answers in 50ms, so a page with no loading state l
 | The page can't respond or repaint (a long task) | `ui-freeze` | 500ms ([INP "poor"](https://web.dev/articles/inp)) |
 | The page's main content appears late | `slow-render` | 4s ([LCP "poor"](https://web.dev/articles/lcp)) |
 | Content jumps when the data arrives | `layout-shift` | 0.1 ([CLS "good"](https://web.dev/articles/cls)) |
+| With every list in its API responses emptied (a new account), a list is just blank, its spinner never stops, or the page crashes | `empty-state` | a section hidden entirely, title and all, is fine |
+| A dialog the click opens leaves focus behind it, ignores Escape, or drops focus to the top of the page when it closes | `dialog-focus` | [WAI-ARIA dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/), WCAG 2.4.3 |
+| After an in-app link, Back skips the page (history replaced) or changes the address but not the page | `back-navigation` | |
 
 <table>
 <tr>
@@ -382,7 +402,7 @@ process.exit(result.ok ? 0 : 1);
 
 - `<canvas>` charts (Chart.js, ECharts in canvas mode) are pixels, so their labels can't be inspected. Use an SVG renderer, or rely on your chart library's own label-collision handling.
 - Pages are checked as they load, with each menu opened. What's behind other clicks (dialogs, tabs, filled forms) is rendered and judged by `--ux`, but its layout is only linted when you list it in `states` or reach it in a [Playwright test](docs/playwright.md). Pages behind a login need [`auth`](docs/authentication.md).
-- `--ux` clicks one control of each kind per page, at most 12, each on a fresh load, so it takes about a minute per page. It doesn't use hover menus or drag and drop.
+- `--ux` clicks one control of each kind per page, at most 12, each on a fresh load, so it takes about a minute per page. It doesn't use hover menus or drag and drop. `empty-state` empties the lists in the JSON the browser fetches; data a server renders into the HTML stays as it is.
 - Server mocks are Node only. Pages a Django, Rails, Laravel or Go server renders need a running backend with test accounts ([other backends](docs/frameworks/other-backends.md)).
 - Contrast follows WCAG 2 AA math. It doesn't model font weight beyond the large-text rule, and doesn't apply APCA.
 - A single page takes about 4–10 seconds at three viewports with the sweep and stress passes. A site is faster per page: pages are checked side by side, and pages that render identically (an SPA's fallback route, duplicate URLs) share their checks. Use `--sweep 1024` or `--no-sweep` for a faster inner loop.
