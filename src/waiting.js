@@ -14,7 +14,8 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const isData = (req) => /^(fetch|xhr)$/.test(req.resourceType());
 
 // One route on the page that can hold, fail or mock its fetch/XHR requests. mode: 'pass' (default),
-// 'hold' (keep them until release()), 'fail' (answer HTTP 500). mockMutations: answer non-GET
+// 'hold' (keep them until release()), 'fail' (answer HTTP 500), 'empty' (send GET requests, answer
+// with their JSON with every list of records emptied: { items: [] }, as for a new account). mockMutations: answer non-GET
 // requests with 200 {} instead of sending them, so the UX pass never changes the app's data;
 // mockIf(url): also answer these (GET requests to /delete, /logout… URLs).
 export async function requestControl(page, { mockMutations = false, mockIf = null } = {}) {
@@ -40,17 +41,62 @@ export async function requestControl(page, { mockMutations = false, mockIf = nul
       rec.failed = true;
       return route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"Internal Server Error"}' }).catch(() => {});
     }
+    if (ctl.mode === 'empty' && req.method() === 'GET' && !(mockIf && mockIf(req.url())) && !/event-stream/i.test(req.headers().accept || '')) return emptied(route, rec);
     if (ctl.mode !== 'hold') return answer(route, req);
     ctl.held.push(rec);
     await new Promise((res) => { rec.release = res; if (ctl.mode !== 'hold') res(); });
     return answer(route, req);
   };
+  const emptied = async (route, rec) => {
+    try {
+      const res = await route.fetch({ timeout: 15000 });
+      const type = res.headers()['content-type'] || '';
+      if (res.ok() && /json/i.test(type)) {
+        const [out, n] = emptyLists(JSON.parse(await res.text()));
+        if (n) { rec.emptied = n; ctl.emptied.push(rec); return await route.fulfill({ response: res, body: JSON.stringify(out) }); }
+      }
+      return await route.fulfill({ response: res });
+    } catch (e) { return route.fallback().catch(() => {}); }
+  };
+  ctl.emptied = [];
   await page.route('**/*', handler);
   ctl.dispose = () => { ctl.release(); return page.unroute('**/*', handler).catch(() => {}); };
   ctl.hold = () => { ctl.mode = 'hold'; ctl.held = []; };
   ctl.fail = () => { ctl.mode = 'fail'; };
   ctl.release = () => { ctl.mode = 'pass'; for (const r of ctl.held) if (r.release) r.release(); };
   return ctl;
+}
+
+// JSON with every non-empty array of objects (the records a page lists) replaced by [];
+// arrays of plain values (roles, tags, chart points) are kept. Returns [json, lists emptied].
+// Records have an id (id, _id, uuid, slug, orderId…) or are GraphQL edges; menus, permissions and
+// chart points ({ x, y }) don't, and are left alone. Counters next to an emptied list (total, count,
+// hasMore…) are set to match it.
+const ID_KEY = /^(id|_id|uuid|guid|key|slug|code|node|cursor)$|(Id|_id|UUID|Uuid)$/;
+const COUNT_KEY = /^(total|count|totalCount|total_count|totalItems|total_items|totalResults|total_results|numResults|resultCount|hits|size|length)$/;
+const MORE_KEY = /^(hasMore|has_more|hasNextPage|has_next_page|hasNext|more)$/;
+const isRecord = (e) => e && typeof e === 'object' && !Array.isArray(e) && Object.keys(e).some((k) => ID_KEY.test(k));
+export function emptyLists(v) {
+  let n = 0;
+  const walk = (x) => {
+    if (Array.isArray(x)) {
+      if (x.length && x.every(isRecord)) { n++; return []; }
+      return x.map(walk);
+    }
+    if (x && typeof x === 'object') {
+      const o = {};
+      let emptied = false;
+      for (const k of Object.keys(x)) { const before = n; o[k] = walk(x[k]); if (n > before && Array.isArray(x[k])) emptied = true; }
+      if (emptied) for (const k of Object.keys(o)) {
+        if (COUNT_KEY.test(k) && typeof o[k] === 'number') o[k] = 0;
+        else if (MORE_KEY.test(k) && typeof o[k] === 'boolean') o[k] = false;
+      }
+      return o;
+    }
+    return x;
+  };
+  const out = walk(v);
+  return [out, n];
 }
 
 export const viewportPng = async (page) => PNG.sync.read(await page.screenshot({ caret: 'hide', timeout: 10000 }));

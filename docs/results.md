@@ -91,6 +91,23 @@ Each page is labelled "should be flagged", "fine" or "ambiguous". Ambiguous page
 - **What `--ux` adds:** `error-feedback` on 11 pages that show a loading state but never handle a failed request. When their request fails, they keep spinning forever, show an empty table, or even show "Settings saved", because the code never checks `response.ok`. We checked these against the source, and they are real.
 - **Cost:** `--ux` takes 5–15s per page on the benchmark, about 3 page loads per action, at most 12 actions per page.
 
+### Empty lists, dialogs and the Back button
+
+These `--ux` checks were added later, with 23 more pages (`bench/loading/app/v.json`): 10 for empty states, 6 for dialogs, 4 for the Back button and 3 for filter dropdowns. Each check has bad pages and pages that do it right in a different way.
+
+| Check | Pages | Flagged correctly | False alarms |
+|---|---|---|---|
+| `empty-state`: a table with only its headers, a grid with nothing under its heading, a page that crashes on `items[0]`, a spinner that never stops on `[]`, "Orders (0)" above an empty table | 5 bad · 5 fine | 5/5 | 0 |
+| `dialog-focus`: a hand-made modal with no focus handling, one that ignores Escape, one that drops focus when it closes | 3 bad · 3 fine | 3/3 | 0 |
+| `back-navigation`: `<Link replace>`, and `history.pushState` with no `popstate` handling | 2 bad · 2 fine | 2/2 | 0 |
+| Filter dropdowns (`action-feedback`): a `<select>` that refetches with nothing shown | 1 bad · 2 fine | 1/1 | 0 |
+
+- **Correct pages it left alone:** an empty state with a message and a button, TanStack Query's empty branch, a section hidden entirely (title and all) when it has nothing, a redirect to onboarding, a chart whose data is plain numbers, `<dialog>` with `showModal()`, a React modal that manages focus by hand, a small `role=dialog` popover, React Router `<Link>`s, and tabs kept in `?tab=` with `replace` (only the query changes).
+- **On the 75 earlier pages:** `empty-state` flagged 37. None of them has an empty branch in its source: each maps over the list and shows a bare table or nothing when the list is empty. `dialog-focus` flagged the two modals of the blind set, and both are real: neither moves focus nor closes on Escape. `back-navigation` flagged nothing, including the four React Router pages. The other rules gave the same results as before.
+- **How the empty page is made:** in every JSON response, each non-empty array of records becomes `[]`, and counters next to it (`total`, `count`, `hasMore`…) are set to match. A record is an object with an id (`id`, `uuid`, `slug`, `orderId`…) or a GraphQL edge. Menus, permissions, chart points and plain values are kept, so the page isn't broken in a way no real user would see. Messages are matched to lists by where they sit in the page (tag, stable id and class from `<body>` down), not by position on screen, because an empty list shrinks and the cards under it move up. Generated ids, hashed classes and state classes (`is-empty`, `list--loading`) are left out of that match. Text such as "No failed jobs" or "Start by uploading a file" counts as an empty-state message, even though it contains an error or loading word.
+- **Which dialogs:** only modal ones (`aria-modal`, `<dialog>` opened with `showModal()`, `alertdialog`, or a dialog over a full-screen overlay), so a cookie banner that appears during the wait isn't blamed on the click. Focus that drops to the page is reported only when the control that opened the dialog is still there and can take focus. renderlint never clicks "OK" or "Done" to close one.
+- **Push or replace:** Chromium's Navigation API gives the index of the current history entry. A link that pushes moves to a new index, and one that replaces stays on the same one. `history.length` can't tell them apart once there are forward entries, because a push truncates them.
+
 ## What we learned
 
 - **Frontier models mostly get layout right but fail contrast all the time.** In every Opus baseline, almost all the defects were WCAG contrast failures: muted gray captions, orange-600 labels on white, white text on light accent colors, chart axis ticks, text on gradients. They're hard to see on a good monitor and easy to miss in review. Once the agent had numbers (`2.66:1, needs 4.5:1 — #ffffff on #459bf4`) and a suggested color, it fixed them in one pass.

@@ -1,0 +1,140 @@
+[
+ {
+  "id": "v-empty-good-msg",
+  "rule": "empty-state",
+  "expect": "ok",
+  "desc": "no orders -> \"No orders yet\" + Create order"
+ },
+ {
+  "id": "v-empty-good-rq",
+  "rule": "empty-state",
+  "expect": "ok",
+  "desc": "TanStack Query, \"Nothing here yet\" inside the card"
+ },
+ {
+  "id": "v-empty-good-hidden",
+  "rule": "empty-state",
+  "expect": "ok",
+  "desc": "\"Recent activity\" card left out entirely when empty, title and all"
+ },
+ {
+  "id": "v-empty-good-onboarding",
+  "rule": "empty-state",
+  "expect": "ok",
+  "desc": "no orders -> sends the user to onboarding"
+ },
+ {
+  "id": "v-empty-bad-table",
+  "rule": "empty-state",
+  "expect": "flag",
+  "desc": "no orders -> table headers only"
+ },
+ {
+  "id": "v-empty-bad-cards",
+  "rule": "empty-state",
+  "expect": "flag",
+  "desc": "customer cards grid -> nothing under the heading"
+ },
+ {
+  "id": "v-empty-bad-crash",
+  "rule": "empty-state",
+  "expect": "flag",
+  "desc": "renders items[0].customer: crashes with no orders"
+ },
+ {
+  "id": "v-empty-bad-stuck",
+  "rule": "empty-state",
+  "expect": "flag",
+  "desc": "!items.length treated as still loading: spinner forever"
+ },
+ {
+  "id": "v-empty-hard-count",
+  "rule": "empty-state",
+  "expect": "flag",
+  "desc": "\"Orders (0)\" above an empty table: a count is not an empty state"
+ },
+ {
+  "id": "v-empty-good-chart",
+  "rule": "empty-state",
+  "expect": "ok",
+  "desc": "a chart of plain numbers: not a list of records, left alone"
+ },
+ {
+  "id": "v-dlg-bad-div",
+  "rule": "dialog-focus",
+  "expect": "flag",
+  "desc": "hand-made modal: no focus in, no Escape, focus lost on close"
+ },
+ {
+  "id": "v-dlg-good-native",
+  "rule": "dialog-focus",
+  "expect": "ok",
+  "desc": "<dialog> with showModal()"
+ },
+ {
+  "id": "v-dlg-good-manual",
+  "rule": "dialog-focus",
+  "expect": "ok",
+  "desc": "React modal that focuses its field, closes on Escape, restores focus"
+ },
+ {
+  "id": "v-dlg-bad-noescape",
+  "rule": "dialog-focus",
+  "expect": "flag",
+  "desc": "focuses its field and restores focus, but Escape does nothing"
+ },
+ {
+  "id": "v-dlg-bad-lostfocus",
+  "rule": "dialog-focus",
+  "expect": "flag",
+  "desc": "focus in and Escape work, focus is not returned on close"
+ },
+ {
+  "id": "v-dlg-good-popover",
+  "rule": "dialog-focus",
+  "expect": "ok",
+  "desc": "a small role=dialog info popover (not a modal)"
+ },
+ {
+  "id": "v-back-good-router",
+  "rule": "back-navigation",
+  "expect": "ok",
+  "desc": "<Link> to another route"
+ },
+ {
+  "id": "v-back-bad-replace",
+  "rule": "back-navigation",
+  "expect": "flag",
+  "desc": "<Link replace>: Back skips the page"
+ },
+ {
+  "id": "v-back-bad-pushstate",
+  "rule": "back-navigation",
+  "expect": "flag",
+  "desc": "history.pushState + local state: Back changes the URL, not the view"
+ },
+ {
+  "id": "v-back-good-tabs",
+  "rule": "back-navigation",
+  "expect": "ok",
+  "desc": "tabs kept in ?tab= with replace (only the query changes)"
+ },
+ {
+  "id": "v-sel-bad-filter",
+  "rule": "action-feedback",
+  "expect": "flag",
+  "desc": "status filter refetches, nothing shows it"
+ },
+ {
+  "id": "v-sel-good-filter",
+  "rule": "action-feedback",
+  "expect": "ok",
+  "desc": "status filter refetches, list dims with aria-busy"
+ },
+ {
+  "id": "v-sel-good-local",
+  "rule": "action-feedback",
+  "expect": "ok",
+  "desc": "status filter applied locally (no request)"
+ }
+]

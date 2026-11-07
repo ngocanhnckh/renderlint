@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Overview</title><link rel="stylesheet" href="_style.css"></head>
+<body><main><h1>Overview</h1>
+<div class="card" id="orders"><h2>Orders</h2><table><thead><tr><th>Order</th><th>Customer</th><th>Total</th></tr></thead><tbody></tbody></table></div>
+<div class="card" id="customers"><h2>Customers</h2><ul></ul></div>
+<div id="activity"></div>
+</main>
+<script>
+// orders: an empty table when there are none (no empty state)
+fetch('orders.json').then((r) => r.json()).then((d) => {
+  document.querySelector('#orders tbody').innerHTML = d.items.map((o) => '<tr><td>#' + o.id + '</td><td>' + o.customer + '</td><td>' + o.total + '</td></tr>').join('');
+});
+// customers: the right way, a message and an action
+fetch('customers.json').then((r) => r.json()).then((d) => {
+  const ul = document.querySelector('#customers ul');
+  ul.innerHTML = d.items.length ? d.items.map((c) => '<li>' + c.name + ' · ' + c.email + '</li>').join('') : '<li>No customers yet. <button>Invite a customer</button></li>';
+});
+// activity: the whole section is left out when there is none (a choice, not a bug)
+fetch('activity.json').then((r) => r.json()).then((d) => {
+  if (d.events.length) document.getElementById('activity').innerHTML = '<div class="card"><h2>Recent activity</h2>' + d.events.map((e) => '<p>' + e.text + '</p>').join('') + '</div>';
+});
+</script>
+</body></html>

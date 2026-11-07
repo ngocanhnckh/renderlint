@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Team</title><link rel="stylesheet" href="_style.css">
+<style>.panel{position:fixed;inset:80px 40px auto;background:#fff;border:1px solid #ccc;padding:24px;min-height:220px;box-shadow:0 8px 30px rgba(0,0,0,.2)}dialog{min-width:300px;min-height:200px}</style></head>
+<body><main><h1>Team</h1>
+<div class="card"><p>Ada Byrne · Owner</p><p>Kenji Mori · Editor</p><button id="filters">Open filters</button><button id="invite">Invite member</button></div>
+</main>
+<!-- a hand-made modal: focus stays behind it, Escape does nothing, focus is lost on close -->
+<div class="panel" id="fp" role="dialog" aria-modal="true" aria-label="Filters" hidden><h2>Filters</h2><label><input type="checkbox"> Owners only</label><p><button id="fclose">Close</button></p></div>
+<!-- the right way: <dialog> with showModal() -->
+<dialog id="inv"><h2>Invite member</h2><label>Email <input type="email"></label><form method="dialog"><button>Cancel</button></form></dialog>
+<script>
+document.getElementById('filters').onclick = () => { document.getElementById('fp').hidden = false; };
+document.getElementById('fclose').onclick = () => { document.getElementById('fp').hidden = true; };
+document.getElementById('invite').onclick = () => document.getElementById('inv').showModal();
+</script>
+</body></html>
