@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const FILES = ['core.js', 'rules/layout.js', 'rules/overlap.js', 'rules/content.js', 'rules/a11y.js', 'rules/forms.js', 'rules/popups.js', 'solid-bg.js', 'run.js'];
+const FILES = ['core.js', 'rules/layout.js', 'rules/overlap.js', 'rules/content.js', 'rules/a11y.js', 'rules/forms.js', 'rules/popups.js', 'rules/loading.js', 'rules/ux.js', 'solid-bg.js', 'run.js'];
 
 let cached;
 export function analyzerSource() {

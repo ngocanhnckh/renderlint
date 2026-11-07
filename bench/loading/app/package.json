@@ -1,0 +1,1 @@
+{"name":"loading-bench","private":true,"type":"module","scripts":{"dev":"vite --port 5393 --strictPort"},"dependencies":{"@tanstack/react-query":"^5.106.1","@vitejs/plugin-react":"^4.7.0","react":"^19.3.1","react-dom":"^19.3.1","react-router":"^7.18.5","vite":"^6.4.5"}}

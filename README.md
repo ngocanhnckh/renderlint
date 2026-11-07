@@ -51,6 +51,8 @@ Not sure what your app needs (a login, roles, server rendering, hundreds of page
 
 ## What's new in 0.2.0
 
+- **Pages that look frozen.** renderlint slows each page's API requests down, as a slow network would, and flags every area that stays blank while it waits: no spinner, no skeleton, no "Loading…". It also flags content that jumps when the data arrives. [More](#loading-states-and-the-ux-pass)
+- **A deep UX pass: `--ux`.** It clicks every kind of button, tab, link and form on each page (filling forms with test data), the way a user would. It reports clicks that get no response for a second, failures nobody is told about (it answers the requests with HTTP 500), forms that submit twice, buttons that do nothing, and freezes over 500ms. Writes never reach your server. [More](#loading-states-and-the-ux-pass)
 - **Every page, every role.** Routes are read from your source (Next.js, Nuxt, SvelteKit, Astro, React Router / Remix, TanStack Router, Angular, Vue Router) and from the running router, and dynamic routes like `/products/:id` are filled with real ids. With `roles`, each page is checked as admin, viewer and so on, all at once. A coverage report gives every route a status, so no page is skipped silently. [More](#every-page-of-a-big-app)
 - **Pages behind a login, with no backend.** Set the token your route guard reads and mock the API, or log in through the real form. Server-rendered apps (Next.js, Nuxt, SvelteKit, Remix, Angular SSR) get the same `mock` on the server, so `middleware.ts` and loaders run too. A page that only showed the login form or "Access denied" is reported, never passed. [More](#pages-behind-a-login)
 - **Menus you can't see.** renderlint opens each dropdown, menu and combobox on the page and checks that its options can be seen. It catches a menu drawn underneath the next card (and names the ancestor whose z-index traps it), and one cut off by a card's `overflow: hidden` or a table's scroll box. Tested on Radix, Headless UI and Bootstrap.
@@ -65,6 +67,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 
 - [What's new in 0.2.0](#whats-new-in-020)
 - [What it catches](#what-it-catches)
+- [Loading states and the UX pass](#loading-states-and-the-ux-pass)
 - [Content you didn't render](#content-you-didnt-render)
 - [How it compares](#how-it-compares)
 - [Does it work?](#does-it-work)
@@ -81,7 +84,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 
 ## What it catches
 
-40 rules, tuned so that a finding is almost always a real defect.
+48 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -98,12 +101,54 @@ Everything else is in the [changelog](CHANGELOG.md).
 | A dropdown arrow on the border, a checkbox floating above its label, an icon over the placeholder, a squashed input | `dropdown-arrow`, `checkbox-layout`, `input-icon-overlap`, `squashed-control` |
 | An input and its button at different heights, an icon sitting higher than its text | `control-height-mismatch`, `icon-misaligned` |
 | `alert("Saved!")`, `confirm("Delete?")`: the browser's grey system box instead of the app's own toast or modal | `native-dialog` (when one opens, and in source, so the ones behind a click are caught too) |
+| A dashboard card that stays blank while its data loads, then pops in; content that jumps when it arrives | `loading-state`, `layout-shift` (renderlint holds the requests for a second to see) |
+| With `--ux`: a click that seems to do nothing for a second, a failed save nobody is told about, a form that submits twice, a dead button, a 2-second freeze | `action-feedback`, `error-feedback`, `double-submit`, `dead-control`, `ui-freeze`, `slow-render` |
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No viewport meta, a pointless 3px scrollbar, `href="#"` links | `missing-viewport-meta`, `accidental-scrollbar`, `dead-link` |
 | No focus ring, icon buttons with no label, tiny tap targets and text | `focus-indicator`, `unlabeled-control`, `tap-target`, `font-size-min` |
 | Hydration errors, crashes, 404s, pages that only showed the login form or "Access denied" | `page-error`, `console-error`, `broken-resource`, `auth-required`, `page-not-shown` |
 
 All rules, their defaults and fix guidance: [docs/rules.md](docs/rules.md). `npx renderlint explain <rule>` prints the same in the terminal.
+
+## Loading states and the UX pass
+
+On a fast dev machine the API answers in 50ms, so a page with no loading state looks fine. On a phone on a train, the same page sits blank for three seconds and looks broken. renderlint shows you that page.
+
+**Every run:** each page that loads data in the browser is reloaded with its `fetch`/XHR requests held for one second. renderlint looks at the page, releases the requests, and finds the areas the data filled. An area that showed nothing meanwhile is a `loading-state` warning. Any loading sign on the page counts: a skeleton, a spinner (including canvas and SVG ones, and spinners with hashed class names), a progress bar, "Loading…" text, `aria-busy`, or anything moving on screen.
+
+![renderlint's screenshot of a dashboard: while the orders request is held, the Recent orders card is empty (boxed in red); once the data arrives, the table fills it](docs/images/ux-loading-state.png)
+
+**`--ux`:** on each page, every kind of button, tab, in-app link and form (filled with test data) is clicked on a fresh load, one of each repeated kind:
+
+| What happens | Rule | Threshold |
+|---|---|---|
+| The click starts a request, and nothing on screen changes for a second | `action-feedback` | 1s: users lose the feeling that the page responds ([Nielsen](https://www.nngroup.com/articles/response-times-3-important-limits/)) |
+| The area it fills stays blank meanwhile | `loading-state` | as above |
+| renderlint answers the request with HTTP 500, and nothing says so (or the spinner never stops) | `error-feedback` | |
+| A second click while the first is pending sends the request again | `double-submit` | |
+| The button does nothing visible: no request, no change, no navigation | `dead-control` | |
+| The page can't respond or repaint (a long task) | `ui-freeze` | 500ms ([INP "poor"](https://web.dev/articles/inp)) |
+| The page's main content appears late | `slow-render` | 4s ([LCP "poor"](https://web.dev/articles/lcp)) |
+| Content jumps when the data arrives | `layout-shift` | 0.1 ([CLS "good"](https://web.dev/articles/cls)) |
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/ux-action-feedback.png" alt="Clicking the Orders link: one second later the page is unchanged, because a React Router loader is still fetching and nothing shows it"><br><sub><code>action-feedback</code>: a React Router loader is fetching, and the page shows no sign of it.</sub></td>
+<td width="50%"><img src="docs/images/ux-error-feedback.png" alt="The orders request answered with HTTP 500: the spinner keeps spinning and no error is shown"><br><sub><code>error-feedback</code>: the request failed and the spinner keeps spinning.</sub></td>
+</tr>
+</table>
+
+Requests that change data (POST, PUT, PATCH, DELETE) are answered by renderlint with `200 {}` and never reach your server. Logout links and "Sign out" buttons are skipped. Every finding is a warning, and its message names the request, the control and what to add.
+
+```
+warn  action-feedback  After clicking the link "Orders", nothing on screen changed for 1s while GET /api/orders
+                       was loading (renderlint held it, as on a slow network): the page looks frozen and users click
+                       again or leave. Respond at once: show the pending state on the control (spinner, "Saving…",
+                       disabled) or where the result will appear (skeleton, dimmed old content, a top progress bar
+                       for page changes), then the result.
+```
+
+**How well does it work?** We measured it on 75 dashboard pages written in React (hooks, TanStack Query, React Router loaders, Suspense, class components), with XHR and in plain HTML. 24 of those pages were written by a separate agent that never saw the detector. renderlint caught every missing loading state and every click with no feedback, and never flagged a page that showed a skeleton, spinner, progress bar, delayed spinner or dimmed content. The benchmark and its results are in [docs/results.md](docs/results.md#loading-states-and---ux).
 
 ## Content you didn't render
 
@@ -183,6 +228,7 @@ npx renderlint index.html about.html            # plain files
 npx renderlint --serve "npm run preview" --url http://localhost:4173
 npx renderlint --pages /,/pricing,/dashboard --viewports 360,768,1440
 npx renderlint --sweep 1024,1366                # only these extra widths (--no-sweep to skip)
+npx renderlint --ux                             # also click through every page: feedback, errors, freezes
 npx renderlint explain contrast                 # what a rule means and how to fix it
 ```
 
@@ -335,7 +381,8 @@ process.exit(result.ok ? 0 : 1);
 ## Limitations
 
 - `<canvas>` charts (Chart.js, ECharts in canvas mode) are pixels, so their labels can't be inspected. Use an SVG renderer, or rely on your chart library's own label-collision handling.
-- Pages are checked as they load. Menus, dialogs, tabs and empty or error states are only checked when you list them in `states` or reach them in a [Playwright test](docs/playwright.md), and pages behind a login need [`auth`](docs/authentication.md).
+- Pages are checked as they load, with each menu opened. What's behind other clicks (dialogs, tabs, filled forms) is rendered and judged by `--ux`, but its layout is only linted when you list it in `states` or reach it in a [Playwright test](docs/playwright.md). Pages behind a login need [`auth`](docs/authentication.md).
+- `--ux` clicks one control of each kind per page, at most 12, each on a fresh load, so it takes about a minute per page. It doesn't use hover menus or drag and drop.
 - Server mocks are Node only. Pages a Django, Rails, Laravel or Go server renders need a running backend with test accounts ([other backends](docs/frameworks/other-backends.md)).
 - Contrast follows WCAG 2 AA math. It doesn't model font weight beyond the large-text rule, and doesn't apply APCA.
 - A single page takes about 4–10 seconds at three viewports with the sweep and stress passes. A site is faster per page: pages are checked side by side, and pages that render identically (an SPA's fallback route, duplicate URLs) share their checks. Use `--sweep 1024` or `--no-sweep` for a faster inner loop.
@@ -350,3 +397,12 @@ node bin/renderlint.js test/fixtures/defects/contrast.html --no-crawl
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). MIT licensed. Mirror: [gitlab.com/anhnn.a05/renderlint](https://gitlab.com/anhnn.a05/renderlint).
+
+## Star history
+
+<a href="https://star-history.com/#ngocanhnckh/renderlint&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ngocanhnckh/renderlint&type=Date&theme=dark">
+    <img alt="Star history of ngocanhnckh/renderlint" src="https://api.star-history.com/svg?repos=ngocanhnckh/renderlint&type=Date">
+  </picture>
+</a>

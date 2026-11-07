@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Store settings</title><link rel="stylesheet" href="_style.css"></head>
+<body><main><h1>Store settings</h1>
+<div class="card" id="list" style="min-height:240px"><div class="bone"></div><div class="bone"></div><div class="bone"></div></div>
+<div class="card"><button id="refresh">Refresh</button><button id="reload">Reload</button><button id="export">Export CSV</button><button id="report">Generate report</button><button id="copy">Copy link</button><a href="/account/delete">Delete account</a></div>
+<form class="card" id="f"><label>Store name<input name="store" required></label><label>Email<input name="email" type="email" required></label><button>Save changes</button></form>
+<form class="card" id="g"><label>Display name<input name="display" required></label><button>Update profile</button></form>
+</main>
+<script>
+const rows = (d) => '<table><tbody>' + d.items.map((o) => '<tr><td>#' + o.id + '</td><td>' + o.customer + '</td><td>' + o.total + '</td></tr>').join('') + '</tbody></table>';
+
+const load = () => fetch('orders.json?' + Math.random()).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+const list = document.getElementById('list');
+load().then((d) => { list.innerHTML = rows(d); }, () => { list.innerHTML = '<p role="alert">Couldn\'t load orders.</p>'; });
+// no feedback while loading, no message when it fails
+document.getElementById('refresh').onclick = () => load().then((d) => { list.innerHTML = '<p>Updated ' + Date.now() + '</p>' + rows(d); }).catch(() => {});
+// the right way: a pending label, disabled, an error message
+const rl = document.getElementById('reload');
+rl.onclick = () => { rl.disabled = true; rl.textContent = 'Reloading…'; load().then((d) => { list.innerHTML = '<p>Reloaded ' + Date.now() + '</p>' + rows(d); }, () => { list.innerHTML = '<p role="alert">Couldn\'t reload. Try again.</p>'; }).finally(() => { rl.disabled = false; rl.textContent = 'Reload'; }); };
+document.getElementById('export').onclick = () => {};
+document.getElementById('report').onclick = () => { const t = performance.now(); while (performance.now() - t < 700); document.getElementById('report').textContent = 'Report ready'; };
+document.getElementById('copy').onclick = (e) => { e.target.textContent = 'Copied!'; };
+// saves twice on a double click, says nothing on failure
+document.getElementById('f').onsubmit = (e) => { e.preventDefault(); fetch('/api/settings', { method: 'POST', body: new FormData(e.target) }).then((r) => { if (r.ok) document.body.insertAdjacentHTML('beforeend', '<div class="toast">Settings saved</div>'); }).catch(() => {}); };
+// the right way
+document.getElementById('g').onsubmit = (e) => { e.preventDefault(); const b = e.target.querySelector('button'); b.disabled = true; b.textContent = 'Saving…'; fetch('/api/profile', { method: 'POST' }).then((r) => { document.body.insertAdjacentHTML('beforeend', r.ok ? '<div class="toast">Profile updated</div>' : '<div class="toast" role="alert">Couldn\'t update your profile.</div>'); }).finally(() => { b.disabled = false; b.textContent = 'Update profile'; }); };
+</script>
+</body></html>

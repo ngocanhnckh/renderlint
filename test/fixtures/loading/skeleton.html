@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Orders</title><link rel="stylesheet" href="_style.css"></head>
+<body><main><h1>Orders</h1>
+<div class="card" id="list"><div class="bone"></div><div class="bone"></div><div class="bone"></div></div>
+</main>
+<script>
+const rows = (d) => '<table><tbody>' + d.items.map((o) => '<tr><td>#' + o.id + '</td><td>' + o.customer + '</td><td>' + o.total + '</td></tr>').join('') + '</tbody></table>';
+fetch('orders.json').then((r) => r.json()).then((d) => { document.getElementById('list').innerHTML = rows(d); });
+</script>
+</body></html>

@@ -1,0 +1,249 @@
+[
+ {
+  "id": "load-bad-null",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "cards render only once data is there; blank meanwhile"
+ },
+ {
+  "id": "load-bad-empty-table",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "table header, empty body until data"
+ },
+ {
+  "id": "load-bad-whole",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "whole app renders null until /api/me: white page"
+ },
+ {
+  "id": "load-bad-partial",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "static stats, the Recent orders card body is empty until data"
+ },
+ {
+  "id": "load-bad-chart",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "chart card keeps its height but stays empty until data"
+ },
+ {
+  "id": "load-bad-rq",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "TanStack Query, data?.items.map, isPending ignored"
+ },
+ {
+  "id": "load-bad-zero",
+  "kind": "load",
+  "expect": "hard",
+  "desc": "stat cards show 0 until the real numbers arrive"
+ },
+ {
+  "id": "load-good-skeleton",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "shimmer skeleton rows (class \"skeleton\")"
+ },
+ {
+  "id": "load-good-skeleton-static",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "grey placeholder blocks, no animation, hashed class name"
+ },
+ {
+  "id": "load-good-pulse",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "Tailwind-style animate-pulse placeholder cards"
+ },
+ {
+  "id": "load-good-spinner",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "spinning ring, hashed class name, no text, no ARIA"
+ },
+ {
+  "id": "load-good-spinner-aria",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "role=status with visually hidden \"Loading orders\""
+ },
+ {
+  "id": "load-good-text",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "plain \"Loading orders...\" paragraph"
+ },
+ {
+  "id": "load-good-suspense",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "React 19 use() + Suspense with a skeleton fallback"
+ },
+ {
+  "id": "load-good-rq",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "TanStack Query with isPending -> spinner"
+ },
+ {
+  "id": "load-good-global-bar",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "a top progress bar while requests run, content area empty"
+ },
+ {
+  "id": "load-good-delayed-spinner",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "spinner shown only after 400ms, to avoid a flash on fast responses"
+ },
+ {
+  "id": "load-good-static",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "no request at all"
+ },
+ {
+  "id": "load-good-background",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "polls /api/ping and posts analytics; the UI does not depend on them"
+ },
+ {
+  "id": "load-good-badge",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "static page; a tiny notification count appears late"
+ },
+ {
+  "id": "load-good-initial-data",
+  "kind": "load",
+  "expect": "ok",
+  "desc": "renders cached data at once, refetches silently (stale-while-revalidate)"
+ },
+ {
+  "id": "click-bad-refresh",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "Refresh refetches; nothing changes until the data arrives"
+ },
+ {
+  "id": "click-bad-loadmore",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "Load more appends rows; no feedback meanwhile"
+ },
+ {
+  "id": "click-bad-save",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "Save POSTs; button stays enabled, a toast comes after"
+ },
+ {
+  "id": "click-bad-tabs-frozen",
+  "kind": "click",
+  "expect": "flag",
+  "desc": "tab switch waits for the data, even the tab highlight"
+ },
+ {
+  "id": "click-hard-tabs-stale",
+  "kind": "click",
+  "expect": "hard",
+  "desc": "tab highlight moves at once, the old tab content stays until data"
+ },
+ {
+  "id": "click-good-refresh",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "Refresh disables itself and shows a small spinner"
+ },
+ {
+  "id": "click-good-refresh-dim",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "Refresh dims the stale table with aria-busy"
+ },
+ {
+  "id": "click-good-save",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "Save becomes \"Saving...\" and disabled"
+ },
+ {
+  "id": "click-good-tabs",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "tab switch shows a skeleton in the panel"
+ },
+ {
+  "id": "click-good-local",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "a button that only toggles local UI"
+ },
+ {
+  "id": "click-good-optimistic",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "Like count goes up at once, the POST runs in the background"
+ },
+ {
+  "id": "click-good-analytics",
+  "kind": "click",
+  "expect": "ok",
+  "desc": "opens a local panel and sends an analytics event"
+ },
+ {
+  "id": "freeze-bad-click",
+  "kind": "freeze",
+  "expect": "flag",
+  "desc": "\"Generate report\" blocks the main thread for 1.5s"
+ },
+ {
+  "id": "freeze-bad-load",
+  "kind": "freeze",
+  "expect": "flag",
+  "desc": "a 1.2s synchronous computation while mounting"
+ },
+ {
+  "id": "freeze-good-chunks",
+  "kind": "freeze",
+  "expect": "ok",
+  "desc": "the same work in 16ms chunks, with a spinner"
+ },
+ {
+  "id": "vanilla-bad",
+  "kind": "load",
+  "expect": "flag",
+  "desc": "plain HTML + fetch().then(innerHTML), empty tbody meanwhile",
+  "url": "/vanilla.html"
+ },
+ {
+  "id": "route-bad-loader",
+  "kind": "route",
+  "expect": "flag",
+  "desc": "React Router data loader; old page stays, no pending UI"
+ },
+ {
+  "id": "route-good-loader",
+  "kind": "route",
+  "expect": "ok",
+  "desc": "same, with useNavigation(): top bar + dimmed page"
+ },
+ {
+  "id": "route-bad-blank",
+  "kind": "route",
+  "expect": "flag",
+  "desc": "route component fetches in an effect, renders nothing until data"
+ },
+ {
+  "id": "route-good-skeleton",
+  "kind": "route",
+  "expect": "ok",
+  "desc": "route component fetches in an effect, skeleton meanwhile"
+ }
+]

@@ -1,0 +1,10 @@
+body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #111827; background: #f3f4f6; }
+main { padding: 24px; max-width: 760px; margin: 0 auto; }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+table { width: 100%; border-collapse: collapse; } td { padding: 8px; border-bottom: 1px solid #f3f4f6; }
+.bone { height: 16px; background: #e5e7eb; border-radius: 6px; margin: 12px 0; }
+.r9 { width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: r9 .8s linear infinite; margin: 24px auto; }
+@keyframes r9 { to { transform: rotate(360deg); } }
+button { font: inherit; padding: 10px 16px; min-height: 44px; border-radius: 8px; border: 1px solid #9ca3af; background: #fff; color: #111827; cursor: pointer; margin: 0 8px 8px 0; }
+label { display: block; margin-bottom: 12px; } input { font: inherit; padding: 8px; border: 1px solid #6b7280; border-radius: 6px; display: block; }
+.toast { position: fixed; bottom: 16px; right: 16px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 8px; }

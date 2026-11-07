@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
 import { measureDropdowns, checkMenus } from './controls.js';
+import { checkLoadingState } from './waiting.js';
+import { uxPass, UX_PERF } from './ux.js';
 import { dialogAdvice, RULES } from './rules-meta.js';
 import { stressJson } from './stress-data.js';
 import { authenticate, loginRedirect, LOGIN_PATH } from './auth.js';
@@ -374,6 +376,8 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
           const first = !state && si === 0 && vi === 0;
           return { vp, scheme, config, replay, sources, source, analyzeOpts, outDir, state, marked, session, serverLog, crawled: !state && !listed.has(key) && !own.has(key), sweep: state || quick || si > 0 ? [] : config.sweep, viewports, focus: first && !quick && config.rules['focus-indicator'] !== 'off', log, cssCache,
             menus: !state && !quick && !replay && si === 0 && config.menus !== false && config.rules['popup-obscured'] !== 'off',
+            loading: first && !quick && !replay && config.loading !== false && (config.rules['loading-state'] !== 'off' || config.rules['layout-shift'] !== 'off'),
+            ux: first && !quick && !replay && !!config.ux,
             detect: detect && !state, discover: discover && first && !quick && !routesFound,
             onJson: first ? onJson : null, probe: first && !!coverage,
             // dark mode: the stress passes are skipped when the layout provably matches the first scheme's
@@ -638,6 +642,7 @@ async function handleRoute(route, routes) {
       let body = spec.file ? readFileSync(spec.file, 'utf8') : spec.body !== undefined ? (typeof spec.body === 'string' ? spec.body : JSON.stringify(spec.body)) : JSON.stringify(spec.json !== undefined ? spec.json : spec.data);
       const isJson = spec.file ? /\.json$/i.test(spec.file) : typeof spec.body !== 'string';
       if (routes.stressData && isJson) { try { body = JSON.stringify(stressJson(JSON.parse(body), routes.stressData)); } catch { /* not JSON */ } }
+      if (spec.delay > 0) await new Promise((r) => setTimeout(r, Math.min(+spec.delay, 30000))); // a slow API
       return await route.fulfill({ status: spec.status || 200, headers: { 'content-type': isJson ? 'application/json' : 'text/plain', ...(spec.headers || {}) }, body });
     }
     if (routes.sources && routes.sources.length && /^(fetch|xhr|eventsource|other)$/.test(req.resourceType())) {
@@ -764,7 +769,7 @@ const MQ_RECORDER = () => {
   window.matchMedia = function matchMedia(q) { if (seen.length < 200 && !seen.includes(String(q))) seen.push(String(q)); return mm.call(window, q); };
 };
 
-async function checkOne(browser, url, { replay, sources = [], vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, menus, log, session, serverLog, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig, onJson, probe, detect, discover }) {
+async function checkOne(browser, url, { replay, sources = [], vp, scheme, config, source, analyzeOpts, outDir, state, marked = new Set(), sweep = [], viewports, focus, menus, loading, ux, log, session, serverLog, crawled, reps, onMeta, template, cssCache, wantSig, onSig, refSig, onJson, probe, detect, discover }) {
   const context = await browser.newContext({
     viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1, colorScheme: scheme,
     reducedMotion: config.reducedMotion ? 'reduce' : 'no-preference', bypassCSP: true, ignoreHTTPSErrors: true,
@@ -784,6 +789,9 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
   if (session && session.initScript) await context.addInitScript(session.initScript);
   const page = await context.newPage();
   const net = trackNetwork(page);
+  let sawData = false; // the page fetched data in the browser (fetch / XHR): the loading pass has something to look at
+  page.on('request', (r) => { if (phase === 'main' && /^(fetch|xhr)$/.test(r.resourceType())) sawData = true; });
+  if (ux) await context.addInitScript(UX_PERF);
   const bpSweep = sweep.length && config.sweepBreakpoints;
   if (bpSweep) await page.addInitScript(MQ_RECORDER);
   if (reps) await page.addInitScript(() => { try { performance.setResourceTimingBufferSize(5000); } catch { /* old browser */ } });
@@ -815,7 +823,7 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
       const at = dialogAt; dialogAt = null;
       await d.dismiss().catch(() => {});
       const text = d.message().replace(/\s+/g, ' ').trim();
-      if (phase !== 'main' || dialogsSeen.has(type + text)) return;
+      if ((phase !== 'main' && phase !== 'ux') || dialogsSeen.has(type + text)) return; // ux: dialogs behind a click
       dialogsSeen.add(type + text);
       const shown = text ? `: "${text.length > 120 ? text.slice(0, 117) + '…' : text}"` : '';
       issues.push({ rule: 'native-dialog', severity: 'error',
@@ -1104,6 +1112,27 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
         }
         lap('data-stress');
       }
+    }
+    // Loading states: reload with the page's data requests held, as on a slow network, and check each
+    // area that fills with data showed something meanwhile. Last: it reloads the page.
+    const reloadReady = async () => { await waitReady(page, net, 4000); await page.evaluate(() => window.__rlWaitQuiet && window.__rlWaitQuiet(500, 3)).catch(() => {}); };
+    const slug = slugFor(url, config.role && config.role.name);
+    if (loading && sawData) {
+      phase = 'loading';
+      routes.stressData = false;
+      issues.push(...await checkLoadingState(page, {
+        url, timeout: config.timeout, log, waitReady: reloadReady, layoutShift: config.rules['layout-shift'] !== 'off',
+        prepare: async () => { await page.evaluate(source); },
+        shotFile: config.screenshots ? join(outDir, 'screens', `${slug}@${vp.width}-loading.png`) : null,
+      }));
+      lap('loading');
+    }
+    // The UX pass (--ux): click through the page's actions and look at how it responds.
+    if (ux) {
+      phase = 'ux';
+      routes.stressData = false;
+      issues.push(...await uxPass(page, { url, config, source, waitReady: reloadReady, log, shotBase: config.screenshots ? join(outDir, 'screens', `${slug}@${vp.width}-ux`) : null }));
+      lap('ux');
     }
     if (mine) mine.rest.resolve({ issues: issues.slice(iRest).map(cloneIssue) });
   } catch (e) {

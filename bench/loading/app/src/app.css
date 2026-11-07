@@ -1,0 +1,42 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: #111827; background: #f3f4f6; }
+.app { display: flex; min-height: 100vh; }
+.side { width: 200px; background: #111827; color: #e5e7eb; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.main { flex: 1; padding: 24px 32px; min-width: 0; }
+h1 { font-size: 24px; margin: 0 0 16px; }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+.stat b { display: block; font-size: 22px; }
+.stat span { color: #6b7280; font-size: 13px; }
+.tbl { width: 100%; border-collapse: collapse; }
+.tbl td, .tbl th { padding: 8px; border-bottom: 1px solid #f3f4f6; text-align: left; }
+.btn { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #d1d5db; background: #fff; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; }
+.btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+.btn:disabled { opacity: .6; cursor: default; }
+.row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid #e5e7eb; margin-bottom: 12px; }
+.tabs button { font: inherit; border: 0; background: none; padding: 8px 12px; cursor: pointer; border-bottom: 2px solid transparent; }
+.tabs button[aria-selected=true] { border-color: #2563eb; color: #2563eb; }
+.chart { height: 220px; display: flex; align-items: flex-end; gap: 12px; }
+.chart i { flex: 1; background: #93c5fd; border-radius: 4px 4px 0 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.toast { position: fixed; bottom: 20px; right: 20px; background: #111827; color: #fff; padding: 10px 16px; border-radius: 8px; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; max-width: 360px; }
+.field input { font: inherit; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; }
+.badge { background: #ef4444; color: #fff; border-radius: 9px; padding: 0 6px; font-size: 12px; margin-left: 6px; }
+.top { display: flex; justify-content: space-between; align-items: center; }
+nav.links { display: flex; gap: 12px; margin-bottom: 16px; }
+nav.links a { color: #2563eb; }
+
+/* skeletons and spinners, under names like a component library's, and under hashed names */
+.skeleton { background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 6px; height: 16px; margin: 10px 0; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.gph { background: #e5e7eb; border-radius: 6px; height: 16px; margin: 10px 0; }
+.animate-pulse { animation: pulse 2s cubic-bezier(.4,0,.6,1) infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+._k3x9 { width: 28px; height: 28px; border: 3px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; animation: _r 0.8s linear infinite; margin: 40px auto; }
+._k3x9.sm { width: 14px; height: 14px; border-width: 2px; margin: 0; border-top-color: currentColor; }
+@keyframes _r { to { transform: rotate(360deg); } }
+.topbar { position: fixed; top: 0; left: 0; height: 3px; background: #2563eb; animation: bar 1.5s ease-out infinite; z-index: 9; }
+@keyframes bar { from { width: 0 } to { width: 90% } }
+.dim { opacity: .5; transition: opacity .2s; }

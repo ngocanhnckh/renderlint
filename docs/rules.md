@@ -39,6 +39,14 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`squashed-control`](#squashed-control) | error | An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom. |
 | [`control-height-mismatch`](#control-height-mismatch) | warn | Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up. |
 | [`icon-misaligned`](#icon-misaligned) | warn | An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text). |
+| [`loading-state`](#loading-state) | warn | An area of the page stays blank while its data loads: no spinner, skeleton, progress bar or "Loading…" text, so on a slow connection the page looks empty, broken or frozen. renderlint reloads each page with its fetch/XHR requests held for a second (as on a slow network), looks at what is shown, releases them and finds the areas the data filled. Any loading sign on the page counts: aria-busy, role=progressbar/status, a running animation, motion on screen, "Loading…"/"Saving…" text, skeleton or spinner class names, placeholder blocks where the content appears. With `--ux`, also checked after each click. |
+| [`action-feedback`](#action-feedback) | warn | After a click (a button, tab, link or form submit), the request it starts takes a while and nothing on screen changes meanwhile: the page looks frozen, and users click again or leave. Checked by `--ux`, which holds the request for a second (Nielsen: past 1s users lose the feeling of direct control). Covers in-app page changes too (React Router loaders, Next.js navigation without loading.tsx). |
+| [`ui-freeze`](#ui-freeze) | warn | The page could not respond or repaint for 500ms or more: a long task blocked the main thread while loading, or after a click (Interaction to Next Paint over 500ms is rated poor). Checked by `--ux`. |
+| [`error-feedback`](#error-feedback) | warn | When a request fails, nothing tells the user: the page shows less (or keeps its spinner forever) on load, or an action seems to succeed. `--ux` answers the page's data requests, and each action's, with HTTP 500 and looks for an error message, an alert or a changed control. |
+| [`double-submit`](#double-submit) | warn | Clicking a submit or save button twice while its request is pending sends it twice: duplicate orders, payments or messages. Checked by `--ux` on actions that change data (POST, PUT, PATCH, DELETE; renderlint answers them itself, nothing reaches the server). |
+| [`dead-control`](#dead-control) | warn | A button that does nothing a user can see when clicked: no request, no change on screen, no navigation, dialog or download. Checked by `--ux`. |
+| [`slow-render`](#slow-render) | warn | The page's main content appears more than 4s after navigation (Largest Contentful Paint, measured by `--ux` on a reload from the local server with a warm cache; Core Web Vitals rates over 4s as poor). |
+| [`layout-shift`](#layout-shift) | warn | Content jumps around while the page loads (Cumulative Layout Shift over 0.1, the Core Web Vitals limit for "good"): text and buttons move as data and images arrive, so users lose their place or click the wrong thing. Measured while the loading-state check holds the page's data for a second and releases it. |
 | [`popup-obscured`](#popup-obscured) | error | An open dropdown, menu, listbox or popover can't be seen: it is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `&lt;details>`) to check, and checks menus already open in `states` and Playwright tests. |
 | [`native-dialog`](#native-dialog) | error | The app uses the browser's own alert(), confirm() or prompt() box: a grey system dialog that blocks the page, ignores the app's design and can't be styled or translated. Found when one opens while a page is checked, and in source code (`window.confirm(…)`, `alert(…)`), which also catches the ones behind a click. The browser's "Leave site?" prompt from `beforeunload` is not flagged. |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
@@ -344,6 +352,72 @@ An input or select is too short for its text: height minus vertical padding leav
 Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up.
 
 **How to fix:** Give controls in a row the same height (e.g. `h-10` on both), or let the row stretch them: `display: flex; align-items: stretch`.
+
+## Ux
+
+### loading-state
+
+**Default:** warn
+
+An area of the page stays blank while its data loads: no spinner, skeleton, progress bar or "Loading…" text, so on a slow connection the page looks empty, broken or frozen. renderlint reloads each page with its fetch/XHR requests held for a second (as on a slow network), looks at what is shown, releases them and finds the areas the data filled. Any loading sign on the page counts: aria-busy, role=progressbar/status, a running animation, motion on screen, "Loading…"/"Saving…" text, skeleton or spinner class names, placeholder blocks where the content appears. With `--ux`, also checked after each click.
+
+**How to fix:** Render a loading state where the data will appear until it arrives: a skeleton shaped like the content (best: no layout jump), or a spinner. With TanStack Query / SWR use isPending / isLoading; with React Suspense a fallback; with React Router loaders useNavigation(); in Next.js a loading.tsx. Show an error message if the request fails.
+
+### action-feedback
+
+**Default:** warn
+
+After a click (a button, tab, link or form submit), the request it starts takes a while and nothing on screen changes meanwhile: the page looks frozen, and users click again or leave. Checked by `--ux`, which holds the request for a second (Nielsen: past 1s users lose the feeling of direct control). Covers in-app page changes too (React Router loaders, Next.js navigation without loading.tsx).
+
+**How to fix:** Respond to the click at once: a pending state on the control (spinner, "Saving…", disabled) or where the result will appear (skeleton, dimmed old content with aria-busy, a top progress bar for page changes: useNavigation(), Next.js loading.tsx, NProgress), then the result.
+
+### ui-freeze
+
+**Default:** warn
+
+The page could not respond or repaint for 500ms or more: a long task blocked the main thread while loading, or after a click (Interaction to Next Paint over 500ms is rated poor). Checked by `--ux`.
+
+**How to fix:** Find the long task in the Performance panel. Move heavy computation to a Web Worker, split work into chunks that yield (await scheduler.yield() / setTimeout), virtualize long lists, and in React wrap slow updates in startTransition so feedback paints first.
+
+### error-feedback
+
+**Default:** warn
+
+When a request fails, nothing tells the user: the page shows less (or keeps its spinner forever) on load, or an action seems to succeed. `--ux` answers the page's data requests, and each action's, with HTTP 500 and looks for an error message, an alert or a changed control.
+
+**How to fix:** Handle the failed request in the UI: an error message where the content would be, or a toast / inline error for an action, saying what went wrong and offering a retry; stop the loading state and re-enable the control. (TanStack Query isError, SWR error, a catch that sets error state, an error boundary.)
+
+### double-submit
+
+**Default:** warn
+
+Clicking a submit or save button twice while its request is pending sends it twice: duplicate orders, payments or messages. Checked by `--ux` on actions that change data (POST, PUT, PATCH, DELETE; renderlint answers them itself, nothing reaches the server).
+
+**How to fix:** Disable the button (or ignore clicks) while the request is in flight, and show that it is working ("Saving…"). For payments and orders, also send an idempotency key.
+
+### dead-control
+
+**Default:** warn
+
+A button that does nothing a user can see when clicked: no request, no change on screen, no navigation, dialog or download. Checked by `--ux`.
+
+**How to fix:** Fix the handler (missing, failing, or attached to another element). If the result is invisible (copied to the clipboard, saved in the background), confirm it with a "Copied" label or a toast. A placeholder button should be disabled or removed.
+
+### slow-render
+
+**Default:** warn
+
+The page's main content appears more than 4s after navigation (Largest Contentful Paint, measured by `--ux` on a reload from the local server with a warm cache; Core Web Vitals rates over 4s as poor).
+
+**How to fix:** Find what delays the content: request waterfalls (requests that wait for each other: start them together, or fetch on the server), a large bundle before the first render (code-split routes, lazy-load heavy components), or render-blocking resources.
+
+### layout-shift
+
+**Default:** warn
+
+Content jumps around while the page loads (Cumulative Layout Shift over 0.1, the Core Web Vitals limit for "good"): text and buttons move as data and images arrive, so users lose their place or click the wrong thing. Measured while the loading-state check holds the page's data for a second and releases it.
+
+**How to fix:** Reserve the space before the content arrives: a skeleton the size of the content, width and height (or aspect-ratio) on images, video and embeds, min-height on areas filled by data, and no banners inserted above existing content.
 
 ## Runtime
 
