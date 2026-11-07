@@ -174,6 +174,13 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
   return issues;
 
   async function checkEmpty(normal, normalShot) {
+    // the app may cache what it fetched (a persisted query cache): put storage back afterwards
+    const stored = await page.evaluate(() => [Object.entries(localStorage), Object.entries(sessionStorage)]).catch(() => null);
+    try { await emptyLoad(normal, normalShot); } finally {
+      if (stored) await page.evaluate(([l, s]) => { localStorage.clear(); sessionStorage.clear(); for (const [k, v] of l) localStorage.setItem(k, v); for (const [k, v] of s) sessionStorage.setItem(k, v); }, stored).catch(() => {});
+    }
+  }
+  async function emptyLoad(normal, normalShot) {
     ctl.mode = 'empty'; ctl.emptied = [];
     let E, eInd, errs, emptyShot;
     try {
@@ -200,12 +207,15 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
     const have = new Map();
     for (const x of N) have.set(x.k, (have.get(x.k) || 0) + 1);
     const added = E.filter((x) => { const n = have.get(x.k) || 0; if (n) { have.set(x.k, n - 1); return false; } return !x.side; });
-    const shownError = added.find((x) => x.err);
+    // "No failed jobs", "No results. Try again with other filters", "Start by uploading a file": an
+    // empty state, even with an error or loading word in it
+    const EMPTY_WORDS = /\b(no|none|nothing|empty|yet|first|start|get started|create|add|zero|0 results)\b/i;
+    const shownError = added.find((x) => x.err && !EMPTY_WORDS.test(x.t));
     const stuck = eInd > 0 && !normal.ind.length;
     const near = (x, g) => !!x.p && (x.p === g.card || x.p.startsWith(g.card + '>'));
     const reqs = describeRequests(emptied, origin);
     for (const g of groups.slice(0, 2)) {
-      const told = added.filter((x) => !x.err && !x.load && /\p{L}{2}/u.test(x.t) && near(x, g));
+      const told = added.filter((x) => (EMPTY_WORDS.test(x.t) || (!x.err && !x.load)) && /\p{L}{2}/u.test(x.t) && (groups.length === 1 || near(x, g)));
       const broken = !!(shownError || errs.length);
       if (told.length && !broken && !stuck) continue;
       const what = broken
@@ -353,19 +363,28 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
     if (!d) return;
     const problems = [];
     if (!d.focusIn) problems.push('focus stays on the page behind it, so keyboard and screen-reader users are left outside the dialog');
+    // closing can be animated: give it up to 1.2s
+    const closed = async () => {
+      let s = null;
+      for (const end = Date.now() + 1200; ;) {
+        s = await page.evaluate(() => window.__renderlint.uxDialogState()).catch(() => null);
+        if (!s || Date.now() > end) return s;
+        // closed: let the browser move focus off what was hidden before reading where it went
+        if (!s.open) { await sleep(200); return (await page.evaluate(() => window.__renderlint.uxDialogState()).catch(() => null)) || s; }
+        await sleep(150);
+      }
+    };
     await page.keyboard.press('Escape').catch(() => {});
-    await sleep(400);
-    let st = await page.evaluate(() => window.__renderlint.uxDialogState()).catch(() => null);
+    let st = await closed();
     if (!st) return;
     let how = 'Escape';
     if (st.open && d.closer) {
       problems.push('Escape doesn\'t close it');
       await page.locator('[data-rl-ux-closer]').first().click({ timeout: 1500 }).catch(() => {});
-      await sleep(400);
-      st = await page.evaluate(() => window.__renderlint.uxDialogState()).catch(() => st);
+      st = (await closed()) || st;
       how = `"${d.closer}"`;
     }
-    if (!st.open && st.focus === 'body') problems.push(`when it closes (${how}), focus is dropped to the top of the page instead of going back to "${act.label}", so keyboard users lose their place`);
+    if (!st.open && st.focus === 'body' && st.triggerFocusable) problems.push(`when it closes (${how}), focus is dropped to the top of the page instead of going back to "${act.label}", so keyboard users lose their place`);
     if (!problems.length) return;
     const shot = shotFile();
     if (shot && shotImg) writeMarked(shot, shotImg, [d.vrect]);
@@ -387,20 +406,24 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
     } else {
       await page.goBack({ timeout: 3000, waitUntil: 'commit' }).catch(() => {});
       await sleep(300);
-      await waitReady();
+      await waitReady().catch(() => {});
       const back = page.url();
       if (routeOf(back) !== routeOf(startUrl)) {
         problem = `Back goes to ${back.startsWith(origin) ? back.replace(origin, '') || '/' : back} instead of ${from}: the route change added more than one history entry (a redirect pushed instead of replaced)`;
       } else if (await page.evaluate((t) => window.__rlDoc === t, token).catch(() => false)) {
         await page.evaluate(source).catch(() => {});
-        const now = await page.evaluate(() => window.__renderlint.waitSnap()).catch(() => null);
-        if (!now) return;
         const bag = (sn) => { const m = new Map(); for (const x of sn.texts) m.set(x.t, (m.get(x.t) || 0) + 1); return m; };
         const only = (a, b) => { const m = bag(b); return a.texts.filter((x) => { const n = m.get(x.t) || 0; if (n) { m.set(x.t, n - 1); return false; } return true; }).map((x) => x.t); };
         const startOnly = only(s0, target), targetOnly = only(target, s0);
-        const has = bag(now);
-        const share = (list) => list.filter((t) => has.get(t)).length / list.length;
-        if (startOnly.length >= 3 && targetOnly.length >= 3 && share(startOnly) < 0.3 && share(targetOnly) > 0.6) {
+        const stale = async () => {
+          const now = await page.evaluate(() => window.__renderlint.waitSnap()).catch(() => null);
+          if (!now) return false;
+          const has = bag(now);
+          const share = (list) => list.filter((t) => has.get(t)).length / list.length;
+          return startOnly.length >= 3 && targetOnly.length >= 3 && share(startOnly) < 0.3 && share(targetOnly) > 0.6;
+        };
+        // a router loader can keep the old view while it fetches: look again a second later
+        if (await stale() && (await sleep(1000), await stale())) {
           problem = `pressing Back changes the address to ${from} again, but the page still shows ${there}: the app doesn't listen for history changes (popstate). Route with the router's own links and navigation (Link / router.push / navigate), or re-render on popstate`;
         }
       }

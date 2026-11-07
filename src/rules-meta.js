@@ -252,13 +252,13 @@ export const RULES = {
   'empty-state': {
     severity: 'warn',
     category: 'ux',
-    summary: 'With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [] }`; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone.',
+    summary: 'With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [], "total": 0 }`: arrays of objects with an id; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone.',
     fix: 'Render an empty state where the content would be: a short message ("No orders yet") and, when the user can add one, the action that does it ("Create order"). Guard code that assumes at least one record (items[0].name, reduce() with no initial value, a chart with no points).',
   },
   'dialog-focus': {
     severity: 'warn',
     category: 'ux',
-    summary: 'A dialog opened by a click doesn\'t handle focus as users expect (WAI-ARIA dialog pattern, WCAG 2.4.3): focus stays on the page behind it, Escape doesn\'t close it, or when it closes focus drops to the top of the page instead of returning to the control that opened it. Checked by `--ux` on dialogs (`<dialog>`, `role=dialog` / `alertdialog`, `aria-modal`) its clicks open.',
+    summary: 'A dialog opened by a click doesn\'t handle focus as users expect (WAI-ARIA dialog pattern, WCAG 2.4.3): focus stays on the page behind it, Escape doesn\'t close it, or when it closes focus drops to the top of the page instead of returning to the control that opened it. Checked by `--ux` on the modal dialogs its clicks open (`<dialog>` with `showModal()`, `aria-modal`, `alertdialog`, or a dialog over a full-screen overlay).',
     fix: 'Use a dialog that manages focus: the `<dialog>` element opened with `showModal()`, or Radix / Headless UI / MUI / Angular CDK dialogs. By hand: focus the first field (or the close button) on open, close on Escape, and on close call `.focus()` on the element that opened it.',
   },
   'back-navigation': {

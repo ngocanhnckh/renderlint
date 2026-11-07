@@ -2500,7 +2500,11 @@ const SIDE_SEL = 'nav,header,footer,aside,[role=navigation],[role=banner],[role=
 const numless = (t) => t.replace(/\d[\d,.\s]*/g, '#');
 // where an element sits, the same in two loads of the page: tag#id.class from <body> down (no
 // sibling numbers: a section left out would shift them)
-const sigOf = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '');
+// ids and classes that can change with the data are left out: generated ids (useId ":r3:", "radix-12"),
+// hashed classes (css-1x2y3z, sc-…), state classes (is-empty, list--loading, active)
+const stableId = (id) => /^[A-Za-z][\w-]*$/.test(id) && !/\d/.test(id);
+const stableClass = (c) => !/\d|--|^(is|has)-|^_|^(css|sc|jsx|svelte|emotion|chakra)-|empty|loading|active|selected|open|hidden|visible/i.test(c);
+const sigOf = (el) => el.tagName.toLowerCase() + (el.id && stableId(el.id) ? '#' + el.id : '') + (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).filter(stableClass).slice(0, 2).join('.') : '').replace(/\.$/, '');
 const pathOf = (el) => { const out = []; for (let a = el; a && a !== document.documentElement; a = a.parentElement) out.push(sigOf(a)); return out.reverse().join('>'); };
 function screenTexts(fn) {
   const w = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
@@ -2568,15 +2572,29 @@ RL.uxEmptyGroups = function (emptyKeys) {
 
 // ---- dialogs an action opens: focus moves in, Escape closes, focus comes back
 const DIALOG_SEL = 'dialog[open],[role=dialog],[role=alertdialog],[aria-modal=true]';
-const CLOSE_LABEL = /^(×|✕|✖|x|close|cancel|dismiss|done|ok|okay|got it|no thanks|not now)$/i;
+const CLOSE_LABEL = /^(×|✕|✖|x|close|cancel|dismiss|no thanks|not now)$/i; // never OK / Done / Confirm: those act
 const openDialogs = () => Array.from(document.querySelectorAll(DIALOG_SEL)).filter((d) => !ours(d) && shownEl(d) && d.getClientRects().length);
+// a modal: says so (aria-modal, <dialog> opened with showModal(), alertdialog), or sits over a
+// full-screen overlay. Not a cookie banner or a non-modal panel that happens to appear.
+function isModal(d) {
+  if (d.getAttribute('aria-modal') === 'true' || d.getAttribute('role') === 'alertdialog') return true;
+  try { if (d.matches('dialog:modal')) return true; } catch (e) { /* :modal unsupported */ }
+  for (const [x, y] of [[4, 4], [innerWidth - 5, innerHeight - 5]]) {
+    for (let e = document.elementFromPoint(x, y); e && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+      if (RL.cs(e).position !== 'fixed') continue;
+      const r = e.getBoundingClientRect();
+      if (r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9 && !d.contains(e) && !e.contains(document.querySelector('[data-rl-ux]'))) return true;
+    }
+  }
+  return false;
+}
 RL.uxDialogMark = function () { RL.resetCaches(); for (const d of openDialogs()) d.setAttribute('data-rl-ux-was', '1'); };
 // the dialog the action opened, if any (big enough to be one: not a tooltip or a small popover)
 RL.uxDialog = function () {
   RL.resetCaches();
   for (const e of document.querySelectorAll('[data-rl-ux-dialog],[data-rl-ux-closer]')) { e.removeAttribute('data-rl-ux-dialog'); e.removeAttribute('data-rl-ux-closer'); }
   const vp = innerWidth * innerHeight;
-  const d = openDialogs().filter((x) => !x.hasAttribute('data-rl-ux-was') && !x.closest('[data-rl-ux-was]')).find((x) => { const r = x.getBoundingClientRect(); return r.width * r.height >= vp * 0.04; });
+  const d = openDialogs().filter((x) => !x.hasAttribute('data-rl-ux-was') && !x.closest('[data-rl-ux-was]')).find((x) => { const r = x.getBoundingClientRect(); return r.width * r.height >= vp * 0.04 && isModal(x); });
   if (!d) return null;
   d.setAttribute('data-rl-ux-dialog', '1');
   const a = document.activeElement;
@@ -2592,7 +2610,9 @@ RL.uxDialogState = function () {
   const a = document.activeElement;
   const t = document.querySelector('[data-rl-ux]');
   const focus = !a || a === document.body || a === document.documentElement ? 'body' : d && d.contains(a) ? 'inside' : t && (t === a || t.contains(a)) ? 'trigger' : 'elsewhere';
-  return { open, focus };
+  // focus can only go back to a trigger that is still there and can take it
+  const triggerFocusable = !!t && t.isConnected && shownEl(t) && !t.disabled && (t.tabIndex >= 0 || /^(BUTTON|A|INPUT|SELECT|TEXTAREA|SUMMARY)$/.test(t.tagName));
+  return { open, focus, triggerFocusable };
 };
 
 // ---- solid-bg.js

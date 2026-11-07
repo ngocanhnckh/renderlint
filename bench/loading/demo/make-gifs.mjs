@@ -26,6 +26,11 @@ const stage = await (await browser.newContext({ viewport: { width: 960, height: 
 await stage.setContent(STAGE_HTML());
 
 // ---- the warnings, from renderlint itself
+// renderlint's finding for the rule on that page (a timing check can miss once on a busy machine: retried)
+async function finding(path, rule, opts) {
+  for (let i = 0; i < 3; i++) { const f = (await findings(path, opts)).find((x) => x.rule === rule); if (f) return f; }
+  throw new Error(`no ${rule} finding on ${path}`);
+}
 async function findings(path, { ux = true } = {}) {
   const res = await check({ targets: [APP + path], browser, scan: false, configFile: false, cwd: WORK,
     config: { crawl: false, routes: false, screenshots: false, outputDir: join(WORK, 'out'), viewports: [VW], colorSchemes: ['light'], sweep: false, stress: false, ux } });
@@ -108,7 +113,7 @@ const SCENES = {
   // the page loads its data with nothing on screen meanwhile
   async loading() {
     const path = '/s/load-bad-whole';
-    const issue = (await findings(path, { ux: false })).find((i) => i.rule === 'loading-state');
+    const issue = await finding(path, 'loading-state', { ux: false });
     const page = await ctx.newPage();
     let release;
     const gate = new Promise((r) => { release = r; });
@@ -131,7 +136,7 @@ const SCENES = {
   // a click blocks the main thread
   async freeze() {
     const path = '/s/freeze-bad-click';
-    const issue = (await findings(path)).find((i) => i.rule === 'ui-freeze');
+    const issue = await finding(path, 'ui-freeze');
     const page = await ctx.newPage();
     await page.goto(APP + path);
     await page.waitForLoadState('networkidle');
@@ -151,7 +156,7 @@ const SCENES = {
   // a save fails and the page says nothing
   async failure() {
     const path = '/s/u-err-bad-save';
-    const issue = (await findings(path)).find((i) => i.rule === 'error-feedback');
+    const issue = await finding(path, 'error-feedback');
     const page = await ctx.newPage();
     await page.route('**/api/settings', async (route) => { await sleep(1200); return route.fulfill({ status: 500, body: '{}' }); });
     await page.goto(APP + path);
@@ -177,7 +182,7 @@ const SCENES = {
   // a new account: the list comes back empty and the table is just empty
   async empty() {
     const path = '/s/v-empty-bad-table';
-    const issue = (await findings(path)).find((i) => i.rule === 'empty-state');
+    const issue = await finding(path, 'empty-state');
     const page = await ctx.newPage();
     await page.goto(APP + path);
     await page.waitForLoadState('networkidle');
@@ -197,7 +202,7 @@ const SCENES = {
   // a hand-made modal: focus stays behind it and Escape does nothing
   async dialog() {
     const path = '/s/v-dlg-bad-div';
-    const issue = (await findings(path)).find((i) => i.rule === 'dialog-focus');
+    const issue = await finding(path, 'dialog-focus');
     const page = await ctx.newPage();
     await page.goto(APP + path);
     await page.waitForLoadState('networkidle');
