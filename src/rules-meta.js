@@ -252,7 +252,7 @@ export const RULES = {
   'empty-state': {
     severity: 'warn',
     category: 'ux',
-    summary: 'With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [], "total": 0 }`: arrays of objects with an id; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone.',
+    summary: 'With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [], "total": 0 }`: arrays of objects with an id, but not the user’s roles, flags, settings, menus or lookup lists; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone.',
     fix: 'Render an empty state where the content would be: a short message ("No orders yet") and, when the user can add one, the action that does it ("Create order"). Guard code that assumes at least one record (items[0].name, reduce() with no initial value, a chart with no points).',
   },
   'dialog-focus': {

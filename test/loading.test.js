@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { check } from '../src/index.js';
 import { launchBrowser } from '../src/browser.js';
 import { testValue } from '../src/ux.js';
+import { emptyLists } from '../src/waiting.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dir = join(here, 'fixtures/loading');
@@ -144,4 +145,15 @@ test('--ux: a filter dropdown that refetches with no sign of it: action-feedback
   const a = found(res).filter((i) => i.rule === 'action-feedback');
   assert.deepEqual(a.map((i) => i.details.action), ['Status'], dump(res));
   assert.match(a[0].message, /choosing "Paid" in the dropdown "Status"/);
+});
+
+test('emptyLists empties the records a page lists, and keeps who the user is, flags and lookup lists', () => {
+  assert.deepEqual(emptyLists({ items: [{ id: 1 }, { id: 2 }], total: 2, hasMore: true }), [{ items: [], total: 0, hasMore: false }, 1]);
+  assert.deepEqual(emptyLists({ data: { edges: [{ cursor: 'a', node: { id: 1 } }], totalCount: 4 } }), [{ data: { edges: [], totalCount: 0 } }, 1]);
+  assert.deepEqual(emptyLists([{ orderId: 5 }]), [[], 1]);
+  // the user's roles stay; their projects go
+  assert.deepEqual(emptyLists({ user: { id: 1, roles: [{ id: 2, name: 'admin' }] }, projects: [{ id: 3 }] }), [{ user: { id: 1, roles: [{ id: 2, name: 'admin' }] }, projects: [] }, 1]);
+  for (const j of [{ flags: [{ key: 'beta', on: true }] }, { countries: [{ code: 'US', id: 1 }] }, { permissions: [{ id: 'read' }] }, { points: [{ x: 1, y: 2 }] }, { tags: ['a', 'b'] }]) {
+    assert.deepEqual(emptyLists(j), [j, 0], JSON.stringify(j));
+  }
 });

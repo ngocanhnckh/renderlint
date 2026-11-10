@@ -69,10 +69,13 @@ export async function requestControl(page, { mockMutations = false, mockIf = nul
 
 // JSON with every non-empty array of objects (the records a page lists) replaced by [];
 // arrays of plain values (roles, tags, chart points) are kept. Returns [json, lists emptied].
-// Records have an id (id, _id, uuid, slug, orderId…) or are GraphQL edges; menus, permissions and
-// chart points ({ x, y }) don't, and are left alone. Counters next to an emptied list (total, count,
-// hasMore…) are set to match it.
-const ID_KEY = /^(id|_id|uuid|guid|key|slug|code|node|cursor)$|(Id|_id|UUID|Uuid)$/;
+// Records have an id (id, _id, uuid, slug, orderId…) or are GraphQL edges; chart points ({ x, y })
+// don't, and are left alone, and so is everything under KEEP_KEY (roles, flags, menus…). Counters
+// next to an emptied list (total, count, hasMore…) are set to match it.
+const ID_KEY = /^(id|_id|uuid|guid|slug|node|cursor)$|(Id|_id|UUID|Uuid)$/;
+// lists a new account has too, or that aren't the user's data: who they are and what they may do,
+// settings and flags, menus, lookup tables. Emptying them shows a page no user sees ("Access denied").
+const KEEP_KEY = /^(roles?|permissions?|scopes?|grants|abilities|capabilities|entitlements|features?|feature_?flags|flags|toggles|experiments|settings|config|preferences|plans?|tiers|locales?|languages?|countries|currencies|timezones|menus?|nav(igation)?|links|routes|breadcrumbs|tabs|columns|fields|options|categories|tags|labels|statuses)$/i;
 const COUNT_KEY = /^(total|count|totalCount|total_count|totalItems|total_items|totalResults|total_results|numResults|resultCount|hits|size|length)$/;
 const MORE_KEY = /^(hasMore|has_more|hasNextPage|has_next_page|hasNext|more)$/;
 const isRecord = (e) => e && typeof e === 'object' && !Array.isArray(e) && Object.keys(e).some((k) => ID_KEY.test(k));
@@ -86,7 +89,7 @@ export function emptyLists(v) {
     if (x && typeof x === 'object') {
       const o = {};
       let emptied = false;
-      for (const k of Object.keys(x)) { const before = n; o[k] = walk(x[k]); if (n > before && Array.isArray(x[k])) emptied = true; }
+      for (const k of Object.keys(x)) { const before = n; o[k] = KEEP_KEY.test(k) ? x[k] : walk(x[k]); if (n > before && Array.isArray(x[k])) emptied = true; }
       if (emptied) for (const k of Object.keys(o)) {
         if (COUNT_KEY.test(k) && typeof o[k] === 'number') o[k] = 0;
         else if (MORE_KEY.test(k) && typeof o[k] === 'boolean') o[k] = false;

@@ -175,12 +175,14 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
 
   async function checkEmpty(normal, normalShot) {
     // the app may cache what it fetched (a persisted query cache): put storage back afterwards
+    // before the normal reload it compares against, so that reload doesn't start from the empty cache
     const stored = await page.evaluate(() => [Object.entries(localStorage), Object.entries(sessionStorage)]).catch(() => null);
-    try { await emptyLoad(normal, normalShot); } finally {
+    const restore = async () => {
       if (stored) await page.evaluate(([l, s]) => { localStorage.clear(); sessionStorage.clear(); for (const [k, v] of l) localStorage.setItem(k, v); for (const [k, v] of s) sessionStorage.setItem(k, v); }, stored).catch(() => {});
-    }
+    };
+    try { await emptyLoad(normal, normalShot, restore); } finally { await restore(); }
   }
-  async function emptyLoad(normal, normalShot) {
+  async function emptyLoad(normal, normalShot, restore) {
     ctl.mode = 'empty'; ctl.emptied = [];
     let E, eInd, errs, emptyShot;
     try {
@@ -195,6 +197,7 @@ export async function uxPass(page, { url, config, source, waitReady, log = () =>
       emptyShot = await viewportPng(page).catch(() => null);
     } finally { ctl.mode = 'pass'; }
     const emptied = ctl.emptied.slice();
+    await restore();
     await fresh();
     const N = await page.evaluate(() => window.__renderlint.uxTexts());
     // errors the page throws anyway are not about the empty lists
