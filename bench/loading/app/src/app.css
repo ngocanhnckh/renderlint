@@ -40,3 +40,8 @@ nav.links a { color: #2563eb; }
 .topbar { position: fixed; top: 0; left: 0; height: 3px; background: #2563eb; animation: bar 1.5s ease-out infinite; z-index: 9; }
 @keyframes bar { from { width: 0 } to { width: 90% } }
 .dim { opacity: .5; transition: opacity .2s; }
+.modal-back { position: fixed; inset: 0; background: rgba(17,24,39,.45); display: flex; align-items: center; justify-content: center; z-index: 20; }
+.modal { background: #fff; border-radius: 12px; padding: 24px; width: 420px; min-height: 200px; }
+dialog.modal::backdrop { background: rgba(17,24,39,.45); }
+.pop { position: absolute; background: #fff; border: 1px solid #e5e7eb; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

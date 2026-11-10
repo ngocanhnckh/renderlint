@@ -47,6 +47,9 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`dead-control`](#dead-control) | warn | A button that does nothing a user can see when clicked: no request, no change on screen, no navigation, dialog or download. Checked by `--ux`. |
 | [`slow-render`](#slow-render) | warn | The page's main content appears more than 4s after navigation (Largest Contentful Paint, measured by `--ux` on a reload from the local server with a warm cache; Core Web Vitals rates over 4s as poor). |
 | [`layout-shift`](#layout-shift) | warn | Content jumps around while the page loads (Cumulative Layout Shift over 0.1, the Core Web Vitals limit for "good"): text and buttons move as data and images arrive, so users lose their place or click the wrong thing. Measured while the loading-state check holds the page's data for a second and releases it. |
+| [`empty-state`](#empty-state) | warn | With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [], "total": 0 }`: arrays of objects with an id, but not the user’s roles, flags, settings, menus or lookup lists; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone. |
+| [`dialog-focus`](#dialog-focus) | warn | A dialog opened by a click doesn't handle focus as users expect (WAI-ARIA dialog pattern, WCAG 2.4.3): focus stays on the page behind it, Escape doesn't close it, or when it closes focus drops to the top of the page instead of returning to the control that opened it. Checked by `--ux` on the modal dialogs its clicks open (`&lt;dialog>` with `showModal()`, `aria-modal`, `alertdialog`, or a dialog over a full-screen overlay). |
+| [`back-navigation`](#back-navigation) | warn | After an in-app link (a client-side route change), the browser's Back button doesn't bring the previous page back: the route change replaced the history entry, so Back skips the page, or the address changes back while the page keeps showing the new one (the app ignores popstate). Checked by `--ux` on in-app links that change the route. |
 | [`popup-obscured`](#popup-obscured) | error | An open dropdown, menu, listbox or popover can't be seen: it is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `&lt;details>`) to check, and checks menus already open in `states` and Playwright tests. |
 | [`native-dialog`](#native-dialog) | error | The app uses the browser's own alert(), confirm() or prompt() box: a grey system dialog that blocks the page, ignores the app's design and can't be styled or translated. Found when one opens while a page is checked, and in source code (`window.confirm(…)`, `alert(…)`), which also catches the ones behind a click. The browser's "Leave site?" prompt from `beforeunload` is not flagged. |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
@@ -418,6 +421,30 @@ The page's main content appears more than 4s after navigation (Largest Contentfu
 Content jumps around while the page loads (Cumulative Layout Shift over 0.1, the Core Web Vitals limit for "good"): text and buttons move as data and images arrive, so users lose their place or click the wrong thing. Measured while the loading-state check holds the page's data for a second and releases it.
 
 **How to fix:** Reserve the space before the content arrives: a skeleton the size of the content, width and height (or aspect-ratio) on images, video and embeds, min-height on areas filled by data, and no banners inserted above existing content.
+
+### empty-state
+
+**Default:** warn
+
+With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [], "total": 0 }`: arrays of objects with an id, but not the user’s roles, flags, settings, menus or lookup lists; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone.
+
+**How to fix:** Render an empty state where the content would be: a short message ("No orders yet") and, when the user can add one, the action that does it ("Create order"). Guard code that assumes at least one record (items[0].name, reduce() with no initial value, a chart with no points).
+
+### dialog-focus
+
+**Default:** warn
+
+A dialog opened by a click doesn't handle focus as users expect (WAI-ARIA dialog pattern, WCAG 2.4.3): focus stays on the page behind it, Escape doesn't close it, or when it closes focus drops to the top of the page instead of returning to the control that opened it. Checked by `--ux` on the modal dialogs its clicks open (`<dialog>` with `showModal()`, `aria-modal`, `alertdialog`, or a dialog over a full-screen overlay).
+
+**How to fix:** Use a dialog that manages focus: the `<dialog>` element opened with `showModal()`, or Radix / Headless UI / MUI / Angular CDK dialogs. By hand: focus the first field (or the close button) on open, close on Escape, and on close call `.focus()` on the element that opened it.
+
+### back-navigation
+
+**Default:** warn
+
+After an in-app link (a client-side route change), the browser's Back button doesn't bring the previous page back: the route change replaced the history entry, so Back skips the page, or the address changes back while the page keeps showing the new one (the app ignores popstate). Checked by `--ux` on in-app links that change the route.
+
+**How to fix:** Navigate with the router's own links and push navigation (`<Link>`, `router.push`, `navigate(path)`); keep `replace` for redirects. If you change the URL with `history.pushState` yourself, render the matching view on `popstate`.
 
 ## Runtime
 

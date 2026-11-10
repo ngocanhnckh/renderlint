@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Orders</title><link rel="stylesheet" href="_style.css"></head>
+<body><main><h1>Orders</h1>
+<div class="card"><label>Status <select id="status"><option value="">All</option><option value="paid">Paid</option><option value="refunded">Refunded</option></select></label>
+<label>Sort <select id="sort"><option value="new">Newest</option><option value="old">Oldest</option></select></label></div>
+<div class="card" id="list" style="min-height:240px"><div class="bone"></div><div class="bone"></div><div class="bone"></div></div>
+</main>
+<script>
+const list = document.getElementById('list');
+let n = 0;
+const rows = (d) => '<p>Showing set ' + (++n) + '</p><table><tbody>' + d.items.map((o) => '<tr><td>#' + o.id + '</td><td>' + o.customer + '</td><td>' + o.total + '</td></tr>').join('') + '</tbody></table>';
+const load = () => fetch('orders.json?' + Math.random()).then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+load().then((d) => { list.innerHTML = rows(d); });
+// filter: refetches with no sign of it
+document.getElementById('status').onchange = () => load().then((d) => { list.innerHTML = rows(d); }, () => { list.innerHTML = '<p role="alert">Couldn\'t load orders.</p>'; });
+// sort: the right way, the list is marked busy and dimmed
+document.getElementById('sort').onchange = () => { list.setAttribute('aria-busy', 'true'); list.style.opacity = .5; load().then((d) => { list.innerHTML = rows(d); }, () => { list.innerHTML = '<p role="alert">Couldn\'t load orders.</p>'; }).finally(() => { list.removeAttribute('aria-busy'); list.style.opacity = 1; }); };
+</script>
+</body></html>
