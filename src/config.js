@@ -18,6 +18,8 @@ export function defaultConcurrency({ cores = availableParallelism(), free = avai
 }
 function availableMem() {
   try { if (typeof process.availableMemory === 'function') return process.availableMemory(); } catch { /* old Node */ }
+  // older Node: on Linux read MemAvailable itself (free memory plus the cache the kernel can drop)
+  try { const m = /^MemAvailable:\s+(\d+) kB/m.exec(readFileSync('/proc/meminfo', 'utf8')); if (m) return +m[1] * 1024; } catch { /* not Linux */ }
   return freemem();
 }
 export const DEFAULTS = {

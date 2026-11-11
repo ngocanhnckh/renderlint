@@ -244,7 +244,7 @@ export async function check(options = {}) {
     mkdirSync(config.outputDir, { recursive: true });
     writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues, ...(cov ? { coverage: cov } : {}), ...(result.roleCoverage ? { roleCoverage: result.roleCoverage } : {}) }, null, 2));
     writeFileSync(join(config.outputDir, 'report.md'), formatMarkdown(result));
-    if (config.screenshots) pruneScreens(join(config.outputDir, 'screens'), { since: started, pages, all: !!config.crawl });
+    if (config.screenshots) pruneScreens(join(config.outputDir, 'screens'), { since: started - 2000, pages, all: !!config.crawl }); // 2s: file times rounded to the second
     return result;
   } finally {
     process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal); process.removeListener('exit', onExit);
