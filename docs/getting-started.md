@@ -5,7 +5,7 @@ renderlint opens your app in a real browser at phone, tablet and desktop widths 
 ## 1. Install
 
 ```bash
-npx -y @ngocanhnckh/renderlint init
+npx -y @yitec/renderlint init
 ```
 
 `init` does the following:

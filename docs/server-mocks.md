@@ -58,7 +58,7 @@ The framework pages list each one's quirks: Angular's allowed hosts, SvelteKit's
 Run it with the preload, and it reads the mocks renderlint writes to `.renderlint/server-mock.json`:
 
 ```bash
-NODE_OPTIONS="--require @ngocanhnckh/renderlint/server-mock" RENDERLINT_SERVER_MOCK=.renderlint/server-mock.json npm run dev
+NODE_OPTIONS="--require @yitec/renderlint/server-mock" RENDERLINT_SERVER_MOCK=.renderlint/server-mock.json npm run dev
 ```
 
 Production builds work the same way: `next start`, `node .output/server/index.mjs`, `node build`, `react-router-serve`.

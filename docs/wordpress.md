@@ -30,7 +30,7 @@ How to fix
 Run the setup in the theme or plugin folder (or ask your coding agent to, with the prompt from the [README](../README.md#quick-start)):
 
 ```bash
-npx -y @ngocanhnckh/renderlint init
+npx -y @yitec/renderlint init
 npx renderlint
 ```
 
@@ -55,8 +55,8 @@ Self-signed certificates (LocalWP, DDEV, Lando, mkcert) are fine. If your site l
 Elementor sites are often built without a code repository. Point renderlint at the site:
 
 ```bash
-npx -y @ngocanhnckh/renderlint https://staging.example.com --max-pages 30
-npx -y @ngocanhnckh/renderlint https://staging.example.com/pricing/ https://staging.example.com/contact/ --no-crawl
+npx -y @yitec/renderlint https://staging.example.com --max-pages 30
+npx -y @yitec/renderlint https://staging.example.com/pricing/ https://staging.example.com/contact/ --no-crawl
 ```
 
 Every finding in Elementor content carries the editor link, so you can open the widget and fix it.

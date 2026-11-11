@@ -1,7 +1,7 @@
 // Vite plugin (React, Vue, Svelte, Solid, Preact, Lit, Qwik… any Vite app).
 //
 //   // vite.config.ts
-//   import renderlint from '@ngocanhnckh/renderlint/vite';
+//   import renderlint from '@yitec/renderlint/vite';
 //   export default defineConfig({ plugins: [react(), renderlint()] });
 //
 // dev:   injects an in-page checker; findings show in a corner overlay and are

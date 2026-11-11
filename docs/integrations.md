@@ -25,7 +25,7 @@ renderlint works on anything that renders in a browser. Pick the gate that suits
 
 ```ts
 // vite.config.ts
-import renderlint from '@ngocanhnckh/renderlint/vite';
+import renderlint from '@yitec/renderlint/vite';
 
 export default defineConfig({
   plugins: [react(), renderlint({ /* rules, viewports, pages, build: true, overlay: true */ })],
@@ -49,11 +49,11 @@ Your e2e tests already sign in as each role and click through dialogs and multi-
 ```ts
 // tests/fixtures.ts
 import { test as base } from '@playwright/test';
-import { withRenderlint } from '@ngocanhnckh/renderlint/playwright';
+import { withRenderlint } from '@yitec/renderlint/playwright';
 export const test = withRenderlint(base);
 
 // playwright.config.ts
-reporter: [['list'], ['@ngocanhnckh/renderlint/playwright/reporter']],
+reporter: [['list'], ['@yitec/renderlint/playwright/reporter']],
 ```
 
 See [Playwright](playwright.md) for what gets checked, the options and the limits.
@@ -70,7 +70,7 @@ Every story is checked in its own iframe, after its play function. See [Storyboo
 
 ```js
 // e.g. in a Next.js client component, Nuxt plugin, or main.ts — dev only
-if (process.env.NODE_ENV === 'development') import('@ngocanhnckh/renderlint/client').then((m) => m.start());
+if (process.env.NODE_ENV === 'development') import('@yitec/renderlint/client').then((m) => m.start());
 ```
 
 ## Claude Code
