@@ -4,6 +4,12 @@
 
 The first version published to npm, as `@yitec/renderlint`.
 
+### Resource use
+
+- `.renderlint/screens/` no longer keeps every screenshot ever written. A run removes the earlier screenshots of the pages it checks, or all earlier ones after a full crawl. In two real projects, 25 of 27 and 91 of 139 screenshots were left over from earlier runs.
+- The default `concurrency` is 3 to 4 browser contexts, down from 3 to 6. More contexts finish sooner without saving any work: on a large app, 4 instead of 6 takes 61 s instead of 49 s and 1.1 GB instead of 1.4 GB at peak, for the same findings. It is also lowered when free memory is short (Linux and Windows; a container's limit with Node 20.13+). `--concurrency` still sets it.
+- The contrast check builds the description of a text (selector, snippet, source) only when the text can be reported, instead of for every text on the page. A full run takes about 6% less CPU and 10% less time.
+
 ### Pages behind a login, and roles
 
 - `auth`: check inner pages frontend-only (the token the route guard reads, plus `mock` for the API), log in through the real form, or run a script for SSO. Unsigned test tokens with `{ "$jwt": { … } }`.

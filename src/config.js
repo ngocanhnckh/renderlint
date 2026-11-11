@@ -1,10 +1,25 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { availableParallelism } from 'node:os';
+import { availableParallelism, freemem, platform } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { RULES } from './rules-meta.js';
 import { normalizeAuth, forgeJwt } from './auth.js';
 
+
+// Half the CPU cores, 3 to 4 (each extra one finishes sooner but holds about 180 MB more at once; the CPU
+// work is the same), and no more contexts than the free memory holds: about 250 MB each on top of
+// about 1 GB for the browser, Node and the system. Free memory is what the OS can hand out (Linux
+// MemAvailable, a container's limit with Node 20.13+); macOS reports only its never-used pages, so
+// it isn't capped there.
+export function defaultConcurrency({ cores = availableParallelism(), free = availableMem(), os = platform() } = {}) {
+  const byCpu = Math.min(4, Math.max(3, cores >> 1));
+  if (os === 'darwin' || !(free > 0)) return byCpu;
+  return Math.max(1, Math.min(byCpu, Math.floor((free - 1024 * 2 ** 20) / (250 * 2 ** 20))));
+}
+function availableMem() {
+  try { if (typeof process.availableMemory === 'function') return process.availableMemory(); } catch { /* old Node */ }
+  return freemem();
+}
 export const DEFAULTS = {
   url: undefined,          // base URL of a running app
   serve: undefined,        // command that starts a server (e.g. "npm run dev")
@@ -42,7 +57,7 @@ export const DEFAULTS = {
   minTapTarget: 24,
   minFontSize: 12,
   maxLineLength: 120,
-  concurrency: Math.min(6, Math.max(3, availableParallelism() >> 1)), // browser contexts (page × viewport × color scheme) checked in parallel
+  concurrency: defaultConcurrency(), // browser contexts (page × viewport × color scheme) checked in parallel
   dedupe: true,            // pages that render identically share the contrast/stress/sweep results; 'template' also skips stress/sweep on pages built like an earlier one; false: off
   menus: true,             // open each menu / dropdown trigger on the page and check that what opens can be seen (popup-obscured)
   loading: true,           // reload each page with its data requests held (a slow network) and check it shows a loading state (loading-state)
