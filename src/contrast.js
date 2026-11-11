@@ -158,6 +158,13 @@ export async function measureContrast(page, candidates, { maxHeight, level = 'AA
   candidates = candidates.map((c) => ({ ...c, rects: c.rects.filter((r) => r.y < clipH) }))
     .filter((c) => samplePoints(c.rects, width, clipH, null).length)
     .map((c) => ({ ...c, proven: proven(c, needOf(c)) }));
+  // Collected without their issue records (collectContrast(true, true)): build them for the text that
+  // can be reported, the same as before any capture: not text proven to pass, or on a solid color that passes.
+  const report = candidates.filter((c) => !c.base && (check || (c.proven !== 'pass' && !(c.proven === 'exact' && judgeSolid(c).ratio + 0.005 >= needOf(c)))));
+  if (report.length) {
+    const bases = await page.evaluate((ix) => window.__renderlint.contrastBases(ix), report.map((c) => c.idx));
+    report.forEach((c, i) => { c.base = bases[i] || {}; });
+  }
   const pixels = candidates.filter((c) => check || !c.proven);
   const complex = pixels.filter((c) => c.complex);
   // The cost of a capture grows with its area: capture the boxes around the text that needs

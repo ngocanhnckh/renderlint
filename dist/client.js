@@ -3173,16 +3173,19 @@ RL.analyze = function (options) {
 
 // Contrast candidates, collected fresh (call after animations settled again,
 // since the occlusion rules scroll the page and may trigger reveal animations).
-RL.collectContrast = function (solid) {
+// lazy: leave out each candidate's issue record (selector, text, source: a quarter of the cost);
+// the runner asks contrastBases() for the few that can be reported.
+RL.collectContrast = function (solid, lazy) {
   RL.resetCaches();
   const cands = RL.contrastCandidates(RL.collectText());
   window.__renderlint_cx = cands.map((c) => c.el);
   if (solid) RL.solidBackgrounds(cands); // text on a provably flat colour needs no capture
   return cands.map((c) => ({
     idx: c.idx, rects: c.rects, color: c.color, opacity: c.opacity, fontSize: c.fontSize, fontWeight: c.fontWeight,
-    large: c.large, complex: c.complex, placeholder: c.placeholder, bg: c.bg, why: c.why, base: RL.issueBase(c.el),
+    large: c.large, complex: c.complex, placeholder: c.placeholder, bg: c.bg, why: c.why, ...(lazy ? {} : { base: RL.issueBase(c.el) }),
   }));
 };
+RL.contrastBases = (idxs) => idxs.map((i) => { const el = window.__renderlint_cx && window.__renderlint_cx[i]; return el ? RL.issueBase(el) : null; });
 
 RL.finishAnimations = function () {
   for (const a of document.getAnimations ? document.getAnimations() : []) {

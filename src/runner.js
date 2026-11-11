@@ -1,6 +1,6 @@
 // Drives a headless browser over pages × viewports × color schemes and
 // collects issues from the in-page analyzer plus screenshot-based checks.
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
@@ -974,7 +974,7 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     const iExtra = issues.length;
 
     if (analyzeOpts.contrastCandidates && !dupOf) {
-      const candidates = await page.evaluate(() => window.__renderlint.collectContrast(true));
+      const candidates = await page.evaluate(() => window.__renderlint.collectContrast(true, true));
       const c = await measureContrast(page, candidates, { maxHeight: config.maxScreenshotHeight, level: config.contrastLevel, check: process.env.RENDERLINT_CONTRAST_CHECK });
       issues.push(...c);
     }
@@ -1354,6 +1354,21 @@ export async function annotate(page, issues, config) {
       delete b.tag;
     }
   }, boxes);
+}
+
+// Screenshots from earlier runs that this run's report no longer points to: of the pages it checked
+// (every page after a full crawl), the ones written before it started. Only renderlint's own .png
+// files in screens/ are touched. Without this, screens/ keeps every screenshot ever written.
+export function pruneScreens(dir, { since, pages, all = false }) {
+  let names;
+  try { names = readdirSync(dir); } catch { return 0; }
+  const slugs = pages.map((p) => { try { return slugFor(p.url, p.role) + '@'; } catch { return null; } }).filter(Boolean);
+  let n = 0;
+  for (const f of names) {
+    if (!f.endsWith('.png') || !(all || slugs.some((s) => f.startsWith(s)))) continue;
+    try { const file = join(dir, f); if (statSync(file).mtimeMs < since) { unlinkSync(file); n++; } } catch { /* gone, or not ours to remove */ }
+  }
+  return n;
 }
 
 export function writeJson(path, data) { writeFileSync(path, JSON.stringify(data, null, 2)); }

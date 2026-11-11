@@ -88,7 +88,7 @@ export async function checkLive(page, { config, name, marked = new Set(), log = 
         if (dead.length) await confirmDeadLinks(page, dead, issues);
         await page.evaluate(() => { window.scrollTo({ top: 0, behavior: 'instant' }); window.__renderlint.finishAnimations(); });
         if (config.rules.contrast !== 'off') {
-          const candidates = await page.evaluate(() => window.__renderlint.collectContrast(true));
+          const candidates = await page.evaluate(() => window.__renderlint.collectContrast(true, true));
           issues.push(...await measureContrast(page, candidates, { maxHeight: config.maxScreenshotHeight, level: config.contrastLevel }));
         }
         if (config.rules['dropdown-arrow'] !== 'off') {

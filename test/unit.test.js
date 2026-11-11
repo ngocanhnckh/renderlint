@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scanSources } from '../src/scan.js';
-import { normalize, DEFAULTS } from '../src/config.js';
+import { normalize, DEFAULTS, defaultConcurrency } from '../src/config.js';
+import { pruneScreens, slugFor } from '../src/runner.js';
 import { mergeIssues } from '../src/report.js';
 import { suggestColor, contrast } from '../src/color.js';
 import { upsertSection, agentSection } from '../src/agent-instructions.js';
@@ -101,4 +102,33 @@ test('sweep adds both sides of each breakpoint within its range', async () => {
   assert.equal(normalize(c).sweepBreakpoints, true, 'normalizing twice keeps the default');
   assert.equal(normalize({ ...DEFAULTS, sweep: '1024,1366' }).sweepBreakpoints, false);
   assert.equal(normalize({ ...DEFAULTS, sweepBreakpoints: false }).sweepBreakpoints, false);
+});
+
+test('pruneScreens removes earlier runs\' screenshots of the checked pages, or all of them after a full crawl', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rl-prune-'));
+  const a = slugFor('http://localhost:5173/orders'), b = slugFor('http://localhost:5173/team'), admin = slugFor('http://localhost:5173/orders', 'admin');
+  const old = Date.now() / 1000 - 3600;
+  const put = (f, stale) => { writeFileSync(join(dir, f), 'x'); if (stale) utimesSync(join(dir, f), old, old); };
+  put(`${a}@375.png`, true); put(`${a}@375-ux1.png`, true); put(`${b}@375.png`, true); put(`${admin}@375.png`, true);
+  put(`${a}@1280.png`, false); put('notes.txt', true);
+  const since = Date.now() - 1000;
+  assert.equal(pruneScreens(dir, { since, pages: [{ url: 'http://localhost:5173/orders' }] }), 2);
+  assert.deepEqual(readdirSync(dir).sort(), [`${a}@1280.png`, `${admin}@375.png`, `${b}@375.png`, 'notes.txt'].sort());
+  // a role's page has its own slug
+  assert.equal(pruneScreens(dir, { since, pages: [{ url: 'http://localhost:5173/orders', role: 'admin' }] }), 1);
+  // a full crawl: every screenshot written before it started goes; this run's and other files stay
+  assert.equal(pruneScreens(dir, { since, pages: [], all: true }), 1);
+  assert.deepEqual(readdirSync(dir).sort(), [`${a}@1280.png`, 'notes.txt'].sort());
+  assert.equal(pruneScreens(join(dir, 'missing'), { since, pages: [], all: true }), 0);
+});
+
+test('default concurrency: half the cores (3 to 4), fewer when free memory is short; not capped on macOS', () => {
+  const MB = 2 ** 20;
+  assert.equal(defaultConcurrency({ cores: 16, free: 40000 * MB, os: 'linux' }), 4);
+  assert.equal(defaultConcurrency({ cores: 6, free: 40000 * MB, os: 'linux' }), 3);
+  assert.equal(defaultConcurrency({ cores: 8, free: 8000 * MB, os: 'linux' }), 4);
+  assert.equal(defaultConcurrency({ cores: 8, free: 1800 * MB, os: 'linux' }), 3);
+  assert.equal(defaultConcurrency({ cores: 8, free: 1100 * MB, os: 'linux' }), 1);
+  assert.equal(defaultConcurrency({ cores: 8, free: 800 * MB, os: 'darwin' }), 4);
+  assert.equal(defaultConcurrency({ cores: 2, free: 0, os: 'linux' }), 3);
 });

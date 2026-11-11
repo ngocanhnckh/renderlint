@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve, basename } from 'node:path';
 import { loadConfig, normalize, DEFAULTS } from './config.js';
 import { launchBrowser, reachApp } from './browser.js';
 import { serveStatic, startAndWait, waitForUrl, probe } from './server.js';
-import { runChecks } from './runner.js';
+import { runChecks, pruneScreens } from './runner.js';
 import { mergeIssues, formatPretty, formatMarkdown, formatGithub } from './report.js';
 import { scanSources } from './scan.js';
 import { serverPlan } from './server-plan.js';
@@ -244,6 +244,7 @@ export async function check(options = {}) {
     mkdirSync(config.outputDir, { recursive: true });
     writeFileSync(join(config.outputDir, 'report.json'), JSON.stringify({ ok: result.ok, stats, pages, issues, ...(cov ? { coverage: cov } : {}), ...(result.roleCoverage ? { roleCoverage: result.roleCoverage } : {}) }, null, 2));
     writeFileSync(join(config.outputDir, 'report.md'), formatMarkdown(result));
+    if (config.screenshots) pruneScreens(join(config.outputDir, 'screens'), { since: started - 2000, pages, all: !!config.crawl }); // 2s: file times rounded to the second
     return result;
   } finally {
     process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal); process.removeListener('exit', onExit);
