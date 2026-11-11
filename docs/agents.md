@@ -24,7 +24,7 @@ Each installed `SKILL.md` ends with a marker line holding the version and a hash
 - updates skills that are unchanged since they were installed and have a newer version;
 - **leaves skills you edited alone,** and says so (`--force` replaces them).
 
-`--no-skills` skips them. `AGENTS.md` then points at the copies inside the installed package (`node_modules/@ngocanhnckh/renderlint/skills/`).
+`--no-skills` skips them. `AGENTS.md` then points at the copies inside the installed package (`node_modules/@yitec/renderlint/skills/`).
 
 ## Agents that read other files
 
@@ -34,4 +34,4 @@ If your agent reads `.cursorrules`, `.github/copilot-instructions.md` or `GEMINI
 
 To set renderlint up through your agent, paste:
 
-> Set up renderlint in this project: run `npx -y @ngocanhnckh/renderlint init`, then follow the "UI quality gate: renderlint" section it adds to AGENTS.md. Use the renderlint-setup skill until the coverage report shows every route checked, then fix every error until `npx renderlint` shows 0 errors.
+> Set up renderlint in this project: run `npx -y @yitec/renderlint init`, then follow the "UI quality gate: renderlint" section it adds to AGENTS.md. Use the renderlint-setup skill until the coverage report shows every route checked, then fix every error until `npx renderlint` shows 0 errors.

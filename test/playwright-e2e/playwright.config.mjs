@@ -1,4 +1,4 @@
-// (in an app: reporter: [['@ngocanhnckh/renderlint/playwright/reporter']])
+// (in an app: reporter: [['@yitec/renderlint/playwright/reporter']])
 // A real Playwright Test run with renderlint's fixture and reporter (driven by test/playwright.test.js).
 // The app is test/fixtures/auth (a sessionStorage-token SPA); the tests mock its API with page.route,
 // as many suites do, and sign in through the form.

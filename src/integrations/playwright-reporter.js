@@ -3,7 +3,7 @@
 // when errors were found (failOn: 'error' | 'warn' | 'never').
 //
 //   // playwright.config.ts
-//   reporter: [['list'], ['@ngocanhnckh/renderlint/playwright/reporter', { failOn: 'error' }]],
+//   reporter: [['list'], ['@yitec/renderlint/playwright/reporter', { failOn: 'error' }]],
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig, normalize } from '../config.js';

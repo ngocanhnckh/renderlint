@@ -3,16 +3,16 @@
 //
 //   // tests/fixtures.ts
 //   import { test as base } from '@playwright/test';
-//   import { withRenderlint } from '@ngocanhnckh/renderlint/playwright';
+//   import { withRenderlint } from '@yitec/renderlint/playwright';
 //   export const test = withRenderlint(base);          // options: see DEFAULT_OPTIONS
 //
 //   // playwright.config.ts: one report for the whole run (and a failed run on errors)
-//   reporter: [['list'], ['@ngocanhnckh/renderlint/playwright/reporter']],
+//   reporter: [['list'], ['@yitec/renderlint/playwright/reporter']],
 //
 //   // in a test, to check a state mid-test as well:
 //   test('…', async ({ page, renderlint }) => { …; await renderlint('review dialog'); … });
 //
-// Or without the fixture: import { renderlint } from '@ngocanhnckh/renderlint/playwright'; await renderlint(page, 'name').
+// Or without the fixture: import { renderlint } from '@yitec/renderlint/playwright'; await renderlint(page, 'name').
 //
 // Two kinds of check:
 //   in place  the test's own page, as it is (all viewports by resizing it, dark mode by emulation,

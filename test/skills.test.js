@@ -69,7 +69,7 @@ test('init installs the skills and points AGENTS.md at them; --no-skills points 
   console.log = () => {};
   try {
     const cwd = dir();
-    writeFileSync(join(cwd, 'package.json'), JSON.stringify({ name: 'app', private: true, devDependencies: { '@ngocanhnckh/renderlint': '^0.2.0' } }));
+    writeFileSync(join(cwd, 'package.json'), JSON.stringify({ name: 'app', private: true, devDependencies: { '@yitec/renderlint': '^0.2.0' } }));
     writeFileSync(join(cwd, 'index.html'), '<!doctype html><title>t</title>');
     const prev = process.cwd();
     process.chdir(cwd);
@@ -85,6 +85,6 @@ test('init installs the skills and points AGENTS.md at them; --no-skills points 
     process.chdir(cwd2);
     try { await init(['--no-install', '--no-browser', '--no-hook', '--no-skills']); } finally { process.chdir(prev); }
     assert.ok(!existsSync(join(cwd2, '.claude', 'skills')));
-    assert.match(readFileSync(join(cwd2, 'AGENTS.md'), 'utf8'), /node_modules\/@ngocanhnckh\/renderlint\/skills\/renderlint-setup\/SKILL\.md/);
+    assert.match(readFileSync(join(cwd2, 'AGENTS.md'), 'utf8'), /node_modules\/@yitec\/renderlint\/skills\/renderlint-setup\/SKILL\.md/);
   } finally { console.log = quiet; }
 });

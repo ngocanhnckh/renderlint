@@ -1,5 +1,5 @@
 // Programmatic API.
-//   import { check } from '@ngocanhnckh/renderlint';
+//   import { check } from '@yitec/renderlint';
 //   const result = await check({ url: 'http://localhost:5173' });
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, basename } from 'node:path';

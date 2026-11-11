@@ -7,7 +7,7 @@ Your end-to-end tests already sign in as each role, click through dialogs and mu
 ```ts
 // tests/fixtures.ts
 import { test as base } from '@playwright/test';
-import { withRenderlint } from '@ngocanhnckh/renderlint/playwright';
+import { withRenderlint } from '@yitec/renderlint/playwright';
 export const test = withRenderlint(base);
 export { expect } from '@playwright/test';
 ```
@@ -16,7 +16,7 @@ Import `test` from `./fixtures` in your specs. If they already use a custom fixt
 
 ```ts
 // playwright.config.ts
-reporter: [['list'], ['@ngocanhnckh/renderlint/playwright/reporter']],
+reporter: [['list'], ['@yitec/renderlint/playwright/reporter']],
 ```
 
 Run your suite as usual (`npx playwright test`). The reporter merges every worker's findings into one renderlint report: `.renderlint/report.json`, `report.md` and screenshots. It prints the report after the run and fails the run on errors (`failOn`).
@@ -43,7 +43,7 @@ The module never imports `@playwright/test` itself; it extends the `test` you pa
   });
   ```
 
-  Without the fixture: `import { renderlint } from '@ngocanhnckh/renderlint/playwright'; await renderlint(page, 'review dialog')`.
+  Without the fixture: `import { renderlint } from '@yitec/renderlint/playwright'; await renderlint(page, 'review dialog')`.
 
 ## Options
 

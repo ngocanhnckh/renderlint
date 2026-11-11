@@ -1,5 +1,5 @@
 import { test as base, expect } from '@playwright/test';
-import { withRenderlint } from '@ngocanhnckh/renderlint/playwright';
+import { withRenderlint } from '@yitec/renderlint/playwright';
 
 const test = withRenderlint(base, { outputDir: process.env.RL_PW_OUT || 'test/.tmp/pw', viewports: [375, 1280], sweep: false, colorSchemes: ['light'] });
 

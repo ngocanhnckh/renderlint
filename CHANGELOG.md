@@ -2,7 +2,7 @@
 
 ## 0.2.0 (2026-10-31)
 
-The first version published to npm, as `@ngocanhnckh/renderlint`.
+The first version published to npm, as `@yitec/renderlint`.
 
 ### Pages behind a login, and roles
 
@@ -24,7 +24,7 @@ The first version published to npm, as `@ngocanhnckh/renderlint`.
 
 ### Tests and components
 
-- Playwright Test: `withRenderlint(test)` checks the pages and states your e2e tests reach, and a reporter collects them (`@ngocanhnckh/renderlint/playwright`, `/playwright/reporter`).
+- Playwright Test: `withRenderlint(test)` checks the pages and states your e2e tests reach, and a reporter collects them (`@yitec/renderlint/playwright`, `/playwright/reporter`).
 - `renderlint storybook`: every story, in its own iframe, after its play function.
 - Content behind an open modal is skipped.
 

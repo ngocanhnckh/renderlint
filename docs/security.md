@@ -19,7 +19,7 @@ renderlint is a test tool. It renders your app in a headless browser and measure
 
 ## Server mocks are local only
 
-The SSR preload (`@ngocanhnckh/renderlint/server-mock`) does nothing unless `RENDERLINT_SERVER_MOCK` is set. renderlint sets it only on the server process it starts.
+The SSR preload (`@yitec/renderlint/server-mock`) does nothing unless `RENDERLINT_SERVER_MOCK` is set. renderlint sets it only on the server process it starts.
 
 Even then, the preload only answers requests that come to a loopback host: `localhost`, `127.0.0.1` or `::1`. A request from any other host gets the app's real behaviour, and a warning on stderr. So a misconfigured deployment can't serve mocked data or mocked logins to real users. Still: never set `RENDERLINT_SERVER_MOCK` or the preload on a deployed server. `"serverMock": false` turns the server side off entirely.
 

@@ -14,7 +14,7 @@ The CLI crawls pages. Some states only exist after clicks: a dialog, step 3 of a
    ```ts
    // tests/fixtures.ts
    import { test as base } from '@playwright/test';
-   import { withRenderlint } from '@ngocanhnckh/renderlint/playwright';
+   import { withRenderlint } from '@yitec/renderlint/playwright';
    export const test = withRenderlint(base);
    export { expect } from '@playwright/test';
    ```
@@ -25,7 +25,7 @@ The CLI crawls pages. Some states only exist after clicks: a dialog, step 3 of a
 
    ```ts
    // playwright.config.ts
-   reporter: [['list'], ['@ngocanhnckh/renderlint/playwright/reporter']],
+   reporter: [['list'], ['@yitec/renderlint/playwright/reporter']],
    ```
 
 3. Run the suite as usual: `npx playwright test`. The report goes to `.renderlint/` like a CLI run.
