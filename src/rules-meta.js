@@ -21,6 +21,12 @@ export const RULES = {
     summary: 'Text is partially cut off by an `overflow: hidden` container or the edge of an <svg> (e.g. chart axis labels).',
     fix: 'Give the container room (remove fixed height, add padding), allow wrapping, or truncate intentionally with `text-overflow: ellipsis` / `line-clamp`. For SVG charts increase the chart margin/padding or rotate/shorten labels.',
   },
+  'unreachable-content': {
+    severity: 'error',
+    category: 'layout',
+    summary: 'Content lies below the bottom of a box that clips (`overflow: hidden` or `clip`), or below the screen on a page that doesn\'t scroll, and nothing around it scrolls: users can never see it. Typical causes: a fixed-height app shell (`height: 100vh; overflow: hidden`) whose page or tab area isn\'t a scroller, or a scroll lock (`body { overflow: hidden }`) left on. Before reporting, renderlint turns the mouse wheel over the box: content that a script scrolls is not reported. Not reported: content moved away on purpose (transformed, absolute or fixed), small boxes (teasers, collapsed panels), boxes with a "Show more" control, faded or line-clamped text, and the page while a dialog is open.',
+    fix: 'Make the area that grows scroll: `overflow-y: auto` on it, and in a flex or grid layout let it shrink to the space it has (`flex: 1 1 0%; min-height: 0`, or `min-height: 0` on the grid row) so it doesn\'t just grow past its parent. Or remove the fixed height so the page scrolls. Remove a scroll lock when what set it closes.',
+  },
   'content-overflow': {
     severity: 'error',
     category: 'layout',

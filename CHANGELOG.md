@@ -4,6 +4,10 @@
 
 The first version published to npm, as `@yitec/renderlint`.
 
+### Content no one can scroll to
+
+- New rule `unreachable-content` (error). It flags content below the bottom of a box that clips (`overflow: hidden` or `clip`), or below the screen on a page that doesn't scroll, where nothing around it scrolls. Typical cases: a page or tab area that grows past a fixed-height app shell without being a scroller, a fixed-height card that hides the rest of its list, and a scroll lock left on. Before reporting, renderlint turns the mouse wheel over the box. Content that a script scrolls (custom scrollbars, scroll-jacking pages) is not reported, nor is content moved away on purpose (transformed, absolute or fixed), in small boxes, next to a "Show more" control, faded out, or behind an open dialog. `text-clipped` on the same box's bottom edge is folded into it. On 99 benchmark pages and the 50 existing test targets, it reported nothing new.
+
 ### Resource use
 
 - `.renderlint/screens/` no longer keeps every screenshot ever written. A run removes the earlier screenshots of the pages it checks, or all earlier ones after a full crawl. In two real projects, 25 of 27 and 91 of 139 screenshots were left over from earlier runs.

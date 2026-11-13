@@ -9,6 +9,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`text-overflow`](#text-overflow) | error | Text spills outside the box (card, button, badge, input) that is supposed to contain it. |
 | [`text-crowding`](#text-crowding) | error | Text still fits inside its card, button or badge, but has run through the side padding and nearly touches the edge (a KPI number, a long label). |
 | [`text-clipped`](#text-clipped) | error | Text is partially cut off by an `overflow: hidden` container or the edge of an &lt;svg> (e.g. chart axis labels). |
+| [`unreachable-content`](#unreachable-content) | error | Content lies below the bottom of a box that clips (`overflow: hidden` or `clip`), or below the screen on a page that doesn't scroll, and nothing around it scrolls: users can never see it. Typical causes: a fixed-height app shell (`height: 100vh; overflow: hidden`) whose page or tab area isn't a scroller, or a scroll lock (`body { overflow: hidden }`) left on. Before reporting, renderlint turns the mouse wheel over the box: content that a script scrolls is not reported. Not reported: content moved away on purpose (transformed, absolute or fixed), small boxes (teasers, collapsed panels), boxes with a "Show more" control, faded or line-clamped text, and the page while a dialog is open. |
 | [`content-overflow`](#content-overflow) | error | A child element (image, button, inner card) sticks out of its visible container. |
 | [`viewport-overflow`](#viewport-overflow) | error | Content is wider than the viewport: the page scrolls sideways on phones, or content is cut off at the screen edge. |
 | [`accidental-scrollbar`](#accidental-scrollbar) | error | A scroll container overflows by only a few pixels, showing a pointless scrollbar. |
@@ -83,6 +84,14 @@ Text still fits inside its card, button or badge, but has run through the side p
 Text is partially cut off by an `overflow: hidden` container or the edge of an <svg> (e.g. chart axis labels).
 
 **How to fix:** Give the container room (remove fixed height, add padding), allow wrapping, or truncate intentionally with `text-overflow: ellipsis` / `line-clamp`. For SVG charts increase the chart margin/padding or rotate/shorten labels.
+
+### unreachable-content
+
+**Default:** error
+
+Content lies below the bottom of a box that clips (`overflow: hidden` or `clip`), or below the screen on a page that doesn't scroll, and nothing around it scrolls: users can never see it. Typical causes: a fixed-height app shell (`height: 100vh; overflow: hidden`) whose page or tab area isn't a scroller, or a scroll lock (`body { overflow: hidden }`) left on. Before reporting, renderlint turns the mouse wheel over the box: content that a script scrolls is not reported. Not reported: content moved away on purpose (transformed, absolute or fixed), small boxes (teasers, collapsed panels), boxes with a "Show more" control, faded or line-clamped text, and the page while a dialog is open.
+
+**How to fix:** Make the area that grows scroll: `overflow-y: auto` on it, and in a flex or grid layout let it shrink to the space it has (`flex: 1 1 0%; min-height: 0`, or `min-height: 0` on the grid row) so it doesn't just grow past its parent. Or remove the fixed height so the page scrolls. Remove a scroll lock when what set it closes.
 
 ### content-overflow
 

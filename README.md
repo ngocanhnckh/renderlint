@@ -56,6 +56,7 @@ Not sure what your app needs (a login, roles, server rendering, hundreds of page
 - **Empty lists, dialogs and the Back button.** `--ux` also loads each page as a brand-new account would see it (every list empty) and flags lists that are just blank, spinners that never stop and pages that crash. It checks that dialogs take focus, close on Escape and hand focus back, and that Back after an in-app link really goes back. [More](#loading-states-and-the-ux-pass)
 - **Every page, every role.** Routes are read from your source (Next.js, Nuxt, SvelteKit, Astro, React Router / Remix, TanStack Router, Angular, Vue Router) and from the running router, and dynamic routes like `/products/:id` are filled with real ids. With `roles`, each page is checked as admin, viewer and so on, all at once. A coverage report gives every route a status, so no page is skipped silently. [More](#every-page-of-a-big-app)
 - **Pages behind a login, with no backend.** Set the token your route guard reads and mock the API, or log in through the real form. Server-rendered apps (Next.js, Nuxt, SvelteKit, Remix, Angular SSR) get the same `mock` on the server, so `middleware.ts` and loaders run too. A page that only showed the login form or "Access denied" is reported, never passed. [More](#pages-behind-a-login)
+- **Content no one can scroll to.** A page area that grows past a fixed-height app shell (`height: 100vh; overflow: hidden`) without becoming a scroller, a card that hides the rest of its list, or `body { overflow: hidden }` left on: the content is there but can never be seen. `unreachable-content` finds it and turns the mouse wheel over it to make sure, so a script that scrolls the box doesn't count. [See it](#see-it)
 - **Menus you can't see.** renderlint opens each dropdown, menu and combobox on the page and checks that its options can be seen. It catches a menu drawn underneath the next card (and names the ancestor whose z-index traps it), and one cut off by a card's `overflow: hidden` or a table's scroll box. Tested on Radix, Headless UI and Bootstrap.
 - **No more `alert()` and `confirm()`.** The new `native-dialog` rule flags the browser's grey system boxes, both when one opens and in source (so the ones behind a click are caught too), and says what to use instead: a toast, an inline message or the app's own modal.
 - **Skills for coding agents.** `init` installs three Claude Code skills: setting up every page and role, fixing findings, and Playwright and Storybook. Each finding says what to change, so the agent can fix it without asking. [More](docs/agents.md)
@@ -85,7 +86,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 
 ## What it catches
 
-51 rules, tuned so that a finding is almost always a real defect.
+52 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -94,6 +95,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 | Gray-on-gray or white-on-yellow text you can barely read | `contrast` (measured from real pixels, so it works on gradients and images) |
 | Elements overlap when the window shrinks, instead of wrapping | `element-overlap`, `viewport-overflow`, `content-overflow` |
 | Chart and diagram labels collide or get cut off | `text-overlap`, `text-clipped` (works on SVG charts) |
+| A page or tab you can't scroll: content painted past an `overflow: hidden` app shell, a fixed-height card hiding the rest of its list, a scroll lock left on | `unreachable-content` (renderlint turns the mouse wheel to make sure) |
 | A fixed header covers the hero, or a decoration covers a button | `obscured-content` |
 | A dropdown or menu that opens behind the next card, or gets cut off by its card or a table's scroll box (z-index, `overflow: hidden`) | `popup-obscured` (renderlint opens each menu to check) |
 | 🚀✨✅ emoji instead of a proper icon set | `emoji` (rendered DOM and source files) |
@@ -229,6 +231,9 @@ Every run saves annotated screenshots with each finding boxed and numbered, so a
 <td><img src="docs/images/demo-team.png" alt="Broken avatar, squashed avatar and an unsized icon grown to 204px"><br><sub>Broken and squashed images, and an unsized 24×24 icon at 204px.</sub></td>
 </tr>
 </table>
+
+<img src="docs/images/demo-unreachable.png" alt="Left: a run dashboard whose Findings tab stops at the screen edge with no scrollbar. Right: the same tab without the clipping, most of it shaded as never reachable, next to renderlint's unreachable-content finding">
+<sub>A tab inside a fixed-height app shell that never became a scroller: everything past the screen edge is painted but can't be reached (<code>unreachable-content</code>). renderlint names the box and how far the content goes.</sub>
 
 <img src="docs/images/demo-forms-annotated.png" alt="An alert-settings form: native select arrows on the border, a checkbox stretched above its label, and a search icon over the placeholder, each boxed by renderlint">
 <sub>Form controls that render but are built wrong: native select arrows on the border (<code>dropdown-arrow</code>), a checkbox stretched away from its label (<code>checkbox-layout</code>), a search icon over the placeholder (<code>input-icon-overlap</code>).</sub>

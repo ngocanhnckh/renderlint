@@ -176,6 +176,79 @@ RL.rule({
 });
 
 // ---------------------------------------------------------------------------
+// Content no one can scroll to: it lies below the bottom of a box that clips (overflow: hidden or clip),
+// or below the screen when the page itself doesn't scroll (overflow: hidden on <html> or <body>), and
+// nothing between them scrolls. A fixed-height app shell whose page area doesn't scroll, a scroll lock
+// left on. text-clipped covers text cut through; this is text past the edge entirely. Content moved
+// away on purpose is left out: by a transform (slides, drawers, sheets), out of flow (absolute, fixed),
+// in a small box (a teaser, a collapsed panel), next to a "Show more" control, or faded out.
+// Only with scrollCheck: the runner then turns the mouse wheel over each box, and a box whose content
+// moves (a JavaScript scroller on overflow: hidden) is not reported.
+const MORE_LABEL = /\b(show|read|see|view|load)\s+(more|all|full|everything)\b|\bexpand\b|\bmore\s*(…|\.\.\.)\s*$/i;
+const clipsY = (s) => s.overflowY === 'hidden' || s.overflowY === 'clip';
+RL.rule({
+  id: 'unreachable-content',
+  run(ctx) {
+    if (!RL.options.scrollCheck || RL.modalRoot()) return; // an open dialog locks the page on purpose
+    const html = document.documentElement, body = document.body;
+    if (!body) return;
+    const hs = RL.cs(html), bs = RL.cs(body);
+    const pageLocked = clipsY(hs) || (hs.overflowY === 'visible' && clipsY(bs));
+    const minH = Math.max(150, innerHeight * 0.3);
+    const groups = new Map(); // clipping box (or html for the screen) → hidden text
+    const w = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    for (let n; (n = w.nextNode());) {
+      const t = n.nodeValue.replace(/\s+/g, ' ').trim();
+      const el = n.parentElement;
+      if (!t || !el || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|OPTION)$/.test(el.tagName) || !RL.isVisible(el) || RL.isIgnored(el, 'unreachable-content')) continue;
+      range.selectNodeContents(n);
+      const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0.5 && r.height > 0.5).map(RL.docRect);
+      if (!rects.length) continue;
+      // the first box up the tree that decides whether this text can be scrolled to
+      let clipper = null;
+      for (let a = el; a; a = RL.parentOf(a)) {
+        if (RL.isDevTool(a) || a.getAttribute('aria-hidden') === 'true' || a.inert) { clipper = null; break; }
+        if (a === body || a === html) { clipper = pageLocked ? html : null; break; }
+        const s = RL.cs(a);
+        if (s.position === 'fixed' || s.position === 'sticky' || s.transform !== 'none' || s.translate !== 'none') break;
+        if (s.webkitLineClamp && s.webkitLineClamp !== 'none') break;
+        if ((s.maskImage && s.maskImage !== 'none') || (s.webkitMaskImage && s.webkitMaskImage !== 'none')) break;
+        if (RL.isScrollContainer(a, 'y')) break; // it scrolls
+        // a box that clips but holds this text (a row with an ellipsis) doesn't hide it: look further up
+        if (clipsY(s)) { const b = RL.paddingBox(a); if (rects.every((r) => r.y >= b.bottom - 1)) { clipper = a; break; } }
+        if (s.position === 'absolute') break; // out of flow: menus, tooltips, positioned decorations
+      }
+      if (!clipper) continue;
+      const box = clipper === html ? { x: scrollX, y: scrollY, right: scrollX + innerWidth, bottom: scrollY + innerHeight, w: innerWidth, h: innerHeight } : RL.paddingBox(clipper);
+      if (box.h < minH || box.w < 120) continue;
+      // entirely below the box, and under it (not beside it: a slide moved sideways)
+      if (!rects.every((r) => r.y >= box.bottom - 1 && r.x < box.right && r.right > box.x)) continue;
+      if (!groups.has(clipper)) groups.set(clipper, { box, items: [] });
+      groups.get(clipper).items.push({ el, t, rects });
+    }
+    for (const [clipper, g] of groups) {
+      const chars = g.items.reduce((a, x) => a + x.t.length, 0);
+      const bottom = Math.max(...g.items.flatMap((x) => x.rects.map((r) => r.bottom)));
+      const below = Math.round(bottom - g.box.bottom);
+      if (g.items.length < 2 || chars < 30 || below < 60) continue;
+      // a "Show more" / "Read more" control in or right after the box reveals the rest
+      const scope = clipper === html ? null : clipper.parentElement || clipper;
+      if (scope && Array.from(scope.querySelectorAll('button,a[href],summary,[role=button]')).some((b) => MORE_LABEL.test((b.textContent || b.getAttribute('aria-label') || '').trim()))) continue;
+      const sample = [];
+      for (const x of g.items) { if (!sample.includes(x.t.slice(0, 40))) sample.push(x.t.slice(0, 40)); if (sample.length >= 3) break; }
+      const s = clipper === html ? (clipsY(hs) ? hs : bs) : RL.cs(clipper);
+      const where = clipper === html ? 'the screen: the page itself doesn\'t scroll (overflow-y: ' + s.overflowY + ' on <' + (clipsY(hs) ? 'html' : 'body') + '>)' : 'this box (overflow-y: ' + s.overflowY + '), and neither it nor anything around the content scrolls';
+      ctx.report({
+        rule: 'unreachable-content', el: clipper === html ? (clipsY(hs) ? html : body) : clipper, needsScrollCheck: true, // the element to fix
+        message: 'Content can\'t be scrolled to: ' + g.items.length + ' piece' + (g.items.length === 1 ? '' : 's') + ' of text, reaching ' + below + 'px below the bottom of ' + where + ' (' + sample.map((x) => '"' + x + '"').join(', ') + ').',
+        details: { below, hidden: g.items.length, clipper: clipper === html ? 'page' : 'box', overflowY: s.overflowY, sample, boxHeight: Math.round(g.box.h) },
+      });
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
 const MEDIA = new Set(['img', 'video', 'canvas', 'svg', 'iframe', 'picture']);
 const CONTROL = new Set(['button', 'input', 'select', 'textarea']);
 const TABLE_PARTS = new Set(['col', 'colgroup', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'caption']);
