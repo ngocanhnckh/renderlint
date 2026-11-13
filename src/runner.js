@@ -1290,28 +1290,30 @@ export async function confirmDeadLinks(page, dead, issues) {
 // cut through at the bottom of a confirmed box is the same defect: runChecks drops that text-clipped.
 export async function confirmUnreachable(page, found, issues) {
   for (const f of found) {
-    delete f.needsScrollCheck;
-    const whole = f.details && f.details.clipper === 'page';
+    const id = f.unreachId;
+    delete f.needsScrollCheck; delete f.unreachId;
     let moved = true;
     try {
-      const at = await page.evaluate(({ sel, whole }) => {
-        const el = document.querySelector(sel);
-        if (!el) return null;
-        const box = whole ? document.documentElement : el;
-        if (!whole) el.scrollIntoView({ block: 'nearest', behavior: 'instant' });
-        const r = whole ? { left: 0, top: 0, right: innerWidth, bottom: innerHeight } : el.getBoundingClientRect();
+      // the box itself (marked by the rule: a selector can match an earlier look-alike), or the screen
+      const at = await page.evaluate((id) => {
+        const box = id ? document.querySelector(`[data-rl-unreach="${id}"]`) : document.documentElement;
+        if (!box) return null;
+        const startY = scrollY;
+        // bring the box into view by scrolling the window only (scrollIntoView would also move clipped ancestors)
+        let r = id ? box.getBoundingClientRect() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+        if (id && (r.top < 0 || r.top > innerHeight - 40)) { window.scrollTo({ top: Math.max(0, scrollY + r.top - 20), behavior: 'instant' }); r = box.getBoundingClientRect(); }
         const top = Math.max(0, r.top), bottom = Math.min(innerHeight, r.bottom), left = Math.max(0, r.left), right = Math.min(innerWidth, r.right);
-        if (bottom - top < 20 || right - left < 20) return null;
+        const done = () => { window.scrollTo({ top: startY, behavior: 'instant' }); return null; };
+        if (bottom - top < 20 || right - left < 20) return done();
         const x = Math.round((left + right) / 2), y = Math.round(top + (bottom - top) * 0.6);
         const hit = document.elementFromPoint(x, y);
-        if (!hit || (!whole && !el.contains(hit))) return null; // something covers it: can't tell
-        // what would move: the box's scroll offsets, the page's, and where its content sits
-        const content = whole ? [el] : [el.firstElementChild, el.lastElementChild, ...Array.from(el.querySelectorAll('*')).slice(-3)].filter(Boolean);
-        // positions relative to the box: the wheel can scroll the page around a box, which reveals nothing in it
-        const rel = (c) => c.getBoundingClientRect().top - (whole ? 0 : box.getBoundingClientRect().top);
-        window.__rlUnreach = { box, content, whole, rel, scrollTop: box.scrollTop, scrollY: scrollY, tops: content.map(rel) };
+        if (!hit || (id && !box.contains(hit))) return done(); // something covers it: can't tell
+        // what would move: the box's scroll offset, the page's (for the screen), where its content sits in it
+        const content = id ? [box.firstElementChild, box.lastElementChild, ...Array.from(box.querySelectorAll('*')).slice(-3)].filter(Boolean) : Array.from(document.body.querySelectorAll('*')).slice(-3);
+        const rel = (c) => c.getBoundingClientRect().top - (id ? box.getBoundingClientRect().top : 0);
+        window.__rlUnreach = { box, content, whole: !id, rel, startY, scrollTop: box.scrollTop, scrollY: scrollY, tops: content.map(rel) };
         return { x, y };
-      }, { sel: f.selector, whole });
+      }, id);
       if (at) {
         await page.mouse.move(at.x, at.y);
         await page.mouse.wheel(0, 400);
@@ -1323,12 +1325,17 @@ export async function confirmUnreachable(page, found, issues) {
         });
         await page.mouse.wheel(0, -400);
         await page.waitForTimeout(150);
-        await page.evaluate(() => { const u = window.__rlUnreach; if (u) { u.box.scrollTop = u.scrollTop; window.scrollTo({ top: u.scrollY, behavior: 'instant' }); } delete window.__rlUnreach; });
+        await page.evaluate(() => {
+          const u = window.__rlUnreach;
+          if (u) { u.box.scrollTo({ top: u.scrollTop, behavior: 'instant' }); window.scrollTo({ top: u.startY, behavior: 'instant' }); }
+          delete window.__rlUnreach;
+        });
         await page.mouse.move(0, 0);
       }
     } catch { moved = true; }
     if (moved) issues.splice(issues.indexOf(f), 1);
   }
+  await page.evaluate(() => { for (const e of document.querySelectorAll('[data-rl-unreach]')) e.removeAttribute('data-rl-unreach'); }).catch(() => {});
 }
 
 export function effectiveSeverity(issue, config) {

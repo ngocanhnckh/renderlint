@@ -819,7 +819,11 @@ RL.rule({
 // Only with scrollCheck: the runner then turns the mouse wheel over each box, and a box whose content
 // moves (a JavaScript scroller on overflow: hidden) is not reported.
 const MORE_LABEL = /\b(show|read|see|view|load)\s+(more|all|full|everything)\b|\bexpand\b|\bmore\s*(…|\.\.\.)\s*$/i;
-const clipsY = (s) => s.overflowY === 'hidden' || s.overflowY === 'clip';
+// controls that move a box's content themselves: a slider's arrows and dots, "Next", "Older"
+const MOVE_LABEL = /^(next|prev|previous|back|forward|up|down|older|newer|scroll( up| down)?)\b|\b(go to )?(slide|page|item|step) \d|^[\s‹›«»▲▼△▽↑↓←→⌃⌄❮❯<>^]+$|^\d{1,2}$/i;
+// overflow-clip-margin paints clipped content past the box anyway
+let unreachIds = 0;
+const clipsY = (s) => s.overflowY === 'hidden' || (s.overflowY === 'clip' && (!s.overflowClipMargin || /^0(px)?$/.test(s.overflowClipMargin)));
 RL.rule({
   id: 'unreachable-content',
   run(ctx) {
@@ -843,7 +847,10 @@ RL.rule({
       let clipper = null;
       for (let a = el; a; a = RL.parentOf(a)) {
         if (RL.isDevTool(a) || a.getAttribute('aria-hidden') === 'true' || a.inert) { clipper = null; break; }
-        if (a === body || a === html) { clipper = pageLocked ? html : null; break; }
+        if (a === html) { clipper = clipsY(hs) ? html : null; break; }
+        // <body>'s overflow is the page's when <html> leaves it visible; otherwise <body> is a box of its own
+        // (html { overflow: hidden } with body as the scroller is a common app layout)
+        if (a === body && hs.overflowY === 'visible') { clipper = pageLocked ? html : null; break; }
         const s = RL.cs(a);
         if (s.position === 'fixed' || s.position === 'sticky' || s.transform !== 'none' || s.translate !== 'none') break;
         if (s.webkitLineClamp && s.webkitLineClamp !== 'none') break;
@@ -866,9 +873,13 @@ RL.rule({
       const bottom = Math.max(...g.items.flatMap((x) => x.rects.map((r) => r.bottom)));
       const below = Math.round(bottom - g.box.bottom);
       if (g.items.length < 2 || chars < 30 || below < 60) continue;
-      // a "Show more" / "Read more" control in or right after the box reveals the rest
+      // a "Show more" control, or a slider's arrows and dots, in or right next to the box reveal the rest.
+      // Tabs don't: switching a panel doesn't show what is cut off at its bottom.
       const scope = clipper === html ? null : clipper.parentElement || clipper;
-      if (scope && Array.from(scope.querySelectorAll('button,a[href],summary,[role=button]')).some((b) => MORE_LABEL.test((b.textContent || b.getAttribute('aria-label') || '').trim()))) continue;
+      const label = (b) => [(b.textContent || '').trim(), b.getAttribute('aria-label') || '', b.getAttribute('title') || ''];
+      if (scope && Array.from(scope.querySelectorAll('button,a[href],summary,[role=button]')).some((b) => b.getAttribute('role') !== 'tab' &&
+        label(b).some((t) => t && (MORE_LABEL.test(t) || MOVE_LABEL.test(t))))) continue;
+      if (clipper !== html) { clipper.setAttribute('data-rl-unreach', String(++unreachIds)); } // for the runner's wheel check
       const sample = [];
       for (const x of g.items) { if (!sample.includes(x.t.slice(0, 40))) sample.push(x.t.slice(0, 40)); if (sample.length >= 3) break; }
       const s = clipper === html ? (clipsY(hs) ? hs : bs) : RL.cs(clipper);
@@ -877,6 +888,7 @@ RL.rule({
         rule: 'unreachable-content', el: clipper === html ? (clipsY(hs) ? html : body) : clipper, needsScrollCheck: true, // the element to fix
         message: 'Content can\'t be scrolled to: ' + g.items.length + ' piece' + (g.items.length === 1 ? '' : 's') + ' of text, reaching ' + below + 'px below the bottom of ' + where + ' (' + sample.map((x) => '"' + x + '"').join(', ') + ').',
         details: { below, hidden: g.items.length, clipper: clipper === html ? 'page' : 'box', overflowY: s.overflowY, sample, boxHeight: Math.round(g.box.h) },
+        unreachId: clipper === html ? 0 : unreachIds,
       });
     }
   },
