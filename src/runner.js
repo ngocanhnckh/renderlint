@@ -255,6 +255,7 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
   }
   const analyzeOpts = {
     rules: config.rules, ignoreSelectors, skipDomContrast: true, contrastCandidates: config.rules.contrast !== 'off', // collected separately after re-settling
+    scrollCheck: true, // unreachable-content: confirmed with the mouse wheel (confirmUnreachable)
     minTapTarget: config.minTapTarget, minFontSize: config.minFontSize, maxLineLength: config.maxLineLength,
   };
 
@@ -568,6 +569,14 @@ export async function runChecks(browser, { urls, config, log = () => {}, session
   const left = runners.flatMap((x) => x.finish());
   const allIssues = [];
   for (const p of pages) { allIssues.push(...await p.done); delete p.done; }
+  // A box whose content can't be scrolled to (unreachable-content, confirmed) also cuts text at its bottom
+  // edge, at the sweep widths and in the stress passes too: one defect, reported once.
+  const unreachableBoxes = new Set(allIssues.filter((i) => i.rule === 'unreachable-content' && i.details && i.details.clipper === 'box').map((i) => i.page + '\0' + i.selector));
+  if (unreachableBoxes.size) {
+    const sameBox = (i) => (i.rule === 'text-clipped' || (i.rule === 'fragile-layout' && i.details && i.details.stressedRule === 'text-clipped')) &&
+      i.related && unreachableBoxes.has(i.page + '\0' + i.related.selector) && i.details && i.details.overflow && i.details.overflow.bottom > 0;
+    for (let k = allIssues.length - 1; k >= 0; k--) if (sameBox(allIssues[k])) allIssues.splice(k, 1);
+  }
   if (coverage) coverage.unvisited = Array.from(new Set(left)); // over the page limit
 
   // Pages the app didn't show (a guard's redirect, 401/403, "Access denied" or "Page not found" in place), per role.
@@ -948,6 +957,8 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     const dead = issues.filter((i) => i.needsListenerCheck);
     if (dead.length) await confirmDeadLinks(page, dead, issues);
     lap('deadlinks');
+    const unreachable = issues.filter((i) => i.needsScrollCheck);
+    if (unreachable.length) { await confirmUnreachable(page, unreachable, issues); lap('unreachable'); }
 
     if (analyzeOpts.contrastCandidates || reps) {
       // the occlusion rules scroll the page, which can start reveal animations: settle again first
@@ -1271,6 +1282,60 @@ export async function confirmDeadLinks(page, dead, issues) {
     await client.detach().catch(() => {});
   }
   for (const d of dead) delete d.needsListenerCheck;
+}
+
+// unreachable-content: turn the mouse wheel over each box (or the screen). Content that moves can be
+// scrolled to after all: a script scrolls an overflow: hidden box (perfect-scrollbar, scroll-jacking
+// pages), so it is not reported. The wheel is turned back and the pointer returned afterwards. Text
+// cut through at the bottom of a confirmed box is the same defect: runChecks drops that text-clipped.
+export async function confirmUnreachable(page, found, issues) {
+  for (const f of found) {
+    const id = f.unreachId;
+    delete f.needsScrollCheck; delete f.unreachId;
+    let moved = true;
+    try {
+      // the box itself (marked by the rule: a selector can match an earlier look-alike), or the screen
+      const at = await page.evaluate((id) => {
+        const box = id ? document.querySelector(`[data-rl-unreach="${id}"]`) : document.documentElement;
+        if (!box) return null;
+        const startY = scrollY;
+        // bring the box into view by scrolling the window only (scrollIntoView would also move clipped ancestors)
+        let r = id ? box.getBoundingClientRect() : { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
+        if (id && (r.top < 0 || r.top > innerHeight - 40)) { window.scrollTo({ top: Math.max(0, scrollY + r.top - 20), behavior: 'instant' }); r = box.getBoundingClientRect(); }
+        const top = Math.max(0, r.top), bottom = Math.min(innerHeight, r.bottom), left = Math.max(0, r.left), right = Math.min(innerWidth, r.right);
+        const done = () => { window.scrollTo({ top: startY, behavior: 'instant' }); return null; };
+        if (bottom - top < 20 || right - left < 20) return done();
+        const x = Math.round((left + right) / 2), y = Math.round(top + (bottom - top) * 0.6);
+        const hit = document.elementFromPoint(x, y);
+        if (!hit || (id && !box.contains(hit))) return done(); // something covers it: can't tell
+        // what would move: the box's scroll offset, the page's (for the screen), where its content sits in it
+        const content = id ? [box.firstElementChild, box.lastElementChild, ...Array.from(box.querySelectorAll('*')).slice(-3)].filter(Boolean) : Array.from(document.body.querySelectorAll('*')).slice(-3);
+        const rel = (c) => c.getBoundingClientRect().top - (id ? box.getBoundingClientRect().top : 0);
+        window.__rlUnreach = { box, content, whole: !id, rel, startY, scrollTop: box.scrollTop, scrollY: scrollY, tops: content.map(rel) };
+        return { x, y };
+      }, id);
+      if (at) {
+        await page.mouse.move(at.x, at.y);
+        await page.mouse.wheel(0, 400);
+        await page.waitForTimeout(300);
+        moved = await page.evaluate(() => {
+          const u = window.__rlUnreach;
+          if (!u) return true;
+          return u.box.scrollTop !== u.scrollTop || (u.whole && scrollY !== u.scrollY) || u.content.some((c, i) => Math.abs(u.rel(c) - u.tops[i]) > 1);
+        });
+        await page.mouse.wheel(0, -400);
+        await page.waitForTimeout(150);
+        await page.evaluate(() => {
+          const u = window.__rlUnreach;
+          if (u) { u.box.scrollTo({ top: u.scrollTop, behavior: 'instant' }); window.scrollTo({ top: u.startY, behavior: 'instant' }); }
+          delete window.__rlUnreach;
+        });
+        await page.mouse.move(0, 0);
+      }
+    } catch { moved = true; }
+    if (moved) issues.splice(issues.indexOf(f), 1);
+  }
+  await page.evaluate(() => { for (const e of document.querySelectorAll('[data-rl-unreach]')) e.removeAttribute('data-rl-unreach'); }).catch(() => {});
 }
 
 export function effectiveSeverity(issue, config) {

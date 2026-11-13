@@ -20,6 +20,7 @@ RL.analyze = function (options) {
     minFontSize: options.minFontSize,
     maxLineLength: options.maxLineLength,
     noScroll: !!options.noScroll,
+    scrollCheck: !!options.scrollCheck, // the runner can confirm unreachable-content with the mouse wheel
   };
   const enabled = (id) => !options.rules || options.rules[id] === undefined || options.rules[id] !== 'off';
   RL.resetCaches();

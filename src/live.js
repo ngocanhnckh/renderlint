@@ -12,7 +12,7 @@ import { measureContrast } from './contrast.js';
 import { measureDropdowns } from './controls.js';
 import { normalize, DEFAULTS } from './config.js';
 import {
-  SETTLE_SCRIPT, annotate, confirmDeadLinks, effectiveSeverity, groupKey, slugFor, stressPasses, sweepPasses,
+  SETTLE_SCRIPT, annotate, confirmDeadLinks, confirmUnreachable, effectiveSeverity, groupKey, slugFor, stressPasses, sweepPasses,
   breakpointWidths, sweepAssignment, writeShot, hashRoute,
 } from './runner.js';
 
@@ -57,7 +57,7 @@ export async function checkLive(page, { config, name, marked = new Set(), log = 
   if (config.screenshots) mkdirSync(join(outDir, 'screens'), { recursive: true });
   const ignoreSelectors = {};
   for (const ig of config.ignore || []) if (ig.selector) (ignoreSelectors[ig.rule || '*'] = ignoreSelectors[ig.rule || '*'] || []).push(ig.selector);
-  const analyzeOpts = { rules: config.rules, ignoreSelectors, skipDomContrast: true, contrastCandidates: false, minTapTarget: config.minTapTarget, minFontSize: config.minFontSize, maxLineLength: config.maxLineLength };
+  const analyzeOpts = { rules: config.rules, ignoreSelectors, skipDomContrast: true, contrastCandidates: false, scrollCheck: true, minTapTarget: config.minTapTarget, minFontSize: config.minFontSize, maxLineLength: config.maxLineLength };
 
   // What to put back afterwards.
   const size = page.viewportSize();
@@ -86,6 +86,8 @@ export async function checkLive(page, { config, name, marked = new Set(), log = 
         issues.push(...res.issues);
         const dead = issues.filter((i) => i.needsListenerCheck);
         if (dead.length) await confirmDeadLinks(page, dead, issues);
+        const unreachable = issues.filter((i) => i.needsScrollCheck);
+        if (unreachable.length) await confirmUnreachable(page, unreachable, issues);
         await page.evaluate(() => { window.scrollTo({ top: 0, behavior: 'instant' }); window.__renderlint.finishAnimations(); });
         if (config.rules.contrast !== 'off') {
           const candidates = await page.evaluate(() => window.__renderlint.collectContrast(true, true));
