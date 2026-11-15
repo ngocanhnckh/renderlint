@@ -77,7 +77,7 @@ function clipperAt(item, popup, x, y) {
 }
 
 // Hit-tests the popup's options. Returns a finding, or null when every option can be seen.
-RL.popupProblem = function (popup, trigger) {
+RL.popupProblem = function (popup, trigger, kind) {
   if (RL.isIgnored(popup, 'popup-obscured') || (trigger && RL.isIgnored(trigger, 'popup-obscured'))) return null;
   let items = Array.from(popup.querySelectorAll(ITEM_SEL)).filter((i) => RL.isVisible(i) && !i.querySelector(ITEM_SEL));
   if (!items.length) items = [popup];
@@ -114,7 +114,7 @@ RL.popupProblem = function (popup, trigger) {
   }
   window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
   if (!hidden) return null;
-  const what = popup.matches('[role=listbox]') || (trigger && trigger.matches('[role=combobox],[aria-haspopup=listbox]')) ? 'dropdown list' : 'menu';
+  const what = kind || (popup.matches('[role=listbox]') || (trigger && trigger.matches('[role=combobox],[aria-haspopup=listbox]')) ? 'dropdown list' : 'menu');
   const name = trigger ? RL.describe(trigger).text : '';
   const of = `${hidden} of ${items.length} ${items.length === 1 && items[0] === popup ? 'part' : 'option' + (items.length === 1 ? '' : 's')}`;
   const opened = 'The open ' + what + (name ? ` of "${name.slice(0, 40)}"` : '');
@@ -220,3 +220,78 @@ RL.menuStillOpen = function (sel) {
   if (trigger.getAttribute('aria-expanded') === 'true') return true;
   return Array.from(document.querySelectorAll(POPUP_SEL)).some((p) => p.getAttribute('data-rl-was-open') !== '1' && isOpenPopup(p));
 };
+
+// ---------------------------------------------------------------------------
+// Tooltips, for the runner: it hovers each trigger, checks that the tooltip can be seen (popup-obscured: off
+// the screen, cut off by a container, drawn underneath), then focuses the trigger and checks the tooltip opens
+// for the keyboard too and closes on Escape (tooltip-keyboard). Triggers: elements tied to a role="tooltip"
+// (aria-describedby), the attributes tooltip libraries use, and icon-only buttons and links (the usual place
+// for one; hovering finds out). Two per repeated kind.
+const TIP_SEL = '[role=tooltip],.tooltip.show,[data-tippy-root],.react-tooltip,.MuiTooltip-popper';
+const TIP_TRIGGER_SEL = '[data-tooltip],[data-tip],[data-tippy-content],[data-bs-toggle=tooltip],[data-toggle=tooltip],[data-tooltip-id],[data-tooltip-content]';
+const tipVisible = (el) => { const r = el.getBoundingClientRect(); return r.width > 2 && r.height > 2 && RL.isVisible(el) && parseFloat(RL.cs(el).opacity) > 0.05; };
+function describedTip(trigger) {
+  for (const id of (trigger.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean)) {
+    const el = document.getElementById(id);
+    if (el && el.getAttribute('role') === 'tooltip') return el;
+  }
+  return null;
+}
+RL.tooltipTriggers = function (max) {
+  RL.resetCaches();
+  for (const t of document.querySelectorAll(TIP_SEL)) t.setAttribute('data-rl-was-open', tipVisible(t) ? '1' : '0');
+  const scope = RL.inScope();
+  const declared = new Set();
+  for (const el of document.querySelectorAll('[aria-describedby]')) if (describedTip(el)) declared.add(el);
+  for (const el of document.querySelectorAll(TIP_TRIGGER_SEL)) declared.add(el);
+  const iconOnly = (el) => RL.isInteractive(el) && !(el.textContent || '').replace(/[\s​]/g, '') && !el.querySelector('input,select,textarea') &&
+    !!(el.getAttribute('aria-label') || el.getAttribute('title') || el.querySelector('svg,img,i,[class*=icon]'));
+  const groups = new Map();
+  const add = (el, prio) => {
+    if (!scope(el) || !RL.isVisible(el) || RL.isDisabled(el) || RL.isIgnored(el, 'popup-obscured')) return;
+    if (el.closest('[role=menu],[role=listbox],[role=tooltip]')) return;
+    const r = RL.rectOf(el);
+    if (r.w < 4 || r.h < 4) return;
+    const sig = (n) => n.tagName + '.' + (typeof n.className === 'string' ? n.className.trim().split(/\s+/).sort().join('.') : '');
+    const chain = [];
+    for (let n = el, d = 0; n && n !== document.body && d < 4; n = n.parentElement, d++) chain.push(sig(n));
+    const key = prio + chain.join('<');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(el);
+  };
+  for (const el of declared) add(el, '0');
+  for (const el of document.querySelectorAll('button,a[href],[role=button]')) if (!declared.has(el) && iconOnly(el)) add(el, '1');
+  const picked = [];
+  for (const [key, list] of Array.from(groups).sort((a, b) => a[0].localeCompare(b[0]))) {
+    picked.push(list[0]);
+    if (list.length > 1 && key[0] === '0') picked.push(list[list.length - 1]);
+  }
+  return picked.slice(0, max || 6).map((el, i) => { el.setAttribute('data-rl-tip', String(i)); return '[data-rl-tip="' + i + '"]'; });
+};
+// The tooltip this trigger opened, if one is visible now.
+function openTip(trigger) {
+  const own = describedTip(trigger);
+  if (own) return tipVisible(own) ? own : null;
+  return Array.from(document.querySelectorAll(TIP_SEL)).find((t) => t.getAttribute('data-rl-was-open') !== '1' && tipVisible(t) && !t.contains(trigger)) || null;
+}
+RL.tooltipOpen = function (sel) { RL.resetCaches(); const t = document.querySelector(sel); return !!(t && openTip(t)); };
+RL.checkTooltip = function (sel) {
+  RL.resetCaches();
+  const trigger = document.querySelector(sel);
+  const tip = trigger && openTip(trigger);
+  if (!tip) return null;
+  const name = (tip.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 50);
+  const r = tip.getBoundingClientRect();
+  const off = { left: Math.round(-r.left), right: Math.round(r.right - innerWidth), top: Math.round(-r.top) };
+  const sides = Object.entries(off).filter(([, v]) => v > 2);
+  if (sides.length) {
+    return { rule: 'popup-obscured', ...RL.issueBase(tip, trigger),
+      message: `The tooltip "${name}" opens partly off the screen: ` + sides.map(([k, v]) => `${v}px past the ${k} edge`).join(', ') + '.',
+      details: { kind: 'off-screen', offscreen: Object.fromEntries(sides), tooltip: true } };
+  }
+  const p = hitTestable(() => RL.popupProblem(tip, trigger, 'tooltip'));
+  if (!p) return null;
+  const { el, related, ...rest } = p;
+  return { ...rest, message: rest.message.replace(/^The open tooltip of "[^"]*"/, `The tooltip "${name}"`), details: { ...rest.details, tooltip: true }, ...RL.issueBase(el, related) };
+};
+RL.tooltipIssueBase = function (sel) { const t = document.querySelector(sel); return t ? RL.issueBase(t) : null; };

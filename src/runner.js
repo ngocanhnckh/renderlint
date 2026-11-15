@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSyn
 import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
-import { measureDropdowns, checkMenus } from './controls.js';
+import { measureDropdowns, checkMenus, checkTooltips, parkPointer } from './controls.js';
 import { checkLoadingState } from './waiting.js';
 import { uxPass, UX_PERF } from './ux.js';
 import { dialogAdvice, RULES } from './rules-meta.js';
@@ -998,6 +998,18 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     lap('dropdowns');
 
     // Open each menu, dropdown and popover trigger, and check that what it opens can be seen.
+    // A screenshot of a finding in a passing state (an open menu or tooltip, a focused control), taken now.
+    const shotOf = (kind) => (config.screenshots ? async (issue, n) => {
+      const file = join(outDir, 'screens', `${slugFor(url, config.role && config.role.name)}@${vp.width}-${kind}${n + 1}.png`);
+      issue.marker = 1;
+      issue.ownShot = true;
+      await annotate(page, [issue], config);
+      const rs = [issue.rect, issue.related && issue.related.rect].filter(Boolean);
+      const top = Math.max(0, Math.min(...rs.map((r) => r.y)) - 160), bottom = Math.max(...rs.map((r) => r.y + r.h)) + 160;
+      await writeShot(page, file, { x: 0, y: top, width: vp.width, height: Math.min(1600, Math.max(200, bottom - top)) });
+      await page.evaluate(() => { const o = document.getElementById('__renderlint_overlay'); if (o) o.remove(); });
+      return file;
+    } : null);
     if (menus && !dupOf) {
       const shot = config.screenshots ? async (issue, n) => {
         const file = join(outDir, 'screens', `${slugFor(url, config.role && config.role.name)}@${vp.width}-menu${n + 1}.png`);
@@ -1021,11 +1033,28 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
       }
     }
     lap('menus');
+    // Tooltips: a pointer and keyboard feature, checked from tablet width up (a phone has no hover).
+    if (menus && !dupOf && vp.width >= 600 && config.rules['popup-obscured'] !== 'off') {
+      issues.push(...await checkTooltips(page, { keyboard: config.rules['tooltip-keyboard'] !== 'off', shot: shotOf('tooltip') }));
+      lap('tooltips');
+    }
     const extra = issues.slice(iExtra);
 
     if (focus) {
       const f = await page.evaluate(() => window.__renderlint.focusCheck(30));
       issues.push(...f);
+      if (config.rules['focus-obscured'] !== 'off') {
+        const w = await focusWalk(page, { shot: shotOf('focus') });
+        issues.push(...w.issues);
+        if (w.disturbed) {
+          // a focused link navigated on its own (rare): start again from a fresh load
+          await page.goto(url, { waitUntil: 'load', timeout: config.timeout });
+          await waitReady(page, net, 4000);
+          await page.evaluate(SETTLE_SCRIPT, { autoScroll: config.autoScroll });
+          await page.evaluate(source);
+        }
+        lap('focus walk');
+      }
       // Focusing and blurring can open things that close on a timer (a search box's
       // results closing 120ms after blur): let them close before the next checks.
       await page.evaluate(() => window.__rlWaitQuiet && window.__rlWaitQuiet(500, 2));
@@ -1330,12 +1359,49 @@ export async function confirmUnreachable(page, found, issues) {
           if (u) { u.box.scrollTo({ top: u.scrollTop, behavior: 'instant' }); window.scrollTo({ top: u.startY, behavior: 'instant' }); }
           delete window.__rlUnreach;
         });
-        await page.mouse.move(0, 0);
+        await parkPointer(page);
       }
     } catch { moved = true; }
     if (moved) issues.splice(issues.indexOf(f), 1);
   }
   await page.evaluate(() => { for (const e of document.querySelectorAll('[data-rl-unreach]')) e.removeAttribute('data-rl-unreach'); }).catch(() => {});
+}
+
+// focus-obscured: walk the page with Tab, then back with Shift+Tab (which brings each control in at the top
+// edge, under a sticky header), as a keyboard user does: the browser scrolls each focused control into view.
+// One finding per covering layer, on the first control it hid. Leaves the page scrolled to the top, unfocused.
+export async function focusWalk(page, { max = 40, shot = null } = {}) {
+  const found = new Map();
+  try {
+    await page.evaluate(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); window.scrollTo({ top: 0, behavior: 'instant' }); });
+    const url = page.url();
+    for (const key of ['Tab', 'Shift+Tab']) {
+      let last = null;
+      for (let i = 0; i < max; i++) {
+        await page.keyboard.press(key);
+        if (page.url() !== url) return { issues: [], disturbed: true };
+        const r = await page.evaluate(() => { const a = document.activeElement; const id = a && a !== document.body ? (a.__rlFocusId || (a.__rlFocusId = Math.random())) : null; return { id, hit: id ? window.__renderlint.focusObscured() : null }; });
+        if (!r.id || r.id === last) break; // focus left the page, or is stuck (a trap)
+        last = r.id;
+        if (r.hit && !found.has(r.hit.cover)) {
+          const h = { ...r.hit, count: 1 };
+          found.set(r.hit.cover, h);
+          // while it is hidden: the page as the keyboard user sees it now
+          if (shot) h.screenshot = await shot({ rule: 'focus-obscured', ...h.base }, found.size - 1).catch(() => undefined);
+        }
+        else if (r.hit) found.get(r.hit.cover).count++;
+      }
+    }
+  } catch { /* best effort */ }
+  await page.evaluate(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); window.scrollTo({ top: 0, behavior: 'instant' }); }).catch(() => {});
+  const issues = Array.from(found.values()).map((h) => ({
+    rule: 'focus-obscured', ...h.base,
+    message: `Keyboard focus is hidden: tabbing to this control scrolls it under a ${h.position} layer (${h.cover}${h.coverText ? ` "${h.coverText}"` : ''}), which covers it entirely` +
+      (h.count > 1 ? `; ${h.count} focused controls were hidden by it` : '') + '.',
+    details: { coveredBy: h.cover, position: h.position, hidden: h.count },
+    ...(h.screenshot ? { screenshot: h.screenshot, ownShot: true } : {}),
+  }));
+  return { issues, disturbed: false };
 }
 
 export function effectiveSeverity(issue, config) {

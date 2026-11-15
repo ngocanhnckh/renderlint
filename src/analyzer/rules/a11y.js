@@ -89,6 +89,79 @@ function accessibleName(el) {
   return '';
 }
 
+// ---------------------------------------------------------------------------
+// ARIA attributes that name, describe or point at another element by id, where no element has that id:
+// the control loses its name or description (a renamed id, a component rendered twice, an id the
+// framework rewrote). aria-controls and aria-owns are left out: a menu or panel is often rendered only
+// while it is open. <label for> is checked too.
+const REF_ATTRS = ['aria-labelledby', 'aria-describedby', 'aria-errormessage', 'aria-details', 'aria-activedescendant', 'for'];
+RL.rule({
+  id: 'aria-reference',
+  run(ctx) {
+    const sel = REF_ATTRS.map((a) => (a === 'for' ? 'label[for]' : '[' + a + ']')).join(',');
+    for (const el of document.querySelectorAll(sel)) {
+      if (!RL.isVisible(el) || RL.isDevTool(el) || RL.isIgnored(el, 'aria-reference')) continue;
+      const root = el.getRootNode && el.getRootNode().getElementById ? el.getRootNode() : document;
+      const bad = [];
+      for (const a of REF_ATTRS) {
+        if (a === 'for' ? el.tagName !== 'LABEL' : !el.hasAttribute(a)) continue;
+        const v = (el.getAttribute(a) || '').trim();
+        if (!v) continue;
+        const missing = (a === 'aria-activedescendant' || a === 'for' ? [v] : v.split(/\s+/)).filter((id) => !root.getElementById(id) && !document.getElementById(id));
+        if (missing.length) bad.push(a + '="' + missing.join(' ') + '"');
+      }
+      if (!bad.length) continue;
+      ctx.report({ rule: 'aria-reference', el,
+        message: 'Points at ' + (bad.length > 1 ? 'ids that don\'t' : 'an id that doesn\'t') + ' exist on the page: ' + bad.join(', ') + '. ' +
+          (el.tagName === 'LABEL' ? 'The label isn\'t tied to its field.' : 'Screen readers lose the name or description it should give.'),
+        details: { missing: bad } });
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Label in name (WCAG 2.5.3, A): a control with visible text whose accessible name (aria-label,
+// aria-labelledby) doesn't contain that text. Voice control users say what they see ("click Place order")
+// and nothing matches. Visible text without letters (×, ›, 3) and screen-reader-only text don't count.
+const nameNorm = (t) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+function visibleText(el) {
+  let out = '';
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n; (n = w.nextNode());) {
+    const p = n.parentElement;
+    if (!p || !RL.isVisible(p) || RL.isVisuallyHidden(p) || p.closest('[aria-hidden=true]')) continue;
+    // icon-font ligatures (<span class="material-icons">arrow_back</span>) draw a glyph, not that text
+    if (/icon|symbol|awesome|glyph/i.test(RL.cs(p).fontFamily) || /(^|[\s_-])(icons?|material|fa|bi|glyphicon|symbols?)([\s_-]|$)/i.test(typeof p.className === 'string' ? p.className : '')) continue;
+    out += ' ' + n.nodeValue;
+  }
+  return out;
+}
+RL.rule({
+  id: 'label-in-name',
+  run(ctx) {
+    for (const el of ctx.elements) {
+      const role = el.getAttribute('role') || '';
+      const isCtl = el.tagName === 'BUTTON' || (el.tagName === 'A' && el.hasAttribute('href')) || /^(button|link|menuitem|menuitemcheckbox|menuitemradio|tab|option|checkbox|radio|switch)$/.test(role);
+      if (!isCtl || !RL.isVisible(el) || RL.isIgnored(el, 'label-in-name')) continue;
+      // a select or combobox trigger shows its value, not its label
+      if (/^(combobox|option)$/.test(role) || el.getAttribute('aria-haspopup') === 'listbox') continue;
+      let name = el.getAttribute('aria-label');
+      if (!(name && name.trim())) {
+        const lb = el.getAttribute('aria-labelledby');
+        if (!lb) continue;
+        name = lb.split(/\s+/).map((id) => document.getElementById(id)).filter(Boolean).map((n) => n.textContent).join(' ');
+      }
+      const shown = nameNorm(visibleText(el));
+      const said = nameNorm(name || '');
+      if (!said || !/\p{L}.*\p{L}/u.test(shown) || shown.length > 80) continue;
+      if ((' ' + said + ' ').includes(' ' + shown + ' ') || said.replace(/ /g, '').includes(shown.replace(/ /g, ''))) continue;
+      ctx.report({ rule: 'label-in-name', el,
+        message: 'Its accessible name "' + name.trim().slice(0, 60) + '" doesn\'t contain the text it shows ("' + visibleText(el).replace(/\s+/g, ' ').trim().slice(0, 40) + '"): voice control users who say the visible label can\'t activate it.',
+        details: { name: name.trim().slice(0, 120), visible: shown } });
+    }
+  },
+});
+
 RL.rule({
   id: 'unlabeled-control',
   run(ctx) {
@@ -265,6 +338,32 @@ RL.rule({
 
 // ---------------------------------------------------------------------------
 // Focus indicators (run as a separate phase because it changes focus).
+// For the runner's Tab walk (focus-obscured): is the focused element entirely hidden under a fixed or sticky
+// layer (a sticky header, a cookie banner, a bottom bar), as WCAG 2.4.11 forbids? Partly hidden passes.
+// Returns null, or the covering layer's selector and the focused element's issue record.
+RL.focusObscured = function () {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement || RL.isIgnored(el, 'focus-obscured')) return null;
+  if (RL.modalRoot() && RL.behindModal(RL.modalRoot(), el)) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return null;
+  const x0 = Math.max(0, r.left), x1 = Math.min(innerWidth, r.right), y0 = Math.max(0, r.top), y1 = Math.min(innerHeight, r.bottom);
+  if (x1 - x0 < 2 || y1 - y0 < 2) return null; // off screen (in a scroll box, a skip link): not this rule's case
+  const layerOf = (n) => { for (let a = n; a && a !== document.documentElement; a = RL.parentOf(a)) { const p = RL.cs(a).position; if (p === 'fixed' || p === 'sticky') return a; } return null; };
+  const own = layerOf(el);
+  const pts = [[0.5, 0.5], [0.12, 0.2], [0.88, 0.2], [0.12, 0.8], [0.88, 0.8]].map(([fx, fy]) => [x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy]);
+  let cover = null;
+  for (const [x, y] of pts) {
+    const stack = document.elementsFromPoint(x, y).filter((e) => e.id !== '__renderlint_overlay' && !RL.isDevTool(e));
+    const idx = stack.findIndex((e) => e === el || el.contains(e) || e.contains(el));
+    const above = idx < 0 ? stack : stack.slice(0, idx);
+    const c = above.find((e) => { const l = layerOf(e); return l && l !== own && !l.contains(el) && RL.isOpaqueLayer(e); });
+    if (!c) return null; // seen here
+    cover = cover || layerOf(c);
+  }
+  return { cover: RL.selector(cover), coverText: (cover.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 50), position: RL.cs(cover).position, base: RL.issueBase(el, cover) };
+};
+
 RL.focusCheck = function (limit) {
   const issues = [];
   const style = document.createElement('style');
