@@ -104,3 +104,51 @@ export async function checkMenus(page, { max = 8, shot } = {}) {
   }).catch(() => {});
   return { issues, disturbed };
 }
+
+// Hovers each tooltip trigger (see RL.tooltipTriggers) and checks the tooltip it opens can be seen
+// (popup-obscured); then focuses it and checks the tooltip opens for the keyboard as well and closes on
+// Escape (tooltip-keyboard, WCAG 2.1.1 and 1.4.13). A trigger that opens nothing on hover is skipped.
+export async function checkTooltips(page, { max = 6, keyboard = true, shot = null } = {}) {
+  let triggers;
+  try { triggers = await page.evaluate((m) => window.__renderlint.tooltipTriggers(m), max); } catch { return []; }
+  const issues = [];
+  const open = (sel) => page.evaluate((s) => window.__renderlint.tooltipOpen(s), sel).catch(() => false);
+  const until = async (want, sel, ms) => { for (const t = Date.now(); Date.now() - t < ms;) { if ((await open(sel)) === want) return true; await page.waitForTimeout(50); } return (await open(sel)) === want; };
+  for (const sel of triggers) {
+    try {
+      await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' }); }, sel);
+      await page.hover(sel, { timeout: 1500 });
+    } catch { continue; }
+    if (!(await until(true, sel, 1200))) { await page.mouse.move(0, 0).catch(() => {}); continue; } // no tooltip here
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => { window.__renderlint.finishAnimations(); requestAnimationFrame(r); }))).catch(() => {});
+    const issue = await page.evaluate((s) => window.__renderlint.checkTooltip(s), sel).catch(() => null);
+    if (issue) {
+      if (shot) issue.screenshot = await shot(issue, issues.length).catch(() => undefined); // while the tooltip is open
+      issues.push(issue);
+    }
+    await page.mouse.move(0, 0).catch(() => {});
+    if (!keyboard || !(await until(false, sel, 1000))) continue;
+    // keyboard: focus it as Tab would (keyboard modality, so :focus-visible styles apply)
+    const focusable = await page.evaluate((s) => { const el = document.querySelector(s); return !!el && el.tabIndex >= 0; }, sel).catch(() => false);
+    if (!focusable) continue;
+    await page.keyboard.press('Shift').catch(() => {});
+    await page.focus(sel).catch(() => {});
+    const shown = await until(true, sel, 1200);
+    const base = await page.evaluate((s) => window.__renderlint.tooltipIssueBase(s), sel).catch(() => null);
+    if (!shown && base) {
+      issues.push({ rule: 'tooltip-keyboard', ...base, message: 'This control\'s tooltip opens on mouse hover only: focusing it with the keyboard shows nothing, so keyboard users never see it.', details: { problem: 'hover-only' } });
+    } else if (shown) {
+      await page.keyboard.press('Escape').catch(() => {});
+      if (!(await until(false, sel, 600)) && base) {
+        issues.push({ rule: 'tooltip-keyboard', ...base, message: 'This control\'s tooltip doesn\'t close on Escape: a tooltip must be dismissible without moving the pointer or focus (WCAG 1.4.13).', details: { problem: 'no-escape' } });
+      }
+    }
+    await page.evaluate(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }).catch(() => {});
+    await until(false, sel, 600);
+  }
+  await page.evaluate(() => {
+    for (const e of document.querySelectorAll('[data-rl-tip],[data-rl-was-open]')) { e.removeAttribute('data-rl-tip'); e.removeAttribute('data-rl-was-open'); }
+    window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+  }).catch(() => {});
+  return issues;
+}

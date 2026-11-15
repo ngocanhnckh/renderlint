@@ -179,8 +179,9 @@ RL.rule({
 // Content no one can scroll to: it lies below the bottom of a box that clips (overflow: hidden or clip),
 // or below the screen when the page itself doesn't scroll (overflow: hidden on <html> or <body>), and
 // nothing between them scrolls. A fixed-height app shell whose page area doesn't scroll, a scroll lock
-// left on. text-clipped covers text cut through; this is text past the edge entirely. Content moved
-// away on purpose is left out: by a transform (slides, drawers, sheets), out of flow (absolute, fixed),
+// left on, a fixed panel or dialog taller than the screen. text-clipped covers text cut through; this is
+// text past the edge entirely. Content moved away on purpose is left out: by a transform (slides, drawers,
+// sheets), out of flow (absolute; fixed panels mostly off screen),
 // in a small box (a teaser, a collapsed panel), next to a "Show more" control, or faded out.
 // Only with scrollCheck: the runner then turns the mouse wheel over each box, and a box whose content
 // moves (a JavaScript scroller on overflow: hidden) is not reported.
@@ -190,35 +191,60 @@ const MOVE_LABEL = /^(next|prev|previous|back|forward|up|down|older|newer|scroll
 // overflow-clip-margin paints clipped content past the box anyway
 let unreachIds = 0;
 const clipsY = (s) => s.overflowY === 'hidden' || (s.overflowY === 'clip' && (!s.overflowClipMargin || /^0(px)?$/.test(s.overflowClipMargin)));
+// A fixed panel or dialog: does the walk from its text stop at it, as the box that holds the text on screen?
+// Only when the panel is mostly on screen: a closed drawer, a toast sliding in or a sheet peeking from the
+// bottom is moved away on purpose. Its own translate may only center it (a dialog at top: 50% with
+// translate(-50%, -50%)): pushed down or sideways it is a sheet or drawer at rest.
+const isDialog = (el) => el.tagName === 'DIALOG' || /^(dialog|alertdialog)$/.test(el.getAttribute('role') || '') || el.getAttribute('aria-modal') === 'true';
+function overlayOnScreen(el, s) {
+  let ty = 0, tx = 0;
+  try { if (s.transform !== 'none') { const m = new DOMMatrixReadOnly(s.transform); ty += m.m42; tx += m.m41; } } catch (e) { return false; }
+  if (s.translate && s.translate !== 'none') { const p = s.translate.split(/\s+/).map(parseFloat); tx += p[0] || 0; ty += p[1] || 0; }
+  const r = el.getBoundingClientRect();
+  if (ty > 1 || Math.abs(tx) > Math.max(1, r.width * 0.55)) return false;
+  const vis = Math.min(innerHeight, r.bottom) - Math.max(0, r.top), visW = Math.min(innerWidth, r.right) - Math.max(0, r.left);
+  return visW >= Math.min(120, innerWidth * 0.3) && (vis >= innerHeight * 0.5 || (isDialog(el) && vis >= innerHeight * 0.3));
+}
 RL.rule({
   id: 'unreachable-content',
   run(ctx) {
-    if (!RL.options.scrollCheck || RL.modalRoot()) return; // an open dialog locks the page on purpose
+    if (!RL.options.scrollCheck) return;
     const html = document.documentElement, body = document.body;
     if (!body) return;
+    // While a dialog is open the page behind it is locked on purpose: only the dialog is checked.
+    const modal = RL.modalRoot();
     const hs = RL.cs(html), bs = RL.cs(body);
-    const pageLocked = clipsY(hs) || (hs.overflowY === 'visible' && clipsY(bs));
+    const pageLocked = !modal && (clipsY(hs) || (hs.overflowY === 'visible' && clipsY(bs)));
     const minH = Math.max(150, innerHeight * 0.3);
-    const groups = new Map(); // clipping box (or html for the screen) → hidden text
+    const screen = () => ({ x: scrollX, y: scrollY, right: scrollX + innerWidth, bottom: scrollY + innerHeight, w: innerWidth, h: innerHeight });
+    const groups = new Map(); // clipping box, fixed panel, or html for the screen → hidden text
+    const overlays = new Map(); // fixed element → mostly on screen?
     const w = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     const range = document.createRange();
     for (let n; (n = w.nextNode());) {
       const t = n.nodeValue.replace(/\s+/g, ' ').trim();
       const el = n.parentElement;
       if (!t || !el || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|OPTION)$/.test(el.tagName) || !RL.isVisible(el) || RL.isIgnored(el, 'unreachable-content')) continue;
+      if (modal && RL.behindModal(modal, el)) continue;
       range.selectNodeContents(n);
       const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0.5 && r.height > 0.5).map(RL.docRect);
       if (!rects.length) continue;
       // the first box up the tree that decides whether this text can be scrolled to
-      let clipper = null;
+      let clipper = null, kind = 'box';
       for (let a = el; a; a = RL.parentOf(a)) {
         if (RL.isDevTool(a) || a.getAttribute('aria-hidden') === 'true' || a.inert) { clipper = null; break; }
-        if (a === html) { clipper = clipsY(hs) ? html : null; break; }
+        if (a === html) { clipper = clipsY(hs) && !modal ? html : null; kind = 'page'; break; }
         // <body>'s overflow is the page's when <html> leaves it visible; otherwise <body> is a box of its own
         // (html { overflow: hidden } with body as the scroller is a common app layout)
-        if (a === body && hs.overflowY === 'visible') { clipper = pageLocked ? html : null; break; }
+        if (a === body && hs.overflowY === 'visible') { clipper = pageLocked ? html : null; kind = 'page'; break; }
         const s = RL.cs(a);
-        if (s.position === 'fixed' || s.position === 'sticky' || s.transform !== 'none' || s.translate !== 'none') break;
+        if (s.position === 'fixed') {
+          // a fixed panel or dialog taller than the screen, that doesn't scroll: its content past the edge is lost
+          if (!overlays.has(a)) overlays.set(a, overlayOnScreen(a, s));
+          if (overlays.get(a)) { clipper = a; kind = 'overlay'; }
+          break;
+        }
+        if (s.position === 'sticky' || s.transform !== 'none' || s.translate !== 'none') break;
         if (s.webkitLineClamp && s.webkitLineClamp !== 'none') break;
         if ((s.maskImage && s.maskImage !== 'none') || (s.webkitMaskImage && s.webkitMaskImage !== 'none')) break;
         if (RL.isScrollContainer(a, 'y')) break; // it scrolls
@@ -227,34 +253,42 @@ RL.rule({
         if (s.position === 'absolute') break; // out of flow: menus, tooltips, positioned decorations
       }
       if (!clipper) continue;
-      const box = clipper === html ? { x: scrollX, y: scrollY, right: scrollX + innerWidth, bottom: scrollY + innerHeight, w: innerWidth, h: innerHeight } : RL.paddingBox(clipper);
-      if (box.h < minH || box.w < 120) continue;
-      // entirely below the box, and under it (not beside it: a slide moved sideways)
-      if (!rects.every((r) => r.y >= box.bottom - 1 && r.x < box.right && r.right > box.x)) continue;
-      if (!groups.has(clipper)) groups.set(clipper, { box, items: [] });
-      groups.get(clipper).items.push({ el, t, rects });
+      const box = kind === 'box' ? RL.paddingBox(clipper) : screen();
+      if (kind === 'box' && (box.h < minH || box.w < 120)) continue;
+      // entirely past the bottom of the box (a fixed panel's: also past the top), and under it (not beside it: a slide moved sideways)
+      const under = (r) => r.x < box.right && r.right > box.x;
+      const past = rects.every((r) => under(r) && r.y >= box.bottom - 1) ? 'below' : kind === 'overlay' && rects.every((r) => under(r) && r.bottom <= box.y + 1) ? 'above' : null;
+      if (!past) continue;
+      if (!groups.has(clipper)) groups.set(clipper, { box, kind, items: [] });
+      groups.get(clipper).items.push({ el, t, rects, past });
     }
     for (const [clipper, g] of groups) {
       const chars = g.items.reduce((a, x) => a + x.t.length, 0);
-      const bottom = Math.max(...g.items.flatMap((x) => x.rects.map((r) => r.bottom)));
-      const below = Math.round(bottom - g.box.bottom);
-      if (g.items.length < 2 || chars < 30 || below < 60) continue;
+      const lo = g.items.filter((x) => x.past === 'below'), hi = g.items.filter((x) => x.past === 'above');
+      const below = lo.length ? Math.round(Math.max(...lo.flatMap((x) => x.rects.map((r) => r.bottom))) - g.box.bottom) : 0;
+      const above = hi.length ? Math.round(g.box.y - Math.min(...hi.flatMap((x) => x.rects.map((r) => r.y)))) : 0;
+      if (g.items.length < 2 || chars < 30 || Math.max(below, above) < 60) continue;
       // a "Show more" control, or a slider's arrows and dots, in or right next to the box reveal the rest.
       // Tabs don't: switching a panel doesn't show what is cut off at its bottom.
-      const scope = clipper === html ? null : clipper.parentElement || clipper;
+      const scope = g.kind === 'page' ? null : g.kind === 'overlay' ? clipper : clipper.parentElement || clipper;
       const label = (b) => [(b.textContent || '').trim(), b.getAttribute('aria-label') || '', b.getAttribute('title') || ''];
       if (scope && Array.from(scope.querySelectorAll('button,a[href],summary,[role=button]')).some((b) => b.getAttribute('role') !== 'tab' &&
         label(b).some((t) => t && (MORE_LABEL.test(t) || MOVE_LABEL.test(t))))) continue;
-      if (clipper !== html) { clipper.setAttribute('data-rl-unreach', String(++unreachIds)); } // for the runner's wheel check
+      if (g.kind !== 'page') { clipper.setAttribute('data-rl-unreach', String(++unreachIds)); } // for the runner's wheel check
       const sample = [];
       for (const x of g.items) { if (!sample.includes(x.t.slice(0, 40))) sample.push(x.t.slice(0, 40)); if (sample.length >= 3) break; }
-      const s = clipper === html ? (clipsY(hs) ? hs : bs) : RL.cs(clipper);
-      const where = clipper === html ? 'the screen: the page itself doesn\'t scroll (overflow-y: ' + s.overflowY + ' on <' + (clipsY(hs) ? 'html' : 'body') + '>)' : 'this box (overflow-y: ' + s.overflowY + '), and neither it nor anything around the content scrolls';
+      const s = g.kind === 'page' ? (clipsY(hs) ? hs : bs) : RL.cs(clipper);
+      const reach = [below && below + 'px below the bottom', above && above + 'px above the top'].filter(Boolean).join(' and ');
+      const message = g.kind === 'page'
+        ? 'Content can\'t be scrolled to: ' + g.items.length + ' pieces of text, reaching ' + reach + ' of the screen: the page itself doesn\'t scroll (overflow-y: ' + s.overflowY + ' on <' + (clipsY(hs) ? 'html' : 'body') + '>)'
+        : g.kind === 'overlay'
+          ? (isDialog(clipper) ? 'This dialog' : 'This fixed panel') + ' is taller than the screen and doesn\'t scroll: ' + g.items.length + ' pieces of text reach ' + reach + ' of the screen, out of reach'
+          : 'Content can\'t be scrolled to: ' + g.items.length + ' pieces of text, reaching ' + reach + ' of this box (overflow-y: ' + s.overflowY + '), and neither it nor anything around the content scrolls';
       ctx.report({
-        rule: 'unreachable-content', el: clipper === html ? (clipsY(hs) ? html : body) : clipper, needsScrollCheck: true, // the element to fix
-        message: 'Content can\'t be scrolled to: ' + g.items.length + ' piece' + (g.items.length === 1 ? '' : 's') + ' of text, reaching ' + below + 'px below the bottom of ' + where + ' (' + sample.map((x) => '"' + x + '"').join(', ') + ').',
-        details: { below, hidden: g.items.length, clipper: clipper === html ? 'page' : 'box', overflowY: s.overflowY, sample, boxHeight: Math.round(g.box.h) },
-        unreachId: clipper === html ? 0 : unreachIds,
+        rule: 'unreachable-content', el: g.kind === 'page' ? (clipsY(hs) ? html : body) : clipper, needsScrollCheck: true, // the element to fix
+        message: message + ' (' + sample.map((x) => '"' + x + '"').join(', ') + ').',
+        details: { below, above, hidden: g.items.length, clipper: g.kind, overflowY: s.overflowY, sample, boxHeight: Math.round(g.kind === 'overlay' ? clipper.getBoundingClientRect().height : g.box.h) },
+        unreachId: g.kind === 'page' ? 0 : unreachIds,
       });
     }
   },

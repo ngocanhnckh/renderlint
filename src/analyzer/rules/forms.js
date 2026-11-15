@@ -223,3 +223,108 @@ RL.dropdownCandidates = function () {
   }
   return out;
 };
+
+// ---------------------------------------------------------------------------
+// Cramped controls: buttons that nearly touch each other, a label that nearly touches its button's border, a
+// button that nearly touches the edge of the card or panel around it. Only gaps between 0.5 and 3.5px count:
+// a design either joins things on purpose (0px: a button group, a full-bleed footer button) or spaces them
+// (4px and up). Buttons joined on purpose have square corners where they meet, so those are left out too.
+const CTL_SEL = 'button,summary,[role=button],input[type=submit],input[type=button],input[type=reset],a[href]';
+function drawnApart(el) {
+  // a border, a shadow, or a background that differs from what is behind it
+  const s = RL.cs(el);
+  for (const n of ['Top', 'Right', 'Bottom', 'Left']) {
+    const w = parseFloat(s['border' + n + 'Width']);
+    const c = RL.parseColor(s['border' + n + 'Color']);
+    if (w > 0 && !/none|hidden/.test(s['border' + n + 'Style']) && c && c.a > 0.15) return true;
+  }
+  if (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow)) return true;
+  const bg = RL.parseColor(s.backgroundColor);
+  if (!bg || bg.a < 0.3) return false;
+  const back = el.parentElement ? RL.backgroundOf(el.parentElement) : null;
+  return !back || Math.abs(bg.r - back.r) + Math.abs(bg.g - back.g) + Math.abs(bg.b - back.b) > 24;
+}
+const cramped = (d) => d > 0.5 && d < 3.5;
+// a drawn track that holds only controls (a segmented control, a toggle group, a tab pill bar) is one control
+// by design: its pills sit close to its edge and to each other on purpose
+function isTrack(box) {
+  if (!box || !drawnApart(box)) return false;
+  if (/^(group|radiogroup|tablist|toolbar|menubar)$/.test(box.getAttribute('role') || '')) return true;
+  const kids = Array.from(box.children).filter((k) => RL.isVisible(k));
+  return kids.length >= 2 && kids.every((k) => k.matches(CTL_SEL) || /^(tab|radio|option)$/.test(k.getAttribute('role') || ''));
+}
+RL.rule({
+  id: 'cramped-control',
+  order: 40,
+  run(ctx) {
+    const scope = RL.inScope();
+    const ctls = Array.from(document.querySelectorAll(CTL_SEL)).filter((el) => scope(el) && RL.isVisible(el) && !RL.isIgnored(el, 'cramped-control') &&
+      !RL.isOutOfFlow(el) && drawnApart(el) && (() => { const r = el.getBoundingClientRect(); return r.width >= 16 && r.height >= 16; })());
+    const reported = new Set();
+    const report = (el, related, message, details) => { if (reported.has(el)) return; reported.add(el); ctx.report({ rule: 'cramped-control', el, related, message, details }); };
+    const radius = (el, corner) => parseFloat(RL.cs(el)['border' + corner + 'Radius']) || 0;
+    // 1. a label that nearly touches its button's left or right border
+    for (const el of ctls) {
+      if (el.tagName === 'INPUT') continue;
+      const s = RL.cs(el);
+      if ((parseFloat(s.paddingLeft) || 0) >= 4 && (parseFloat(s.paddingRight) || 0) >= 4) continue;
+      const rects = [];
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      for (let n; (n = w.nextNode());) {
+        if (!/\S/.test(n.nodeValue) || !n.parentElement || !RL.isVisible(n.parentElement) || RL.isVisuallyHidden(n.parentElement)) continue;
+        range.selectNodeContents(n);
+        rects.push(...Array.from(range.getClientRects()).filter((r) => r.width > 1 && r.height > 1));
+      }
+      if (!rects.length) continue;
+      const b = el.getBoundingClientRect();
+      const bl = parseFloat(s.borderLeftWidth) || 0, br = parseFloat(s.borderRightWidth) || 0;
+      const gapL = Math.min(...rects.map((r) => r.left)) - (b.left + bl), gapR = (b.right - br) - Math.max(...rects.map((r) => r.right));
+      if (gapL < -0.5 || gapR < -0.5) continue; // spills out: text-overflow's business
+      const g = Math.min(gapL, gapR);
+      if (g >= 3) continue;
+      report(el, undefined, 'The label nearly touches the ' + (gapL <= gapR ? 'left' : 'right') + ' border of its control: ' + Math.max(0, Math.round(g * 10) / 10) + 'px of space.', { kind: 'label', gap: Math.round(g * 10) / 10 });
+    }
+    // 2. two controls next to each other, 0.5 to 3.5px apart (or touching, when the corners that meet are rounded)
+    const rect = new Map(ctls.map((el) => [el, el.getBoundingClientRect()]));
+    const byParent = new Map();
+    for (const el of ctls) {
+      let p = el.parentElement;
+      for (let d = 0; p && d < 2 && p.children.length === 1; d++) p = p.parentElement; // <li><button>…
+      if (!p) continue;
+      if (!byParent.has(p)) byParent.set(p, []);
+      byParent.get(p).push(el);
+    }
+    for (const [parent, list] of byParent) {
+      if (list.length < 2 || list.length > 40 || isTrack(parent)) continue;
+      for (let i = 0; i < list.length; i++) for (let j = 0; j < list.length; j++) {
+        if (i === j) continue;
+        const a = list[i], b = list[j], ra = rect.get(a), rb = rect.get(b);
+        if (a.contains(b) || b.contains(a)) continue;
+        const vOver = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top), hOver = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+        let gap = null, meet = null;
+        if (vOver > Math.min(ra.height, rb.height) * 0.5 && rb.left >= ra.left) { gap = rb.left - ra.right; meet = Math.min(radius(a, 'TopRight'), radius(a, 'BottomRight'), radius(b, 'TopLeft'), radius(b, 'BottomLeft')); }
+        else if (hOver > Math.min(ra.width, rb.width) * 0.5 && rb.top >= ra.top) { gap = rb.top - ra.bottom; meet = Math.min(radius(a, 'BottomLeft'), radius(a, 'BottomRight'), radius(b, 'TopLeft'), radius(b, 'TopRight')); }
+        if (gap === null || meet < 2) continue; // square where they meet: joined on purpose (a segmented group)
+        if (!(cramped(gap) || (gap > -0.5 && gap <= 0.5))) continue;
+        report(b, a, (gap <= 0.5 ? 'These controls touch' : 'These controls nearly touch: ' + Math.round(gap * 10) / 10 + 'px apart') + ', so they read as one and are easy to mis-tap.', { kind: 'gap', gap: Math.round(gap * 10) / 10 });
+      }
+    }
+    // 3. a control 0.5 to 3.5px from the inner edge of the card or panel around it
+    for (const el of ctls) {
+      const r = rect.get(el);
+      let box = null;
+      for (let p = el.parentElement, d = 0; p && p !== document.body && d < 4; p = p.parentElement, d++) {
+        if (p.matches(CTL_SEL) || RL.isScrollContainer(p, 'x') || RL.isScrollContainer(p, 'y')) break;
+        if (drawnApart(p)) { box = p; break; }
+      }
+      if (!box || isTrack(box) || box.querySelector('input:not([type=hidden]),select,textarea')) continue; // an input group joins its button on purpose
+      const s = RL.cs(box), b = box.getBoundingClientRect();
+      const inner = { left: b.left + (parseFloat(s.borderLeftWidth) || 0), right: b.right - (parseFloat(s.borderRightWidth) || 0), top: b.top + (parseFloat(s.borderTopWidth) || 0), bottom: b.bottom - (parseFloat(s.borderBottomWidth) || 0) };
+      const d = { left: r.left - inner.left, right: inner.right - r.right, top: r.top - inner.top, bottom: inner.bottom - r.bottom };
+      const side = Object.keys(d).find((k) => cramped(d[k]));
+      if (!side) continue;
+      report(el, box, 'This control sits ' + Math.round(d[side] * 10) / 10 + 'px from the ' + side + ' edge of the box around it: it looks jammed against the edge.', { kind: 'edge', side, gap: Math.round(d[side] * 10) / 10 });
+    }
+  },
+});

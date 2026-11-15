@@ -4,6 +4,19 @@
 
 The first version published to npm, as `@yitec/renderlint`.
 
+### Tooltips, keyboard focus, ARIA and cramped controls
+
+Ideas taken from comparing renderlint with [lintapple](https://github.com/gholtzap/lintapple). renderlint missed 9 of the 12 defects on lintapple's demo page. The objective ones are covered now; the ones that only make sense against a design policy (font allowlist, type scale, alignment contracts) are not.
+
+- `unreachable-content` also covers fixed panels and dialogs taller than the screen that don't scroll (the bottom and, for a centered dialog, the top are out of reach). Panels that are mostly off screen on purpose (closed drawers, sheets peeking from the bottom, toasts) are left out. While a dialog is open, only the dialog is checked.
+- `popup-obscured` also covers tooltips. From 600px wide up, renderlint hovers each tooltip trigger and reports a tooltip that opens partly off the screen, is cut off, or is drawn underneath something. Triggers: controls tied to a `role="tooltip"`, the attributes tooltip libraries use, and icon-only buttons.
+- New rule `tooltip-keyboard` (warn): a tooltip that doesn't open when its control gets keyboard focus, or doesn't close on Escape (WCAG 2.1.1, 1.4.13).
+- New rule `focus-obscured` (warn): renderlint walks the page with Tab and Shift+Tab, and reports a focused control entirely hidden under a sticky or fixed layer (WCAG 2.4.11). Its screenshot is taken at that moment.
+- New rule `aria-reference` (warn): `aria-labelledby`, `aria-describedby`, `aria-errormessage`, `aria-details`, `aria-activedescendant` or `<label for>` naming an id that doesn't exist.
+- New rule `label-in-name` (warn): a button or link whose `aria-label` doesn't contain its visible text (WCAG 2.5.3). Select and combobox triggers, which show a value, are left out.
+- New rule `cramped-control` (warn): a label within 3px of its button's border, two buttons 0.5–3.5px apart (or touching with rounded corners), or a button 0.5–3.5px from its card's edge. Button groups, segmented controls and input groups are left out.
+- Contrast: text under a scroll container's border no longer counts as visible (overflow clips at the padding edge). This removed a false 1:1 finding in a scrolled `<dialog>`.
+
 ### Content no one can scroll to
 
 - New rule `unreachable-content` (error). It flags content below the bottom of a box that clips (`overflow: hidden` or `clip`), or below the screen on a page that doesn't scroll, where nothing around it scrolls. Typical cases: a page or tab area that grows past a fixed-height app shell without being a scroller, a fixed-height card that hides the rest of its list, and a scroll lock left on. Before reporting, renderlint turns the mouse wheel over the box. Content that a script scrolls (custom scrollbars, scroll-jacking pages) is not reported, nor is content moved away on purpose (transformed, absolute or fixed), in small boxes, next to a "Show more" control, faded out, or behind an open dialog. `text-clipped` on the same box's bottom edge is folded into it. On 99 benchmark pages and the 50 existing test targets, it reported nothing new.

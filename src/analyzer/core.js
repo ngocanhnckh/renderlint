@@ -535,7 +535,10 @@ RL.clipBoxOf = function (el) {
   let box = s.position === 'fixed' ? null : RL.clipBoxOf(parentOf(el));
   const isSvg = el.namespaceURI === 'http://www.w3.org/2000/svg';
   if ((!isSvg || el.tagName.toLowerCase() === 'svg') && (s.overflowX !== 'visible' || s.overflowY !== 'visible')) {
-    const r = docRect(el.getBoundingClientRect());
+    // overflow clips at the padding edge: text under the border is not shown either
+    const b = docRect(el.getBoundingClientRect());
+    const bt = parseFloat(s.borderTopWidth) || 0, br = parseFloat(s.borderRightWidth) || 0, bb = parseFloat(s.borderBottomWidth) || 0, bl = parseFloat(s.borderLeftWidth) || 0;
+    const r = { x: b.x + bl, y: b.y + bt, right: b.right - br, bottom: b.bottom - bb };
     const own = {
       x: s.overflowX !== 'visible' ? r.x : -1e9, right: s.overflowX !== 'visible' ? r.right : 1e9,
       y: s.overflowY !== 'visible' ? r.y : -1e9, bottom: s.overflowY !== 'visible' ? r.bottom : 1e9,

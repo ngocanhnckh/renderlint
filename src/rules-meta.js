@@ -165,6 +165,30 @@ export const RULES = {
     summary: 'A focusable element shows no visible change when focused (outline removed without replacement).',
     fix: 'Keep the outline or add a `:focus-visible` style (e.g. Tailwind `focus-visible:ring-2`).',
   },
+  'aria-reference': {
+    severity: 'warn',
+    category: 'accessibility',
+    summary: '`aria-labelledby`, `aria-describedby`, `aria-errormessage`, `aria-details`, `aria-activedescendant` or `<label for>` points at an id no element on the page has, so the control loses its name, description or label. `aria-controls` and `aria-owns` are not checked: menus and panels are often rendered only while open.',
+    fix: 'Point the attribute at the id the element really has, or render that element. In React, build ids with `useId()` and pass the same value to both sides; a component rendered twice with a fixed id breaks the second copy.',
+  },
+  'label-in-name': {
+    severity: 'warn',
+    category: 'accessibility',
+    summary: 'A button or link shows text, but its accessible name (`aria-label` or `aria-labelledby`) doesn\'t contain that text (WCAG 2.5.3, A). Voice control users say what they see ("click Place order") and nothing matches; screen readers read something else than the screen shows. Text without letters (×, ›, a count) is not checked.',
+    fix: 'Remove the `aria-label` so the visible text is the name, or make the label start with the visible text: `aria-label="Place order, total $42"`.',
+  },
+  'tooltip-keyboard': {
+    severity: 'warn',
+    category: 'accessibility',
+    summary: 'A tooltip opens on mouse hover but not when its control gets keyboard focus, so keyboard users never see it (WCAG 2.1.1), or it doesn\'t close on Escape (WCAG 1.4.13). renderlint hovers each tooltip trigger (controls tied to a `role="tooltip"`, the attributes tooltip libraries use, and icon-only buttons) at 600px wide and up, then focuses it and presses Escape.',
+    fix: 'Open the tooltip on focus as well as hover (`:focus-visible` next to `:hover`, or the library\'s focus trigger: Radix, MUI, Floating UI and Tippy do this by default), tie it to its control with `aria-describedby`, and close it on Escape without moving focus.',
+  },
+  'focus-obscured': {
+    severity: 'warn',
+    category: 'accessibility',
+    summary: 'Tabbing to a control scrolls it under a sticky header, a cookie banner or a fixed bottom bar, which covers it entirely: keyboard users can\'t see where they are (WCAG 2.2 2.4.11, AA). renderlint walks the page with Tab and Shift+Tab, as a keyboard user does. A control that is only partly covered passes.',
+    fix: 'Reserve the covered space when the browser scrolls a focused control into view: `html { scroll-padding-top: <header height> }` for a sticky header, `scroll-padding-bottom` for a fixed bottom bar. Let a cookie banner be dismissed, or keep it from covering the page (`position: sticky` at the end, or reserve its height).',
+  },
   'fragile-layout': {
     severity: 'warn',
     category: 'responsive',
@@ -194,6 +218,12 @@ export const RULES = {
     category: 'forms',
     summary: 'An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom.',
     fix: 'Remove the fixed height or reduce vertical padding: use either `height` with `padding-block: 0`, or padding with `height: auto`. A 16px font needs about 20px of content height.',
+  },
+  'cramped-control': {
+    severity: 'warn',
+    category: 'forms',
+    summary: 'A button\'s label nearly touches its border, two buttons nearly touch (or touch with rounded corners), or a button nearly touches the edge of the card or panel around it. Only gaps between 0.5 and 3.5px are reported: flush on purpose (0px, a button group with square inner corners, a full-bleed footer button, an input group) and spaced (4px and up) pass.',
+    fix: 'Give the space a real value from your spacing scale: `padding-inline` of at least 8px on buttons, `gap: 8px` on button rows (and a `row-gap` when they wrap), padding on the card. To join buttons into a group on purpose, set the gap to 0 and square the corners where they meet.',
   },
   'control-height-mismatch': {
     severity: 'warn',
@@ -276,7 +306,7 @@ export const RULES = {
   'popup-obscured': {
     severity: 'error',
     category: 'overlap',
-    summary: 'An open dropdown, menu, listbox or popover can\'t be seen: it is cut off by a container\'s `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `<details>`) to check, and checks menus already open in `states` and Playwright tests.',
+    summary: 'An open dropdown, menu, listbox, popover or tooltip can\'t be seen: it opens partly off the screen (tooltips), is cut off by a container\'s `overflow: hidden` / `auto` (a card, a table wrapper), or is drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `<details>`) to check, and checks menus already open in `states` and Playwright tests.',
     fix: 'Render the menu outside the clipping container: in a portal or the top layer (Radix / shadcn `Portal`, Headless UI `anchor`, MUI Popper / Menu (portal by default), Angular CDK Overlay, the `popover` attribute, Floating UI with `strategy: "fixed"` outside transformed ancestors). Or remove `overflow: hidden` from the ancestor. For "drawn underneath": raising the menu\'s own z-index doesn\'t help while an ancestor starts a stacking context (z-index on a positioned card, transform, filter, opacity < 1); give that ancestor the higher z-index while the menu is open, or portal the menu out.',
   },
   'native-dialog': {

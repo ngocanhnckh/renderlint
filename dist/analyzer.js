@@ -541,7 +541,10 @@ RL.clipBoxOf = function (el) {
   let box = s.position === 'fixed' ? null : RL.clipBoxOf(parentOf(el));
   const isSvg = el.namespaceURI === 'http://www.w3.org/2000/svg';
   if ((!isSvg || el.tagName.toLowerCase() === 'svg') && (s.overflowX !== 'visible' || s.overflowY !== 'visible')) {
-    const r = docRect(el.getBoundingClientRect());
+    // overflow clips at the padding edge: text under the border is not shown either
+    const b = docRect(el.getBoundingClientRect());
+    const bt = parseFloat(s.borderTopWidth) || 0, br = parseFloat(s.borderRightWidth) || 0, bb = parseFloat(s.borderBottomWidth) || 0, bl = parseFloat(s.borderLeftWidth) || 0;
+    const r = { x: b.x + bl, y: b.y + bt, right: b.right - br, bottom: b.bottom - bb };
     const own = {
       x: s.overflowX !== 'visible' ? r.x : -1e9, right: s.overflowX !== 'visible' ? r.right : 1e9,
       y: s.overflowY !== 'visible' ? r.y : -1e9, bottom: s.overflowY !== 'visible' ? r.bottom : 1e9,
@@ -812,8 +815,9 @@ RL.rule({
 // Content no one can scroll to: it lies below the bottom of a box that clips (overflow: hidden or clip),
 // or below the screen when the page itself doesn't scroll (overflow: hidden on <html> or <body>), and
 // nothing between them scrolls. A fixed-height app shell whose page area doesn't scroll, a scroll lock
-// left on. text-clipped covers text cut through; this is text past the edge entirely. Content moved
-// away on purpose is left out: by a transform (slides, drawers, sheets), out of flow (absolute, fixed),
+// left on, a fixed panel or dialog taller than the screen. text-clipped covers text cut through; this is
+// text past the edge entirely. Content moved away on purpose is left out: by a transform (slides, drawers,
+// sheets), out of flow (absolute; fixed panels mostly off screen),
 // in a small box (a teaser, a collapsed panel), next to a "Show more" control, or faded out.
 // Only with scrollCheck: the runner then turns the mouse wheel over each box, and a box whose content
 // moves (a JavaScript scroller on overflow: hidden) is not reported.
@@ -823,35 +827,60 @@ const MOVE_LABEL = /^(next|prev|previous|back|forward|up|down|older|newer|scroll
 // overflow-clip-margin paints clipped content past the box anyway
 let unreachIds = 0;
 const clipsY = (s) => s.overflowY === 'hidden' || (s.overflowY === 'clip' && (!s.overflowClipMargin || /^0(px)?$/.test(s.overflowClipMargin)));
+// A fixed panel or dialog: does the walk from its text stop at it, as the box that holds the text on screen?
+// Only when the panel is mostly on screen: a closed drawer, a toast sliding in or a sheet peeking from the
+// bottom is moved away on purpose. Its own translate may only center it (a dialog at top: 50% with
+// translate(-50%, -50%)): pushed down or sideways it is a sheet or drawer at rest.
+const isDialog = (el) => el.tagName === 'DIALOG' || /^(dialog|alertdialog)$/.test(el.getAttribute('role') || '') || el.getAttribute('aria-modal') === 'true';
+function overlayOnScreen(el, s) {
+  let ty = 0, tx = 0;
+  try { if (s.transform !== 'none') { const m = new DOMMatrixReadOnly(s.transform); ty += m.m42; tx += m.m41; } } catch (e) { return false; }
+  if (s.translate && s.translate !== 'none') { const p = s.translate.split(/\s+/).map(parseFloat); tx += p[0] || 0; ty += p[1] || 0; }
+  const r = el.getBoundingClientRect();
+  if (ty > 1 || Math.abs(tx) > Math.max(1, r.width * 0.55)) return false;
+  const vis = Math.min(innerHeight, r.bottom) - Math.max(0, r.top), visW = Math.min(innerWidth, r.right) - Math.max(0, r.left);
+  return visW >= Math.min(120, innerWidth * 0.3) && (vis >= innerHeight * 0.5 || (isDialog(el) && vis >= innerHeight * 0.3));
+}
 RL.rule({
   id: 'unreachable-content',
   run(ctx) {
-    if (!RL.options.scrollCheck || RL.modalRoot()) return; // an open dialog locks the page on purpose
+    if (!RL.options.scrollCheck) return;
     const html = document.documentElement, body = document.body;
     if (!body) return;
+    // While a dialog is open the page behind it is locked on purpose: only the dialog is checked.
+    const modal = RL.modalRoot();
     const hs = RL.cs(html), bs = RL.cs(body);
-    const pageLocked = clipsY(hs) || (hs.overflowY === 'visible' && clipsY(bs));
+    const pageLocked = !modal && (clipsY(hs) || (hs.overflowY === 'visible' && clipsY(bs)));
     const minH = Math.max(150, innerHeight * 0.3);
-    const groups = new Map(); // clipping box (or html for the screen) → hidden text
+    const screen = () => ({ x: scrollX, y: scrollY, right: scrollX + innerWidth, bottom: scrollY + innerHeight, w: innerWidth, h: innerHeight });
+    const groups = new Map(); // clipping box, fixed panel, or html for the screen → hidden text
+    const overlays = new Map(); // fixed element → mostly on screen?
     const w = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     const range = document.createRange();
     for (let n; (n = w.nextNode());) {
       const t = n.nodeValue.replace(/\s+/g, ' ').trim();
       const el = n.parentElement;
       if (!t || !el || /^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE|OPTION)$/.test(el.tagName) || !RL.isVisible(el) || RL.isIgnored(el, 'unreachable-content')) continue;
+      if (modal && RL.behindModal(modal, el)) continue;
       range.selectNodeContents(n);
       const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0.5 && r.height > 0.5).map(RL.docRect);
       if (!rects.length) continue;
       // the first box up the tree that decides whether this text can be scrolled to
-      let clipper = null;
+      let clipper = null, kind = 'box';
       for (let a = el; a; a = RL.parentOf(a)) {
         if (RL.isDevTool(a) || a.getAttribute('aria-hidden') === 'true' || a.inert) { clipper = null; break; }
-        if (a === html) { clipper = clipsY(hs) ? html : null; break; }
+        if (a === html) { clipper = clipsY(hs) && !modal ? html : null; kind = 'page'; break; }
         // <body>'s overflow is the page's when <html> leaves it visible; otherwise <body> is a box of its own
         // (html { overflow: hidden } with body as the scroller is a common app layout)
-        if (a === body && hs.overflowY === 'visible') { clipper = pageLocked ? html : null; break; }
+        if (a === body && hs.overflowY === 'visible') { clipper = pageLocked ? html : null; kind = 'page'; break; }
         const s = RL.cs(a);
-        if (s.position === 'fixed' || s.position === 'sticky' || s.transform !== 'none' || s.translate !== 'none') break;
+        if (s.position === 'fixed') {
+          // a fixed panel or dialog taller than the screen, that doesn't scroll: its content past the edge is lost
+          if (!overlays.has(a)) overlays.set(a, overlayOnScreen(a, s));
+          if (overlays.get(a)) { clipper = a; kind = 'overlay'; }
+          break;
+        }
+        if (s.position === 'sticky' || s.transform !== 'none' || s.translate !== 'none') break;
         if (s.webkitLineClamp && s.webkitLineClamp !== 'none') break;
         if ((s.maskImage && s.maskImage !== 'none') || (s.webkitMaskImage && s.webkitMaskImage !== 'none')) break;
         if (RL.isScrollContainer(a, 'y')) break; // it scrolls
@@ -860,34 +889,42 @@ RL.rule({
         if (s.position === 'absolute') break; // out of flow: menus, tooltips, positioned decorations
       }
       if (!clipper) continue;
-      const box = clipper === html ? { x: scrollX, y: scrollY, right: scrollX + innerWidth, bottom: scrollY + innerHeight, w: innerWidth, h: innerHeight } : RL.paddingBox(clipper);
-      if (box.h < minH || box.w < 120) continue;
-      // entirely below the box, and under it (not beside it: a slide moved sideways)
-      if (!rects.every((r) => r.y >= box.bottom - 1 && r.x < box.right && r.right > box.x)) continue;
-      if (!groups.has(clipper)) groups.set(clipper, { box, items: [] });
-      groups.get(clipper).items.push({ el, t, rects });
+      const box = kind === 'box' ? RL.paddingBox(clipper) : screen();
+      if (kind === 'box' && (box.h < minH || box.w < 120)) continue;
+      // entirely past the bottom of the box (a fixed panel's: also past the top), and under it (not beside it: a slide moved sideways)
+      const under = (r) => r.x < box.right && r.right > box.x;
+      const past = rects.every((r) => under(r) && r.y >= box.bottom - 1) ? 'below' : kind === 'overlay' && rects.every((r) => under(r) && r.bottom <= box.y + 1) ? 'above' : null;
+      if (!past) continue;
+      if (!groups.has(clipper)) groups.set(clipper, { box, kind, items: [] });
+      groups.get(clipper).items.push({ el, t, rects, past });
     }
     for (const [clipper, g] of groups) {
       const chars = g.items.reduce((a, x) => a + x.t.length, 0);
-      const bottom = Math.max(...g.items.flatMap((x) => x.rects.map((r) => r.bottom)));
-      const below = Math.round(bottom - g.box.bottom);
-      if (g.items.length < 2 || chars < 30 || below < 60) continue;
+      const lo = g.items.filter((x) => x.past === 'below'), hi = g.items.filter((x) => x.past === 'above');
+      const below = lo.length ? Math.round(Math.max(...lo.flatMap((x) => x.rects.map((r) => r.bottom))) - g.box.bottom) : 0;
+      const above = hi.length ? Math.round(g.box.y - Math.min(...hi.flatMap((x) => x.rects.map((r) => r.y)))) : 0;
+      if (g.items.length < 2 || chars < 30 || Math.max(below, above) < 60) continue;
       // a "Show more" control, or a slider's arrows and dots, in or right next to the box reveal the rest.
       // Tabs don't: switching a panel doesn't show what is cut off at its bottom.
-      const scope = clipper === html ? null : clipper.parentElement || clipper;
+      const scope = g.kind === 'page' ? null : g.kind === 'overlay' ? clipper : clipper.parentElement || clipper;
       const label = (b) => [(b.textContent || '').trim(), b.getAttribute('aria-label') || '', b.getAttribute('title') || ''];
       if (scope && Array.from(scope.querySelectorAll('button,a[href],summary,[role=button]')).some((b) => b.getAttribute('role') !== 'tab' &&
         label(b).some((t) => t && (MORE_LABEL.test(t) || MOVE_LABEL.test(t))))) continue;
-      if (clipper !== html) { clipper.setAttribute('data-rl-unreach', String(++unreachIds)); } // for the runner's wheel check
+      if (g.kind !== 'page') { clipper.setAttribute('data-rl-unreach', String(++unreachIds)); } // for the runner's wheel check
       const sample = [];
       for (const x of g.items) { if (!sample.includes(x.t.slice(0, 40))) sample.push(x.t.slice(0, 40)); if (sample.length >= 3) break; }
-      const s = clipper === html ? (clipsY(hs) ? hs : bs) : RL.cs(clipper);
-      const where = clipper === html ? 'the screen: the page itself doesn\'t scroll (overflow-y: ' + s.overflowY + ' on <' + (clipsY(hs) ? 'html' : 'body') + '>)' : 'this box (overflow-y: ' + s.overflowY + '), and neither it nor anything around the content scrolls';
+      const s = g.kind === 'page' ? (clipsY(hs) ? hs : bs) : RL.cs(clipper);
+      const reach = [below && below + 'px below the bottom', above && above + 'px above the top'].filter(Boolean).join(' and ');
+      const message = g.kind === 'page'
+        ? 'Content can\'t be scrolled to: ' + g.items.length + ' pieces of text, reaching ' + reach + ' of the screen: the page itself doesn\'t scroll (overflow-y: ' + s.overflowY + ' on <' + (clipsY(hs) ? 'html' : 'body') + '>)'
+        : g.kind === 'overlay'
+          ? (isDialog(clipper) ? 'This dialog' : 'This fixed panel') + ' is taller than the screen and doesn\'t scroll: ' + g.items.length + ' pieces of text reach ' + reach + ' of the screen, out of reach'
+          : 'Content can\'t be scrolled to: ' + g.items.length + ' pieces of text, reaching ' + reach + ' of this box (overflow-y: ' + s.overflowY + '), and neither it nor anything around the content scrolls';
       ctx.report({
-        rule: 'unreachable-content', el: clipper === html ? (clipsY(hs) ? html : body) : clipper, needsScrollCheck: true, // the element to fix
-        message: 'Content can\'t be scrolled to: ' + g.items.length + ' piece' + (g.items.length === 1 ? '' : 's') + ' of text, reaching ' + below + 'px below the bottom of ' + where + ' (' + sample.map((x) => '"' + x + '"').join(', ') + ').',
-        details: { below, hidden: g.items.length, clipper: clipper === html ? 'page' : 'box', overflowY: s.overflowY, sample, boxHeight: Math.round(g.box.h) },
-        unreachId: clipper === html ? 0 : unreachIds,
+        rule: 'unreachable-content', el: g.kind === 'page' ? (clipsY(hs) ? html : body) : clipper, needsScrollCheck: true, // the element to fix
+        message: message + ' (' + sample.map((x) => '"' + x + '"').join(', ') + ').',
+        details: { below, above, hidden: g.items.length, clipper: g.kind, overflowY: s.overflowY, sample, boxHeight: Math.round(g.kind === 'overlay' ? clipper.getBoundingClientRect().height : g.box.h) },
+        unreachId: g.kind === 'page' ? 0 : unreachIds,
       });
     }
   },
@@ -1676,6 +1713,77 @@ function accessibleName(el) {
   return '';
 }
 
+// ---------------------------------------------------------------------------
+// ARIA attributes that name, describe or point at another element by id, where no element has that id:
+// the control loses its name or description (a renamed id, a component rendered twice, an id the
+// framework rewrote). aria-controls and aria-owns are left out: a menu or panel is often rendered only
+// while it is open. <label for> is checked too.
+const REF_ATTRS = ['aria-labelledby', 'aria-describedby', 'aria-errormessage', 'aria-details', 'aria-activedescendant', 'for'];
+RL.rule({
+  id: 'aria-reference',
+  run(ctx) {
+    const sel = REF_ATTRS.map((a) => (a === 'for' ? 'label[for]' : '[' + a + ']')).join(',');
+    for (const el of document.querySelectorAll(sel)) {
+      if (!RL.isVisible(el) || RL.isDevTool(el) || RL.isIgnored(el, 'aria-reference')) continue;
+      const root = el.getRootNode && el.getRootNode().getElementById ? el.getRootNode() : document;
+      const bad = [];
+      for (const a of REF_ATTRS) {
+        if (a === 'for' ? el.tagName !== 'LABEL' : !el.hasAttribute(a)) continue;
+        const v = (el.getAttribute(a) || '').trim();
+        if (!v) continue;
+        const missing = (a === 'aria-activedescendant' || a === 'for' ? [v] : v.split(/\s+/)).filter((id) => !root.getElementById(id) && !document.getElementById(id));
+        if (missing.length) bad.push(a + '="' + missing.join(' ') + '"');
+      }
+      if (!bad.length) continue;
+      ctx.report({ rule: 'aria-reference', el,
+        message: 'Points at ' + (bad.length > 1 ? 'ids that don\'t' : 'an id that doesn\'t') + ' exist on the page: ' + bad.join(', ') + '. ' +
+          (el.tagName === 'LABEL' ? 'The label isn\'t tied to its field.' : 'Screen readers lose the name or description it should give.'),
+        details: { missing: bad } });
+    }
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Label in name (WCAG 2.5.3, A): a control with visible text whose accessible name (aria-label,
+// aria-labelledby) doesn't contain that text. Voice control users say what they see ("click Place order")
+// and nothing matches. Visible text without letters (×, ›, 3) and screen-reader-only text don't count.
+const nameNorm = (t) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+function visibleText(el) {
+  let out = '';
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n; (n = w.nextNode());) {
+    const p = n.parentElement;
+    if (!p || !RL.isVisible(p) || RL.isVisuallyHidden(p) || p.closest('[aria-hidden=true]')) continue;
+    out += ' ' + n.nodeValue;
+  }
+  return out;
+}
+RL.rule({
+  id: 'label-in-name',
+  run(ctx) {
+    for (const el of ctx.elements) {
+      const role = el.getAttribute('role') || '';
+      const isCtl = el.tagName === 'BUTTON' || (el.tagName === 'A' && el.hasAttribute('href')) || /^(button|link|menuitem|menuitemcheckbox|menuitemradio|tab|option|checkbox|radio|switch)$/.test(role);
+      if (!isCtl || !RL.isVisible(el) || RL.isIgnored(el, 'label-in-name')) continue;
+      // a select or combobox trigger shows its value, not its label
+      if (/^(combobox|option)$/.test(role) || el.getAttribute('aria-haspopup') === 'listbox') continue;
+      let name = el.getAttribute('aria-label');
+      if (!(name && name.trim())) {
+        const lb = el.getAttribute('aria-labelledby');
+        if (!lb) continue;
+        name = lb.split(/\s+/).map((id) => document.getElementById(id)).filter(Boolean).map((n) => n.textContent).join(' ');
+      }
+      const shown = nameNorm(visibleText(el));
+      const said = nameNorm(name || '');
+      if (!said || !/\p{L}.*\p{L}/u.test(shown) || shown.length > 80) continue;
+      if ((' ' + said + ' ').includes(' ' + shown + ' ') || said.replace(/ /g, '').includes(shown.replace(/ /g, ''))) continue;
+      ctx.report({ rule: 'label-in-name', el,
+        message: 'Its accessible name "' + name.trim().slice(0, 60) + '" doesn\'t contain the text it shows ("' + visibleText(el).replace(/\s+/g, ' ').trim().slice(0, 40) + '"): voice control users who say the visible label can\'t activate it.',
+        details: { name: name.trim().slice(0, 120), visible: shown } });
+    }
+  },
+});
+
 RL.rule({
   id: 'unlabeled-control',
   run(ctx) {
@@ -1852,6 +1960,32 @@ RL.rule({
 
 // ---------------------------------------------------------------------------
 // Focus indicators (run as a separate phase because it changes focus).
+// For the runner's Tab walk (focus-obscured): is the focused element entirely hidden under a fixed or sticky
+// layer (a sticky header, a cookie banner, a bottom bar), as WCAG 2.4.11 forbids? Partly hidden passes.
+// Returns null, or the covering layer's selector and the focused element's issue record.
+RL.focusObscured = function () {
+  const el = document.activeElement;
+  if (!el || el === document.body || el === document.documentElement || RL.isIgnored(el, 'focus-obscured')) return null;
+  if (RL.modalRoot() && RL.behindModal(RL.modalRoot(), el)) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return null;
+  const x0 = Math.max(0, r.left), x1 = Math.min(innerWidth, r.right), y0 = Math.max(0, r.top), y1 = Math.min(innerHeight, r.bottom);
+  if (x1 - x0 < 2 || y1 - y0 < 2) return null; // off screen (in a scroll box, a skip link): not this rule's case
+  const layerOf = (n) => { for (let a = n; a && a !== document.documentElement; a = RL.parentOf(a)) { const p = RL.cs(a).position; if (p === 'fixed' || p === 'sticky') return a; } return null; };
+  const own = layerOf(el);
+  const pts = [[0.5, 0.5], [0.12, 0.2], [0.88, 0.2], [0.12, 0.8], [0.88, 0.8]].map(([fx, fy]) => [x0 + (x1 - x0) * fx, y0 + (y1 - y0) * fy]);
+  let cover = null;
+  for (const [x, y] of pts) {
+    const stack = document.elementsFromPoint(x, y).filter((e) => e.id !== '__renderlint_overlay' && !RL.isDevTool(e));
+    const idx = stack.findIndex((e) => e === el || el.contains(e) || e.contains(el));
+    const above = idx < 0 ? stack : stack.slice(0, idx);
+    const c = above.find((e) => { const l = layerOf(e); return l && l !== own && !l.contains(el) && RL.isOpaqueLayer(e); });
+    if (!c) return null; // seen here
+    cover = cover || layerOf(c);
+  }
+  return { cover: RL.selector(cover), coverText: (cover.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 50), position: RL.cs(cover).position, base: RL.issueBase(el, cover) };
+};
+
 RL.focusCheck = function (limit) {
   const issues = [];
   const style = document.createElement('style');
@@ -2119,6 +2253,111 @@ RL.dropdownCandidates = function () {
   return out;
 };
 
+// ---------------------------------------------------------------------------
+// Cramped controls: buttons that nearly touch each other, a label that nearly touches its button's border, a
+// button that nearly touches the edge of the card or panel around it. Only gaps between 0.5 and 3.5px count:
+// a design either joins things on purpose (0px: a button group, a full-bleed footer button) or spaces them
+// (4px and up). Buttons joined on purpose have square corners where they meet, so those are left out too.
+const CTL_SEL = 'button,summary,[role=button],input[type=submit],input[type=button],input[type=reset],a[href]';
+function drawnApart(el) {
+  // a border, a shadow, or a background that differs from what is behind it
+  const s = RL.cs(el);
+  for (const n of ['Top', 'Right', 'Bottom', 'Left']) {
+    const w = parseFloat(s['border' + n + 'Width']);
+    const c = RL.parseColor(s['border' + n + 'Color']);
+    if (w > 0 && !/none|hidden/.test(s['border' + n + 'Style']) && c && c.a > 0.15) return true;
+  }
+  if (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow)) return true;
+  const bg = RL.parseColor(s.backgroundColor);
+  if (!bg || bg.a < 0.3) return false;
+  const back = el.parentElement ? RL.backgroundOf(el.parentElement) : null;
+  return !back || Math.abs(bg.r - back.r) + Math.abs(bg.g - back.g) + Math.abs(bg.b - back.b) > 24;
+}
+const cramped = (d) => d > 0.5 && d < 3.5;
+// a drawn track that holds only controls (a segmented control, a toggle group, a tab pill bar) is one control
+// by design: its pills sit close to its edge and to each other on purpose
+function isTrack(box) {
+  if (!box || !drawnApart(box)) return false;
+  if (/^(group|radiogroup|tablist|toolbar|menubar)$/.test(box.getAttribute('role') || '')) return true;
+  const kids = Array.from(box.children).filter((k) => RL.isVisible(k));
+  return kids.length >= 2 && kids.every((k) => k.matches(CTL_SEL) || /^(tab|radio|option)$/.test(k.getAttribute('role') || ''));
+}
+RL.rule({
+  id: 'cramped-control',
+  order: 40,
+  run(ctx) {
+    const scope = RL.inScope();
+    const ctls = Array.from(document.querySelectorAll(CTL_SEL)).filter((el) => scope(el) && RL.isVisible(el) && !RL.isIgnored(el, 'cramped-control') &&
+      !RL.isOutOfFlow(el) && drawnApart(el) && (() => { const r = el.getBoundingClientRect(); return r.width >= 16 && r.height >= 16; })());
+    const reported = new Set();
+    const report = (el, related, message, details) => { if (reported.has(el)) return; reported.add(el); ctx.report({ rule: 'cramped-control', el, related, message, details }); };
+    const radius = (el, corner) => parseFloat(RL.cs(el)['border' + corner + 'Radius']) || 0;
+    // 1. a label that nearly touches its button's left or right border
+    for (const el of ctls) {
+      if (el.tagName === 'INPUT') continue;
+      const s = RL.cs(el);
+      if ((parseFloat(s.paddingLeft) || 0) >= 4 && (parseFloat(s.paddingRight) || 0) >= 4) continue;
+      const rects = [];
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const range = document.createRange();
+      for (let n; (n = w.nextNode());) {
+        if (!/\S/.test(n.nodeValue) || !n.parentElement || !RL.isVisible(n.parentElement) || RL.isVisuallyHidden(n.parentElement)) continue;
+        range.selectNodeContents(n);
+        rects.push(...Array.from(range.getClientRects()).filter((r) => r.width > 1 && r.height > 1));
+      }
+      if (!rects.length) continue;
+      const b = el.getBoundingClientRect();
+      const bl = parseFloat(s.borderLeftWidth) || 0, br = parseFloat(s.borderRightWidth) || 0;
+      const gapL = Math.min(...rects.map((r) => r.left)) - (b.left + bl), gapR = (b.right - br) - Math.max(...rects.map((r) => r.right));
+      if (gapL < -0.5 || gapR < -0.5) continue; // spills out: text-overflow's business
+      const g = Math.min(gapL, gapR);
+      if (g >= 3) continue;
+      report(el, undefined, 'The label nearly touches the ' + (gapL <= gapR ? 'left' : 'right') + ' border of its control: ' + Math.max(0, Math.round(g * 10) / 10) + 'px of space.', { kind: 'label', gap: Math.round(g * 10) / 10 });
+    }
+    // 2. two controls next to each other, 0.5 to 3.5px apart (or touching, when the corners that meet are rounded)
+    const rect = new Map(ctls.map((el) => [el, el.getBoundingClientRect()]));
+    const byParent = new Map();
+    for (const el of ctls) {
+      let p = el.parentElement;
+      for (let d = 0; p && d < 2 && p.children.length === 1; d++) p = p.parentElement; // <li><button>…
+      if (!p) continue;
+      if (!byParent.has(p)) byParent.set(p, []);
+      byParent.get(p).push(el);
+    }
+    for (const [parent, list] of byParent) {
+      if (list.length < 2 || list.length > 40 || isTrack(parent)) continue;
+      for (let i = 0; i < list.length; i++) for (let j = 0; j < list.length; j++) {
+        if (i === j) continue;
+        const a = list[i], b = list[j], ra = rect.get(a), rb = rect.get(b);
+        if (a.contains(b) || b.contains(a)) continue;
+        const vOver = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top), hOver = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+        let gap = null, meet = null;
+        if (vOver > Math.min(ra.height, rb.height) * 0.5 && rb.left >= ra.left) { gap = rb.left - ra.right; meet = Math.min(radius(a, 'TopRight'), radius(a, 'BottomRight'), radius(b, 'TopLeft'), radius(b, 'BottomLeft')); }
+        else if (hOver > Math.min(ra.width, rb.width) * 0.5 && rb.top >= ra.top) { gap = rb.top - ra.bottom; meet = Math.min(radius(a, 'BottomLeft'), radius(a, 'BottomRight'), radius(b, 'TopLeft'), radius(b, 'TopRight')); }
+        if (gap === null || meet < 2) continue; // square where they meet: joined on purpose (a segmented group)
+        if (!(cramped(gap) || (gap > -0.5 && gap <= 0.5))) continue;
+        report(b, a, (gap <= 0.5 ? 'These controls touch' : 'These controls nearly touch: ' + Math.round(gap * 10) / 10 + 'px apart') + ', so they read as one and are easy to mis-tap.', { kind: 'gap', gap: Math.round(gap * 10) / 10 });
+      }
+    }
+    // 3. a control 0.5 to 3.5px from the inner edge of the card or panel around it
+    for (const el of ctls) {
+      const r = rect.get(el);
+      let box = null;
+      for (let p = el.parentElement, d = 0; p && p !== document.body && d < 4; p = p.parentElement, d++) {
+        if (p.matches(CTL_SEL) || RL.isScrollContainer(p, 'x') || RL.isScrollContainer(p, 'y')) break;
+        if (drawnApart(p)) { box = p; break; }
+      }
+      if (!box || isTrack(box) || box.querySelector('input:not([type=hidden]),select,textarea')) continue; // an input group joins its button on purpose
+      const s = RL.cs(box), b = box.getBoundingClientRect();
+      const inner = { left: b.left + (parseFloat(s.borderLeftWidth) || 0), right: b.right - (parseFloat(s.borderRightWidth) || 0), top: b.top + (parseFloat(s.borderTopWidth) || 0), bottom: b.bottom - (parseFloat(s.borderBottomWidth) || 0) };
+      const d = { left: r.left - inner.left, right: inner.right - r.right, top: r.top - inner.top, bottom: inner.bottom - r.bottom };
+      const side = Object.keys(d).find((k) => cramped(d[k]));
+      if (!side) continue;
+      report(el, box, 'This control sits ' + Math.round(d[side] * 10) / 10 + 'px from the ' + side + ' edge of the box around it: it looks jammed against the edge.', { kind: 'edge', side, gap: Math.round(d[side] * 10) / 10 });
+    }
+  },
+});
+
 // ---- rules/popups.js
 // Open dropdowns, menus, listboxes and popovers that can't be seen: cut off by a
 // container's overflow, or painted underneath another element (z-index / stacking order).
@@ -2199,7 +2438,7 @@ function clipperAt(item, popup, x, y) {
 }
 
 // Hit-tests the popup's options. Returns a finding, or null when every option can be seen.
-RL.popupProblem = function (popup, trigger) {
+RL.popupProblem = function (popup, trigger, kind) {
   if (RL.isIgnored(popup, 'popup-obscured') || (trigger && RL.isIgnored(trigger, 'popup-obscured'))) return null;
   let items = Array.from(popup.querySelectorAll(ITEM_SEL)).filter((i) => RL.isVisible(i) && !i.querySelector(ITEM_SEL));
   if (!items.length) items = [popup];
@@ -2236,7 +2475,7 @@ RL.popupProblem = function (popup, trigger) {
   }
   window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
   if (!hidden) return null;
-  const what = popup.matches('[role=listbox]') || (trigger && trigger.matches('[role=combobox],[aria-haspopup=listbox]')) ? 'dropdown list' : 'menu';
+  const what = kind || (popup.matches('[role=listbox]') || (trigger && trigger.matches('[role=combobox],[aria-haspopup=listbox]')) ? 'dropdown list' : 'menu');
   const name = trigger ? RL.describe(trigger).text : '';
   const of = `${hidden} of ${items.length} ${items.length === 1 && items[0] === popup ? 'part' : 'option' + (items.length === 1 ? '' : 's')}`;
   const opened = 'The open ' + what + (name ? ` of "${name.slice(0, 40)}"` : '');
@@ -2342,6 +2581,81 @@ RL.menuStillOpen = function (sel) {
   if (trigger.getAttribute('aria-expanded') === 'true') return true;
   return Array.from(document.querySelectorAll(POPUP_SEL)).some((p) => p.getAttribute('data-rl-was-open') !== '1' && isOpenPopup(p));
 };
+
+// ---------------------------------------------------------------------------
+// Tooltips, for the runner: it hovers each trigger, checks that the tooltip can be seen (popup-obscured: off
+// the screen, cut off by a container, drawn underneath), then focuses the trigger and checks the tooltip opens
+// for the keyboard too and closes on Escape (tooltip-keyboard). Triggers: elements tied to a role="tooltip"
+// (aria-describedby), the attributes tooltip libraries use, and icon-only buttons and links (the usual place
+// for one; hovering finds out). Two per repeated kind.
+const TIP_SEL = '[role=tooltip],.tooltip.show,[data-tippy-root],.react-tooltip,.MuiTooltip-popper';
+const TIP_TRIGGER_SEL = '[data-tooltip],[data-tip],[data-tippy-content],[data-bs-toggle=tooltip],[data-toggle=tooltip],[data-tooltip-id],[data-tooltip-content]';
+const tipVisible = (el) => { const r = el.getBoundingClientRect(); return r.width > 2 && r.height > 2 && RL.isVisible(el) && parseFloat(RL.cs(el).opacity) > 0.05; };
+function describedTip(trigger) {
+  for (const id of (trigger.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean)) {
+    const el = document.getElementById(id);
+    if (el && el.getAttribute('role') === 'tooltip') return el;
+  }
+  return null;
+}
+RL.tooltipTriggers = function (max) {
+  RL.resetCaches();
+  for (const t of document.querySelectorAll(TIP_SEL)) t.setAttribute('data-rl-was-open', tipVisible(t) ? '1' : '0');
+  const scope = RL.inScope();
+  const declared = new Set();
+  for (const el of document.querySelectorAll('[aria-describedby]')) if (describedTip(el)) declared.add(el);
+  for (const el of document.querySelectorAll(TIP_TRIGGER_SEL)) declared.add(el);
+  const iconOnly = (el) => RL.isInteractive(el) && !(el.textContent || '').replace(/[\s​]/g, '') && !el.querySelector('input,select,textarea') &&
+    !!(el.getAttribute('aria-label') || el.getAttribute('title') || el.querySelector('svg,img,i,[class*=icon]'));
+  const groups = new Map();
+  const add = (el, prio) => {
+    if (!scope(el) || !RL.isVisible(el) || RL.isDisabled(el) || RL.isIgnored(el, 'popup-obscured')) return;
+    if (el.closest('[role=menu],[role=listbox],[role=tooltip]')) return;
+    const r = RL.rectOf(el);
+    if (r.w < 4 || r.h < 4) return;
+    const sig = (n) => n.tagName + '.' + (typeof n.className === 'string' ? n.className.trim().split(/\s+/).sort().join('.') : '');
+    const chain = [];
+    for (let n = el, d = 0; n && n !== document.body && d < 4; n = n.parentElement, d++) chain.push(sig(n));
+    const key = prio + chain.join('<');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(el);
+  };
+  for (const el of declared) add(el, '0');
+  for (const el of document.querySelectorAll('button,a[href],[role=button]')) if (!declared.has(el) && iconOnly(el)) add(el, '1');
+  const picked = [];
+  for (const [key, list] of Array.from(groups).sort((a, b) => a[0].localeCompare(b[0]))) {
+    picked.push(list[0]);
+    if (list.length > 1 && key[0] === '0') picked.push(list[list.length - 1]);
+  }
+  return picked.slice(0, max || 6).map((el, i) => { el.setAttribute('data-rl-tip', String(i)); return '[data-rl-tip="' + i + '"]'; });
+};
+// The tooltip this trigger opened, if one is visible now.
+function openTip(trigger) {
+  const own = describedTip(trigger);
+  if (own) return tipVisible(own) ? own : null;
+  return Array.from(document.querySelectorAll(TIP_SEL)).find((t) => t.getAttribute('data-rl-was-open') !== '1' && tipVisible(t) && !t.contains(trigger)) || null;
+}
+RL.tooltipOpen = function (sel) { RL.resetCaches(); const t = document.querySelector(sel); return !!(t && openTip(t)); };
+RL.checkTooltip = function (sel) {
+  RL.resetCaches();
+  const trigger = document.querySelector(sel);
+  const tip = trigger && openTip(trigger);
+  if (!tip) return null;
+  const name = (tip.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 50);
+  const r = tip.getBoundingClientRect();
+  const off = { left: Math.round(-r.left), right: Math.round(r.right - innerWidth), top: Math.round(-r.top) };
+  const sides = Object.entries(off).filter(([, v]) => v > 2);
+  if (sides.length) {
+    return { rule: 'popup-obscured', ...RL.issueBase(tip, trigger),
+      message: `The tooltip "${name}" opens partly off the screen: ` + sides.map(([k, v]) => `${v}px past the ${k} edge`).join(', ') + '.',
+      details: { kind: 'off-screen', offscreen: Object.fromEntries(sides), tooltip: true } };
+  }
+  const p = hitTestable(() => RL.popupProblem(tip, trigger, 'tooltip'));
+  if (!p) return null;
+  const { el, related, ...rest } = p;
+  return { ...rest, message: rest.message.replace(/^The open tooltip of "[^"]*"/, `The tooltip "${name}"`), details: { ...rest.details, tooltip: true }, ...RL.issueBase(el, related) };
+};
+RL.tooltipIssueBase = function (sel) { const t = document.querySelector(sel); return t ? RL.issueBase(t) : null; };
 
 // ---- rules/loading.js
 // What the user sees while the page waits for data (loading-state, action-feedback, error-feedback).

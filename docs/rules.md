@@ -33,11 +33,16 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`button-text-wrap`](#button-text-wrap) | warn | A short button label breaks onto multiple lines. |
 | [`line-length`](#line-length) | warn | Paragraph lines are very long (>120 characters), which is tiring to read. |
 | [`focus-indicator`](#focus-indicator) | warn | A focusable element shows no visible change when focused (outline removed without replacement). |
+| [`aria-reference`](#aria-reference) | warn | `aria-labelledby`, `aria-describedby`, `aria-errormessage`, `aria-details`, `aria-activedescendant` or `&lt;label for>` points at an id no element on the page has, so the control loses its name, description or label. `aria-controls` and `aria-owns` are not checked: menus and panels are often rendered only while open. |
+| [`label-in-name`](#label-in-name) | warn | A button or link shows text, but its accessible name (`aria-label` or `aria-labelledby`) doesn't contain that text (WCAG 2.5.3, A). Voice control users say what they see ("click Place order") and nothing matches; screen readers read something else than the screen shows. Text without letters (×, ›, a count) is not checked. |
+| [`tooltip-keyboard`](#tooltip-keyboard) | warn | A tooltip opens on mouse hover but not when its control gets keyboard focus, so keyboard users never see it (WCAG 2.1.1), or it doesn't close on Escape (WCAG 1.4.13). renderlint hovers each tooltip trigger (controls tied to a `role="tooltip"`, the attributes tooltip libraries use, and icon-only buttons) at 600px wide and up, then focuses it and presses Escape. |
+| [`focus-obscured`](#focus-obscured) | warn | Tabbing to a control scrolls it under a sticky header, a cookie banner or a fixed bottom bar, which covers it entirely: keyboard users can't see where they are (WCAG 2.2 2.4.11, AA). renderlint walks the page with Tab and Shift+Tab, as a keyboard user does. A control that is only partly covered passes. |
 | [`fragile-layout`](#fragile-layout) | warn | Stress test: the layout breaks with content the sample data doesn't have yet: ~50% longer text, long unbreakable emails/URLs/IDs, numbers with three more digits, longer API data, or the worst case declared with data-renderlint-maxlength / data-renderlint-sample (that last one is an error). |
 | [`dropdown-arrow`](#dropdown-arrow) | error | A dropdown's arrow sits much closer to the border than its text does to the other side, so it looks jammed against the edge. Measured from pixels, so it covers native arrows, background-image chevrons and custom triggers. |
 | [`checkbox-layout`](#checkbox-layout) | error | A checkbox or radio button is stretched to the full width (drawn in the middle, away from its label), or sits on its own row above its label. |
 | [`input-icon-overlap`](#input-icon-overlap) | error | An icon (search, mail, calendar) is drawn over the part of an input where its text and placeholder appear, so typed text runs underneath it. |
 | [`squashed-control`](#squashed-control) | error | An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom. |
+| [`cramped-control`](#cramped-control) | warn | A button's label nearly touches its border, two buttons nearly touch (or touch with rounded corners), or a button nearly touches the edge of the card or panel around it. Only gaps between 0.5 and 3.5px are reported: flush on purpose (0px, a button group with square inner corners, a full-bleed footer button, an input group) and spaced (4px and up) pass. |
 | [`control-height-mismatch`](#control-height-mismatch) | warn | Controls placed side by side (an input and its button, a select next to a text field) have different heights, so their edges don't line up. |
 | [`icon-misaligned`](#icon-misaligned) | warn | An icon next to a single line of text sits visibly above or below the text's center (an inline SVG on the baseline, or a larger icon next to small text). |
 | [`loading-state`](#loading-state) | warn | An area of the page stays blank while its data loads: no spinner, skeleton, progress bar or "Loading…" text, so on a slow connection the page looks empty, broken or frozen. renderlint reloads each page with its fetch/XHR requests held for a second (as on a slow network), looks at what is shown, releases them and finds the areas the data filled. Any loading sign on the page counts: aria-busy, role=progressbar/status, a running animation, motion on screen, "Loading…"/"Saving…" text, skeleton or spinner class names, placeholder blocks where the content appears. With `--ux`, also checked after each click. |
@@ -51,7 +56,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`empty-state`](#empty-state) | warn | With no data yet (a new account, a filter that matches nothing), a list, table or chart is just empty, keeps loading, or the page breaks: nothing says there is nothing yet. `--ux` reloads the page with every list of records in its JSON responses emptied (`{ "items": [], "total": 0 }`: arrays of objects with an id, but not the user’s roles, flags, settings, menus or lookup lists; renderlint answers, nothing changes on the server) and looks for a message where the content was. A section hidden entirely, title and all, is left alone. |
 | [`dialog-focus`](#dialog-focus) | warn | A dialog opened by a click doesn't handle focus as users expect (WAI-ARIA dialog pattern, WCAG 2.4.3): focus stays on the page behind it, Escape doesn't close it, or when it closes focus drops to the top of the page instead of returning to the control that opened it. Checked by `--ux` on the modal dialogs its clicks open (`&lt;dialog>` with `showModal()`, `aria-modal`, `alertdialog`, or a dialog over a full-screen overlay). |
 | [`back-navigation`](#back-navigation) | warn | After an in-app link (a client-side route change), the browser's Back button doesn't bring the previous page back: the route change replaced the history entry, so Back skips the page, or the address changes back while the page keeps showing the new one (the app ignores popstate). Checked by `--ux` on in-app links that change the route. |
-| [`popup-obscured`](#popup-obscured) | error | An open dropdown, menu, listbox or popover can't be seen: it is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `&lt;details>`) to check, and checks menus already open in `states` and Playwright tests. |
+| [`popup-obscured`](#popup-obscured) | error | An open dropdown, menu, listbox, popover or tooltip can't be seen: it opens partly off the screen (tooltips), is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or is drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `&lt;details>`) to check, and checks menus already open in `states` and Playwright tests. |
 | [`native-dialog`](#native-dialog) | error | The app uses the browser's own alert(), confirm() or prompt() box: a grey system dialog that blocks the page, ignores the app's design and can't be styled or translated. Found when one opens while a page is checked, and in source code (`window.confirm(…)`, `alert(…)`), which also catches the ones behind a click. The browser's "Leave site?" prompt from `beforeunload` is not flagged. |
 | [`page-error`](#page-error) | error | The page could not be loaded or analyzed: navigation failed, timed out, or returned an HTTP error (4xx/5xx). |
 | [`auth-required`](#auth-required) | error | A page renderlint was asked to check sent it to a login page or identity provider instead, so the page itself was never checked. A warning for pages found by crawling, and for a home page that is the sign-in page (which is then checked itself). Any other page the app didn't show is `page-not-shown`. |
@@ -165,7 +170,7 @@ Text or a control is hidden underneath another opaque element (fixed header cove
 
 **Default:** error
 
-An open dropdown, menu, listbox or popover can't be seen: it is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `<details>`) to check, and checks menus already open in `states` and Playwright tests.
+An open dropdown, menu, listbox, popover or tooltip can't be seen: it opens partly off the screen (tooltips), is cut off by a container's `overflow: hidden` / `auto` (a card, a table wrapper), or is drawn underneath a later element because of z-index and stacking order. renderlint opens the menu triggers on each page (`aria-haspopup`, comboboxes, Bootstrap dropdowns, `<details>`) to check, and checks menus already open in `states` and Playwright tests.
 
 **How to fix:** Render the menu outside the clipping container: in a portal or the top layer (Radix / shadcn `Portal`, Headless UI `anchor`, MUI Popper / Menu (portal by default), Angular CDK Overlay, the `popover` attribute, Floating UI with `strategy: "fixed"` outside transformed ancestors). Or remove `overflow: hidden` from the ancestor. For "drawn underneath": raising the menu's own z-index doesn't help while an ancestor starts a stacking context (z-index on a positioned card, transform, filter, opacity < 1); give that ancestor the higher z-index while the menu is open, or portal the menu out.
 
@@ -323,6 +328,40 @@ Paragraph lines are very long (>120 characters), which is tiring to read.
 
 **How to fix:** Constrain text width, e.g. `max-width: 65ch` (Tailwind `max-w-prose`).
 
+## Accessibility
+
+### aria-reference
+
+**Default:** warn
+
+`aria-labelledby`, `aria-describedby`, `aria-errormessage`, `aria-details`, `aria-activedescendant` or `<label for>` points at an id no element on the page has, so the control loses its name, description or label. `aria-controls` and `aria-owns` are not checked: menus and panels are often rendered only while open.
+
+**How to fix:** Point the attribute at the id the element really has, or render that element. In React, build ids with `useId()` and pass the same value to both sides; a component rendered twice with a fixed id breaks the second copy.
+
+### label-in-name
+
+**Default:** warn
+
+A button or link shows text, but its accessible name (`aria-label` or `aria-labelledby`) doesn't contain that text (WCAG 2.5.3, A). Voice control users say what they see ("click Place order") and nothing matches; screen readers read something else than the screen shows. Text without letters (×, ›, a count) is not checked.
+
+**How to fix:** Remove the `aria-label` so the visible text is the name, or make the label start with the visible text: `aria-label="Place order, total $42"`.
+
+### tooltip-keyboard
+
+**Default:** warn
+
+A tooltip opens on mouse hover but not when its control gets keyboard focus, so keyboard users never see it (WCAG 2.1.1), or it doesn't close on Escape (WCAG 1.4.13). renderlint hovers each tooltip trigger (controls tied to a `role="tooltip"`, the attributes tooltip libraries use, and icon-only buttons) at 600px wide and up, then focuses it and presses Escape.
+
+**How to fix:** Open the tooltip on focus as well as hover (`:focus-visible` next to `:hover`, or the library's focus trigger: Radix, MUI, Floating UI and Tippy do this by default), tie it to its control with `aria-describedby`, and close it on Escape without moving focus.
+
+### focus-obscured
+
+**Default:** warn
+
+Tabbing to a control scrolls it under a sticky header, a cookie banner or a fixed bottom bar, which covers it entirely: keyboard users can't see where they are (WCAG 2.2 2.4.11, AA). renderlint walks the page with Tab and Shift+Tab, as a keyboard user does. A control that is only partly covered passes.
+
+**How to fix:** Reserve the covered space when the browser scrolls a focused control into view: `html { scroll-padding-top: <header height> }` for a sticky header, `scroll-padding-bottom` for a fixed bottom bar. Let a cookie banner be dismissed, or keep it from covering the page (`position: sticky` at the end, or reserve its height).
+
 ## Forms
 
 ### dropdown-arrow
@@ -356,6 +395,14 @@ An icon (search, mail, calendar) is drawn over the part of an input where its te
 An input or select is too short for its text: height minus vertical padding leaves less room than the font needs, so the text is cut off at the top and bottom.
 
 **How to fix:** Remove the fixed height or reduce vertical padding: use either `height` with `padding-block: 0`, or padding with `height: auto`. A 16px font needs about 20px of content height.
+
+### cramped-control
+
+**Default:** warn
+
+A button's label nearly touches its border, two buttons nearly touch (or touch with rounded corners), or a button nearly touches the edge of the card or panel around it. Only gaps between 0.5 and 3.5px are reported: flush on purpose (0px, a button group with square inner corners, a full-bleed footer button, an input group) and spaced (4px and up) pass.
+
+**How to fix:** Give the space a real value from your spacing scale: `padding-inline` of at least 8px on buttons, `gap: 8px` on button rows (and a `row-gap` when they wrap), padding on the card. To join buttons into a group on purpose, set the gap to 0 and square the corners where they meet.
 
 ### control-height-mismatch
 
