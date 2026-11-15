@@ -1,0 +1,2 @@
+renderlint — 1 page(s) × viewports 375px, 768px, 1280px
+✔ No UI defects found.

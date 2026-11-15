@@ -1,0 +1,37 @@
+{
+  "before": {
+    "errors": 2,
+    "warnings": 0,
+    "issues": [
+      {
+        "rule": "popup-obscured",
+        "severity": "error",
+        "message": "The open menu of \"Billing actions\" is cut off by main > div.cards > section.card.clip:nth-of-type(1) (overflow: hidden): 3 of 3 options can't be seen.",
+        "selector": "#m1 > li:nth-of-type(1) > button",
+        "text": "Download invoice",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "popup-obscured",
+        "severity": "error",
+        "message": "The open menu of \"Team actions\" is drawn underneath another element (2 of 3 options hidden behind main > div.cards > section.card.stack:nth-of-type(3)). Its z-index only counts inside main > div.cards > section.card.stack:nth-of-type(2) (z-index: 1), which sits below that element.",
+        "selector": "#m2 > li:nth-of-type(2) > button",
+        "text": "Manage roles",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      }
+    ]
+  },
+  "after": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": []
+  }
+}

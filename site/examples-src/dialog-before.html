@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project settings</title><style>*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:#111827;background:#f4f4f5}main{max-width:960px;margin:0 auto;padding:24px}h1{font-size:22px;margin:0 0 16px}.card{background:#fff;border:1px solid #e4e4e7;border-radius:12px;padding:16px 18px}
+button{font:inherit;padding:10px 16px;min-height:44px;border-radius:8px;border:1px solid #a1a1aa;background:#fff;color:#18181b;cursor:pointer}.danger{background:#b91c1c;color:#fff;border-color:#b91c1c}</style></head><body><main><h1>Project settings</h1><section class="card"><h2 style="margin:0 0 6px;font-size:16px">Delete project</h2><p style="margin:0 0 12px;color:#3f3f46">Removes the project and its 214 deployments.</p><button class="danger" id="del">Delete project</button></section></main>
+<script>
+window.addEventListener("load",()=>setTimeout(()=>alert("Your trial ends in 3 days"),50));
+document.getElementById("del").addEventListener("click",()=>{if(window.confirm("Delete this project?")){fetch("/api/projects/42",{method:"DELETE"});}});
+</script></body></html>

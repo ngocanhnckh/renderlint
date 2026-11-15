@@ -1,0 +1,26 @@
+renderlint — 1 page(s) × viewports 375px, 768px, 1280px
+
+✖ checkbox-layout (1)  A checkbox or radio button is stretched to the full width (drawn in the middle, away from its label), or sits on its own row above its label.
+  error A checkbox is stretched to 289px wide, so the box is drawn in the middle of that space, away from its label (usually a global `input { width: 100% }`).
+        at #e
+        page /forms-before.html · all viewports · see .renderlint/screens/forms-before-html-vwbhz@375.png #1
+
+✖ dropdown-arrow (1)  A dropdown's arrow sits much closer to the border than its text does to the other side, so it looks jammed against the edge. Measured from pixels, so it covers native arrows, background-image chevrons and custom triggers.
+  error The dropdown arrow sits 3px from the right border while the text starts 27px from the left, so the arrow looks jammed against the edge. The browser draws the native arrow near the border regardless of padding-right.
+        at #f  "Every hour Daily digest"
+        page /forms-before.html · all viewports · see .renderlint/screens/forms-before-html-vwbhz@375.png #3
+
+✖ input-icon-overlap (1)  An icon (search, mail, calendar) is drawn over the part of an input where its text and placeholder appear, so typed text runs underneath it.
+  error An icon is drawn over the area where the field shows its text and placeholder (16px of overlap on the left). Typed text will run underneath it.
+        at #q
+      with main > form.card > div > svg
+        page /forms-before.html · all viewports · see .renderlint/screens/forms-before-html-vwbhz@375.png #2
+
+How to fix
+  checkbox-layout: Scope full-width input styles to text fields (`input:not([type=checkbox]):not([type=radio])`), give checkboxes `width: auto` (Tailwind `w-4 h-4 shrink-0`), and put the box and label in a row: `display: flex; align-items: center; gap: 8px` (or `items-start` for multi-line labels).
+  dropdown-arrow: Chrome and Safari draw the native arrow near the border and ignore padding-right. Use `appearance: none` with your own chevron, e.g. `background: url(chevron.svg) no-repeat right 12px center; padding-right: 40px`, or position an icon inside the padding. Keep the arrow's right inset close to the text's left inset.
+  input-icon-overlap: Add padding on the icon's side so the text starts after it: e.g. `padding-left: 40px` (Tailwind `pl-10`) for a 16px icon at `left: 12px`, or `pr-10` for a trailing icon.
+
+If a finding is intentional, mark the element: data-renderlint-ignore="<rule>" (space-separated, or empty for all rules), or in CSS: --renderlint-ignore: <rule>; — both apply to the element and its descendants. Add data-renderlint-reason="…" to explain why.
+
+✖ 3 error(s), 0 warnings · screenshots in .renderlint/screens

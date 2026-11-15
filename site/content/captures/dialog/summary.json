@@ -1,0 +1,23 @@
+{
+  "before": {
+    "errors": 1,
+    "warnings": 0,
+    "issues": [
+      {
+        "rule": "native-dialog",
+        "severity": "error",
+        "message": "alert() \"Your trial ends in 3 days\" opened the browser's native dialog, called at /dialog-before.html:4:51. Replace it with the app's own toast or snackbar (\"Saved\"), or with an inline message next to the field for a form error. Use the toast/dialog component the project already has (search for one: sonner, react-hot-toast, a components/ui/dialog, MatDialog / MatSnackBar, ElMessageBox…) before adding a library.",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      }
+    ]
+  },
+  "after": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": []
+  }
+}

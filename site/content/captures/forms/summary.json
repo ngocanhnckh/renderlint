@@ -1,0 +1,49 @@
+{
+  "before": {
+    "errors": 3,
+    "warnings": 0,
+    "issues": [
+      {
+        "rule": "checkbox-layout",
+        "severity": "error",
+        "message": "A checkbox is stretched to 289px wide, so the box is drawn in the middle of that space, away from its label (usually a global `input { width: 100% }`).",
+        "selector": "#e",
+        "text": "",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "dropdown-arrow",
+        "severity": "error",
+        "message": "The dropdown arrow sits 3px from the right border while the text starts 27px from the left, so the arrow looks jammed against the edge. The browser draws the native arrow near the border regardless of padding-right.",
+        "selector": "#f",
+        "text": "Every hour Daily digest",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "input-icon-overlap",
+        "severity": "error",
+        "message": "An icon is drawn over the area where the field shows its text and placeholder (16px of overlap on the left). Typed text will run underneath it.",
+        "selector": "#q",
+        "text": "",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      }
+    ]
+  },
+  "after": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "before": {
+    "errors": 0,
+    "warnings": 1,
+    "issues": [
+      {
+        "rule": "loading-state",
+        "severity": "warn",
+        "message": "While this page waited for its data (GET /orders.json; renderlint held it 1s, as on a slow network), the area where \"Order · Customer · Total · Status\" appears showed nothing: no spinner, skeleton, progress bar or \"Loading…\" text. On a slow connection the page looks empty or frozen. Render a loading state in #orders until the data arrives (a skeleton shaped like the content, or a spinner), and an error message if the request fails.",
+        "selector": "#orders",
+        "text": "Order Customer Total Status A-1042 Lena Fischer €184.00 Paid A-1043 T…",
+        "viewports": [
+          375
+        ]
+      }
+    ]
+  },
+  "after": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": []
+  }
+}

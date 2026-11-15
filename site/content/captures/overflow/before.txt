@@ -1,0 +1,35 @@
+renderlint — 1 page(s) × viewports 375px, 768px, 1280px
+
+✖ text-clipped (1)  Text is partially cut off by an `overflow: hidden` container or the edge of an <svg> (e.g. chart axis labels).
+  error Text is cut off by an overflow:hidden container (137px past the right edge). (×2 similar elements)
+        at main > div.grid:nth-of-type(1) > div.card.kpi:nth-of-type(1) > div.v:nth-of-type(2)  "$1,284,930.55"
+        page /overflow-before.html · all viewports · see .renderlint/screens/overflow-before-html-1ddxy@375.png #3
+
+✖ text-overflow (2)  Text spills outside the box (card, button, badge, input) that is supposed to contain it.
+  error Text spills outside its container (227px past the right edge).
+        at main > div.card.acct:nth-of-type(2) > p:nth-of-type(2)  "Email: dana.whitfield-procurement@northwind-enterprise.example.com"
+      with main > div.card.acct:nth-of-type(2)  "Account Owner: Dana Whitfield Email: dana.whitfiel"
+        page /overflow-before.html · all viewports · see .renderlint/screens/overflow-before-html-1ddxy@375.png #1
+  error Text spills outside its box (46px past the right edge).
+        at main > div.card.acct:nth-of-type(2) > p:nth-of-type(3) > span.btn  "Start your free trial today"
+        page /overflow-before.html · all viewports · see .renderlint/screens/overflow-before-html-1ddxy@375.png #2
+
+✖ viewport-overflow (1)  Content is wider than the viewport: the page scrolls sideways on phones, or content is cut off at the screen edge.
+  error Element extends 4px beyond the 320px viewport, causing horizontal page scroll.
+        at main > div.card.acct:nth-of-type(2)  "Account Owner: Dana Whitfield Email: dana.whitfield-procurement@north…"
+        page /overflow-before.html · at 320px · see .renderlint/screens/overflow-before-html-1ddxy@320.png #5
+
+⚠ fragile-layout (1)  Stress test: the layout breaks with content the sample data doesn't have yet: ~50% longer text, long unbreakable emails/URLs/IDs, numbers with three more digits, longer API data, or the worst case declared with data-renderlint-maxlength / data-renderlint-sample (that last one is an error).
+  warn  With bigger numbers (three more digits): Text is cut off by an overflow:hidden container (34px past the right edge).
+        at main > div.grid:nth-of-type(1) > div.card.kpi:nth-of-type(3) > div.v:nth-of-type(2)  "86,000"
+        page /overflow-before.html · at 375px
+
+How to fix
+  text-clipped: Give the container room (remove fixed height, add padding), allow wrapping, or truncate intentionally with `text-overflow: ellipsis` / `line-clamp`. For SVG charts increase the chart margin/padding or rotate/shorten labels.
+  text-overflow: Let the text wrap: remove fixed widths/heights or `white-space: nowrap`, add `overflow-wrap: anywhere` (Tailwind `break-words`) for long words/URLs, and use `min-width: 0` on flex/grid children so they can shrink.
+  viewport-overflow: Replace fixed pixel widths with fluid ones (`max-width: 100%`, `w-full`), make rows wrap (`flex-wrap`), collapse grids to fewer columns at small breakpoints (`grid-cols-1 md:grid-cols-3`), and break long words.
+  fragile-layout: Design for longer content: allow wrapping, avoid fixed heights/widths on text containers, add `min-width: 0` to flex children and `overflow-wrap: anywhere` for long words.
+
+If a finding is intentional, mark the element: data-renderlint-ignore="<rule>" (space-separated, or empty for all rules), or in CSS: --renderlint-ignore: <rule>; — both apply to the element and its descendants. Add data-renderlint-reason="…" to explain why.
+
+✖ 5 error(s), 1 warning(s) · screenshots in .renderlint/screens

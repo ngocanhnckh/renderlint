@@ -1,0 +1,50 @@
+renderlint — 1 page(s) × viewports 375px, 768px, 1280px
+
+✖ contrast (10)  Text does not have enough contrast with what is actually behind it (WCAG AA: 4.5:1, or 3:1 for large text). Measured from real rendered pixels, so it works over gradients and images.
+  error Low text contrast: 1.64:1, needs 3:1 — #ffffff on a non-uniform background (≈#9bd0fc).
+        at main > section.hero > h1  "Lisbon, 21°"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #1
+       fix use background #7096b5 (currently #ffffff on #9bd0fc)
+  error Low text contrast: 1.59:1, needs 4.5:1 — #e0f2fe on a non-uniform background (≈#8dc5fb).
+        at main > section.hero > p  "Light breeze from the north-west. Clear skies until the evening."
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #2
+       fix use background #4f6e8d (currently #e0f2fe on #8dc5fb)
+  error Low text contrast: 1.66:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#a0cdfc).
+        at main > section.hero > div.days > div.day:nth-of-type(1)  "Tue 22° Sunny"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #3
+       fix use background #5d7792 (currently #ffffff on #a0cdfc)
+  error Low text contrast: 1.50:1, needs 4.5:1 — #e3f2ff on a non-uniform background (≈#9ccafc).
+        at main > section.hero > div.days > div.day:nth-of-type(1) > small  "Sunny"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #4
+       fix use background #546d88 (currently #e3f2ff on #9ccafc)
+  error Low text contrast: 2.02:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#86bafa).
+        at main > section.hero > div.days > div.day:nth-of-type(2)  "Wed 19° Cloudy"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #5
+       fix use background #5677a0 (currently #ffffff on #86bafa)
+  error Low text contrast: 1.76:1, needs 4.5:1 — #e0effe on a non-uniform background (≈#84b8fa).
+        at main > section.hero > div.days > div.day:nth-of-type(2) > small  "Cloudy"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #6
+       fix use background #4d6b91 (currently #e0effe on #84b8fa)
+  error Low text contrast: 1.85:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#91c2fc).
+        at main > section.hero > div.days > div.day:nth-of-type(3)  "Thu 18° Showers"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #7
+       fix use background #577497 (currently #ffffff on #91c2fc)
+  error Low text contrast: 1.63:1, needs 4.5:1 — #e1f0fe on a non-uniform background (≈#8ec0fb).
+        at main > section.hero > div.days > div.day:nth-of-type(3) > small  "Showers"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #8
+       fix use background #506c8d (currently #e1f0fe on #8ec0fb)
+  error Low text contrast: 2.29:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#7badf8).
+        at main > section.hero > div.days > div.day:nth-of-type(4)  "Fri 23° Sunny"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #9
+       fix use background #5476a9 (currently #ffffff on #7badf8)
+  error Low text contrast: 1.97:1, needs 4.5:1 — #deedfe on a non-uniform background (≈#79abf7).
+        at main > section.hero > div.days > div.day:nth-of-type(4) > small  "Sunny"
+        page /contrast-before.html · all viewports · see .renderlint/screens/contrast-before-html-eaveh@375.png #10
+       fix use background #4b6a99 (currently #deedfe on #79abf7)
+
+How to fix
+  contrast: Use the suggested color (or darker/lighter), change the background, or add an overlay/scrim behind text on images. Check dark mode separately.
+
+If a finding is intentional, mark the element: data-renderlint-ignore="<rule>" (space-separated, or empty for all rules), or in CSS: --renderlint-ignore: <rule>; — both apply to the element and its descendants. Add data-renderlint-reason="…" to explain why.
+
+✖ 10 error(s), 0 warnings · screenshots in .renderlint/screens
