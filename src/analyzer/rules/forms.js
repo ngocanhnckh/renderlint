@@ -231,14 +231,12 @@ RL.dropdownCandidates = function () {
 // (4px and up). Buttons joined on purpose have square corners where they meet, so those are left out too.
 const CTL_SEL = 'button,summary,[role=button],input[type=submit],input[type=button],input[type=reset],a[href]';
 function drawnApart(el) {
-  // a border, a shadow, or a background that differs from what is behind it
+  // drawn as a box: a background that differs from what is behind it, borders on both sides, or an outer
+  // shadow. An underline (a bottom border, an inset shadow: tabs, links) doesn't make a box.
   const s = RL.cs(el);
-  for (const n of ['Top', 'Right', 'Bottom', 'Left']) {
-    const w = parseFloat(s['border' + n + 'Width']);
-    const c = RL.parseColor(s['border' + n + 'Color']);
-    if (w > 0 && !/none|hidden/.test(s['border' + n + 'Style']) && c && c.a > 0.15) return true;
-  }
-  if (s.boxShadow && s.boxShadow !== 'none' && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow)) return true;
+  const side = (n) => { const w = parseFloat(s['border' + n + 'Width']); const c = RL.parseColor(s['border' + n + 'Color']); return w > 0 && !/none|hidden/.test(s['border' + n + 'Style']) && !!c && c.a > 0.15; };
+  if ((side('Left') && side('Right')) || (side('Top') && side('Bottom') && side('Left'))) return true;
+  if (s.boxShadow && s.boxShadow !== 'none' && !/inset/.test(s.boxShadow) && !/^rgba\(0, 0, 0, 0\)/.test(s.boxShadow)) return true;
   const bg = RL.parseColor(s.backgroundColor);
   if (!bg || bg.a < 0.3) return false;
   const back = el.parentElement ? RL.backgroundOf(el.parentElement) : null;

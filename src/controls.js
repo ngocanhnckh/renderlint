@@ -108,6 +108,19 @@ export async function checkMenus(page, { max = 8, shot } = {}) {
 // Hovers each tooltip trigger (see RL.tooltipTriggers) and checks the tooltip it opens can be seen
 // (popup-obscured); then focuses it and checks the tooltip opens for the keyboard as well and closes on
 // Escape (tooltip-keyboard, WCAG 2.1.1 and 1.4.13). A trigger that opens nothing on hover is skipped.
+// Moves the pointer onto empty page background (not over a logo or menu that hovering would open).
+export async function parkPointer(page) {
+  const at = await page.evaluate(() => {
+    for (const [fx, fy] of [[0.5, 0.98], [0.02, 0.98], [0.98, 0.98], [0.98, 0.5], [0.02, 0.5], [0.5, 0.5]]) {
+      const x = Math.round((innerWidth - 1) * fx), y = Math.round((innerHeight - 1) * fy);
+      const e = document.elementFromPoint(x, y);
+      if (!e || e === document.body || e === document.documentElement || (!e.closest('a,button,[role],[tabindex],input,select,textarea,summary,label'))) return { x, y };
+    }
+    return { x: 0, y: 0 };
+  }).catch(() => ({ x: 0, y: 0 }));
+  await page.mouse.move(at.x, at.y).catch(() => {});
+}
+
 export async function checkTooltips(page, { max = 6, keyboard = true, shot = null } = {}) {
   let triggers;
   try { triggers = await page.evaluate((m) => window.__renderlint.tooltipTriggers(m), max); } catch { return []; }
@@ -119,15 +132,18 @@ export async function checkTooltips(page, { max = 6, keyboard = true, shot = nul
       await page.evaluate((s) => { const el = document.querySelector(s); if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' }); }, sel);
       await page.hover(sel, { timeout: 1500 });
     } catch { continue; }
-    if (!(await until(true, sel, 1200))) { await page.mouse.move(0, 0).catch(() => {}); continue; } // no tooltip here
+    if (!(await until(true, sel, 1200))) { await parkPointer(page); continue; } // no tooltip here
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => { window.__renderlint.finishAnimations(); requestAnimationFrame(r); }))).catch(() => {});
     const issue = await page.evaluate((s) => window.__renderlint.checkTooltip(s), sel).catch(() => null);
     if (issue) {
       if (shot) issue.screenshot = await shot(issue, issues.length).catch(() => undefined); // while the tooltip is open
       issues.push(issue);
     }
-    await page.mouse.move(0, 0).catch(() => {});
-    if (!keyboard || !(await until(false, sel, 1000))) continue;
+    await parkPointer(page);
+    // a tooltip that stays open must not be taken for the next trigger's
+    const sticky = () => page.evaluate(() => { for (const t of document.querySelectorAll('[role=tooltip],.tooltip.show,[data-tippy-root],.react-tooltip,.MuiTooltip-popper')) { const r = t.getBoundingClientRect(); if (r.width > 2 && r.height > 2) t.setAttribute('data-rl-was-open', '1'); } }).catch(() => {});
+    if (!(await until(false, sel, 1000))) { await sticky(); continue; }
+    if (!keyboard) continue;
     // keyboard: focus it as Tab would (keyboard modality, so :focus-visible styles apply)
     const focusable = await page.evaluate((s) => { const el = document.querySelector(s); return !!el && el.tabIndex >= 0; }, sel).catch(() => false);
     if (!focusable) continue;
@@ -144,7 +160,7 @@ export async function checkTooltips(page, { max = 6, keyboard = true, shot = nul
       }
     }
     await page.evaluate(() => { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); }).catch(() => {});
-    await until(false, sel, 600);
+    if (!(await until(false, sel, 600))) await sticky();
   }
   await page.evaluate(() => {
     for (const e of document.querySelectorAll('[data-rl-tip],[data-rl-was-open]')) { e.removeAttribute('data-rl-tip'); e.removeAttribute('data-rl-was-open'); }

@@ -4,7 +4,7 @@ import { copyFileSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSyn
 import { join } from 'node:path';
 import { analyzerSource } from './analyzer/bundle.js';
 import { measureContrast } from './contrast.js';
-import { measureDropdowns, checkMenus, checkTooltips } from './controls.js';
+import { measureDropdowns, checkMenus, checkTooltips, parkPointer } from './controls.js';
 import { checkLoadingState } from './waiting.js';
 import { uxPass, UX_PERF } from './ux.js';
 import { dialogAdvice, RULES } from './rules-meta.js';
@@ -1359,7 +1359,7 @@ export async function confirmUnreachable(page, found, issues) {
           if (u) { u.box.scrollTo({ top: u.scrollTop, behavior: 'instant' }); window.scrollTo({ top: u.startY, behavior: 'instant' }); }
           delete window.__rlUnreach;
         });
-        await page.mouse.move(0, 0);
+        await parkPointer(page);
       }
     } catch { moved = true; }
     if (moved) issues.splice(issues.indexOf(f), 1);

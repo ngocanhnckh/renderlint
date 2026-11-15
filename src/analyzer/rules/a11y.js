@@ -130,6 +130,8 @@ function visibleText(el) {
   for (let n; (n = w.nextNode());) {
     const p = n.parentElement;
     if (!p || !RL.isVisible(p) || RL.isVisuallyHidden(p) || p.closest('[aria-hidden=true]')) continue;
+    // icon-font ligatures (<span class="material-icons">arrow_back</span>) draw a glyph, not that text
+    if (/icon|symbol|awesome|glyph/i.test(RL.cs(p).fontFamily) || /(^|[\s_-])(icons?|material|fa|bi|glyphicon|symbols?)([\s_-]|$)/i.test(typeof p.className === 'string' ? p.className : '')) continue;
     out += ' ' + n.nodeValue;
   }
   return out;
