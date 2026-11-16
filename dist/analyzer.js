@@ -1188,6 +1188,16 @@ function placedLayer(el, stop) {
   }
   return null;
 }
+// The layer is placed against a box that is little more than the other text
+// (a "NEW" on "Inbox", a superscript on a heading, a unit after a price): the
+// two move together, so they can't drift into each other.
+function anchoredTo(layer, other) {
+  if (RL.cs(layer).position !== 'absolute') return false; // fixed: placed against the screen
+  const cb = layer.offsetParent;
+  if (!cb || cb === document.body || cb === document.documentElement || !RL.containsComposed(cb, other.el)) return false;
+  const r = cb.getBoundingClientRect(), b = other.box;
+  return r.height <= Math.max(b.h * 1.6, b.h + 12);
+}
 function drawnBetween(el, stop) {
   for (let n = el; n && n !== stop; n = RL.parentOf(n)) if (RL.hasVisibleBoundary(n)) return true;
   return false;
@@ -1234,6 +1244,7 @@ RL.rule({
       const common = RL.commonAncestor(a.el, b.el);
       const la = placedLayer(a.el, common), lb = placedLayer(b.el, common);
       if (!la && !lb) return true; // one flow: the layout keeps them apart
+      if ((!la || anchoredTo(la, b)) && (!lb || anchoredTo(lb, a))) return true; // one is placed against the other
       if (drawnBetween(a.el, common) || drawnBetween(b.el, common)) return true; // on its own badge, bubble or chip
       const key = RL.selector(a.el) + '|' + RL.selector(b.el);
       if (reported.has(key)) return true;
@@ -1242,7 +1253,7 @@ RL.rule({
       ctx.report({
         rule: 'text-near-overlap', el: first.el, related: second.el,
         message: '"' + RL.snippet(first.node, 30) + '" and "' + RL.snippet(second.node, 30) + '" sit side by side ' + hit.gap + 'px apart, ' + hit.offset +
-          'px out of line, in separately positioned layers: nothing keeps them apart, so they run into each other at other sizes.',
+          'px out of line, ' + (la && lb ? 'in separately positioned layers' : 'one of them in a positioned layer') + ': nothing keeps them apart, so they run into each other at other sizes.',
         details: { gap: hit.gap, offset: hit.offset, layer: RL.selector(la || lb) },
       });
       return true;

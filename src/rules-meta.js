@@ -54,7 +54,7 @@ export const RULES = {
   'text-near-overlap': {
     severity: 'warn',
     category: 'overlap',
-    summary: 'Two pieces of text sit side by side almost touching and out of line, and at least one is in an absolutely or fixed positioned layer: nothing in the layout keeps them apart, so they collide at other widths. Typical cause: a centred empty-state or loading message laid over a panel whose title is pinned top-left. Not reported: text lined up with its neighbour, text on its own badge, chip or tooltip, SVG charts, and icons.',
+    summary: 'Two pieces of text sit side by side almost touching and out of line, and at least one is in an absolutely or fixed positioned layer: nothing in the layout keeps them apart, so they collide at other widths. Typical cause: a centred empty-state or loading message laid over a panel whose title is pinned top-left. Not reported: text lined up with its neighbour, a label placed against the text it annotates (a "NEW" on a menu item, a unit after a price), text on its own badge, chip or tooltip, SVG charts, and icons.',
     fix: 'Put one below the other in normal flow (a flex column: header, then the content area), or offset the overlay past the header (`inset: 64px 0 0` instead of `inset: 0`). If both must be layers, reserve room with padding on the layer that moves.',
   },
   'element-overlap': {
