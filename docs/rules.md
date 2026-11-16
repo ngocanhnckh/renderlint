@@ -14,6 +14,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`viewport-overflow`](#viewport-overflow) | error | Content is wider than the viewport: the page scrolls sideways on phones, or content is cut off at the screen edge. |
 | [`accidental-scrollbar`](#accidental-scrollbar) | error | A scroll container overflows by only a few pixels, showing a pointless scrollbar. |
 | [`text-overlap`](#text-overlap) | error | Two pieces of text are drawn on top of each other — overlapping labels in charts, diagrams, absolutely positioned captions, or collapsed layouts. |
+| [`text-near-overlap`](#text-near-overlap) | warn | Two pieces of text sit side by side almost touching and out of line, and at least one is in an absolutely or fixed positioned layer: nothing in the layout keeps them apart, so they collide at other widths. Typical cause: a centred empty-state or loading message laid over a panel whose title is pinned top-left. Not reported: text lined up with its neighbour, a label placed against the text it annotates (a "NEW" on a menu item, a unit after a price), text on its own badge, chip or tooltip, SVG charts, and icons. |
 | [`element-overlap`](#element-overlap) | error | Boxes that are laid out side by side (cards, buttons, images) overlap each other, typically after the viewport shrinks. |
 | [`obscured-content`](#obscured-content) | error | Text or a control is hidden underneath another opaque element (fixed header covering the hero, absolutely positioned image over a button). |
 | [`contrast`](#contrast) | error | Text does not have enough contrast with what is actually behind it (WCAG AA: 4.5:1, or 3:1 for large text). Measured from real rendered pixels, so it works over gradients and images. |
@@ -149,6 +150,14 @@ Stress test: the layout breaks with content the sample data doesn't have yet: ~5
 Two pieces of text are drawn on top of each other — overlapping labels in charts, diagrams, absolutely positioned captions, or collapsed layouts.
 
 **How to fix:** Give elements space (no fixed heights, avoid absolute positioning for flowing content). For charts: reduce tick count, rotate or truncate labels, increase chart margins, or use a legend instead of inline labels.
+
+### text-near-overlap
+
+**Default:** warn
+
+Two pieces of text sit side by side almost touching and out of line, and at least one is in an absolutely or fixed positioned layer: nothing in the layout keeps them apart, so they collide at other widths. Typical cause: a centred empty-state or loading message laid over a panel whose title is pinned top-left. Not reported: text lined up with its neighbour, a label placed against the text it annotates (a "NEW" on a menu item, a unit after a price), text on its own badge, chip or tooltip, SVG charts, and icons.
+
+**How to fix:** Put one below the other in normal flow (a flex column: header, then the content area), or offset the overlay past the header (`inset: 64px 0 0` instead of `inset: 0`). If both must be layers, reserve room with padding on the layer that moves.
 
 ### element-overlap
 

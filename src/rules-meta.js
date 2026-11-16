@@ -51,6 +51,12 @@ export const RULES = {
     summary: 'Two pieces of text are drawn on top of each other — overlapping labels in charts, diagrams, absolutely positioned captions, or collapsed layouts.',
     fix: 'Give elements space (no fixed heights, avoid absolute positioning for flowing content). For charts: reduce tick count, rotate or truncate labels, increase chart margins, or use a legend instead of inline labels.',
   },
+  'text-near-overlap': {
+    severity: 'warn',
+    category: 'overlap',
+    summary: 'Two pieces of text sit side by side almost touching and out of line, and at least one is in an absolutely or fixed positioned layer: nothing in the layout keeps them apart, so they collide at other widths. Typical cause: a centred empty-state or loading message laid over a panel whose title is pinned top-left. Not reported: text lined up with its neighbour, a label placed against the text it annotates (a "NEW" on a menu item, a unit after a price), text on its own badge, chip or tooltip, SVG charts, and icons.',
+    fix: 'Put one below the other in normal flow (a flex column: header, then the content area), or offset the overlay past the header (`inset: 64px 0 0` instead of `inset: 0`). If both must be layers, reserve room with padding on the layer that moves.',
+  },
   'element-overlap': {
     severity: 'error',
     category: 'overlap',

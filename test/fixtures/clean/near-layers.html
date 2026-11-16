@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="expect" content=""><meta name="no-warn" content="text-near-overlap"><title>Layered labels</title>
+<style>
+body{margin:0;padding:8px;font:14px/1.5 system-ui,sans-serif;color:#111827;background:#fff}
+section{position:relative;width:300px;min-height:200px;border:1px solid #d1d5db;border-radius:12px;margin:0 0 16px}
+.head{position:absolute;left:18px;top:14px}
+.head h2{margin:0;font-size:18px;font-weight:500}
+.head small{display:block;width:46px;text-align:right;white-space:nowrap;font-size:12px;color:#4b5563}
+.below{position:absolute;inset:72px 0 0;display:flex;justify-content:center}
+.below p{width:160px;margin:0}
+.badge{position:absolute;left:calc(100% + 4px);top:-6px;padding:0 6px;border-radius:999px;background:#dc2626;color:#fff;font-size:12px}
+.price{position:relative;font-size:32px;font-weight:700;line-height:40px}
+.per{position:absolute;left:100%;margin-left:4px;bottom:0;top:0;display:flex;align-items:center;font-size:14px;color:#4b5563;white-space:nowrap}
+.row{display:flex;align-items:flex-start;gap:6px}
+.row h3{margin:0;font-size:24px}
+.row span{font-size:12px;color:#4b5563}
+.tip{position:absolute;left:calc(100% + 6px);top:6px;padding:2px 8px;border-radius:6px;background:#111827;color:#fff;font-size:12px;white-space:nowrap}
+.ico{position:absolute;right:calc(100% + 6px);top:2px;white-space:nowrap;font-family:'Material Icons',monospace;font-size:20px}
+</style></head><body>
+<h1 style="font-size:20px">Layered labels</h1>
+<!-- Header and empty state in separate layers, but the message starts below the header. -->
+<section><div class="below"><p>Topology appears as the run explores.</p></div><div class="head"><h2>Topology</h2><small>Live</small></div></section>
+<!-- Absolutely placed badge with its own background. -->
+<div><p style="position:relative;display:inline-block;margin:8px 0 16px">Inbox items<span class="badge">New</span></p></div>
+<!-- Plain-text labels placed against the text they annotate: they move with it. -->
+<div><div style="position:relative;display:inline-block;margin:12px 0 16px"><span style="font-size:18px">Inbox</span><span style="position:absolute;left:100%;margin-left:4px;top:-4px;font-size:12px;color:#b00020">NEW</span></div></div>
+<div><h2 style="position:relative;display:inline-block;margin:0 0 16px;font-size:22px">Dashboard<sup style="position:absolute;left:100%;margin-left:6px;top:-8px;font-size:12px;color:#4b5563">preview</sup></h2></div>
+<p style="margin:0 0 16px"><span style="position:relative;font-size:28px;font-weight:700">$12<span style="position:absolute;left:100%;margin-left:4px;top:2px;font-size:12px;color:#4b5563;white-space:nowrap">per seat</span></span></p>
+<!-- Absolutely placed caption lined up (centred) with the price. -->
+<p style="margin:0 0 16px"><span class="price">$49<span class="per">per month</span></span></p>
+<!-- One flow: top-aligned items of different sizes are kept apart by the layout. -->
+<div class="row" style="margin:0 0 16px"><h3>Findings</h3><span>Updated today</span></div>
+<!-- Tooltip with its own bubble right next to its trigger. -->
+<div><p style="position:relative;display:inline-block;margin:0 0 16px">Exposure score<span class="tip" role="tooltip">Severity weighted</span></p></div>
+<!-- Icon-font ligature placed beside a label. -->
+<p style="position:relative;margin:0 0 16px 90px"><span class="ico" aria-hidden="true">search</span>Search the run</p>
+</body></html>

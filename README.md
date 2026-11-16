@@ -87,7 +87,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 
 ## What it catches
 
-57 rules, tuned so that a finding is almost always a real defect.
+58 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -96,6 +96,7 @@ Everything else is in the [changelog](CHANGELOG.md).
 | Gray-on-gray or white-on-yellow text you can barely read | `contrast` (measured from real pixels, so it works on gradients and images) |
 | Elements overlap when the window shrinks, instead of wrapping | `element-overlap`, `viewport-overflow`, `content-overflow` |
 | Chart and diagram labels collide or get cut off | `text-overlap`, `text-clipped` (works on SVG charts) |
+| Two layers that don't know about each other almost touching: a centred "No data yet" message drifting into a panel title pinned top-left | `text-near-overlap` (they collide at other widths) |
 | A page or tab you can't scroll: content painted past an `overflow: hidden` app shell, a fixed-height card hiding the rest of its list, a dialog or side panel taller than a phone screen, a scroll lock left on | `unreachable-content` (renderlint turns the mouse wheel to make sure) |
 | A fixed header covers the hero, or a decoration covers a button | `obscured-content` |
 | A dropdown or menu that opens behind the next card, or gets cut off by its card or a table's scroll box (z-index, `overflow: hidden`); a tooltip that opens off the screen | `popup-obscured` (renderlint opens each menu and hovers each tooltip to check) |
@@ -241,6 +242,9 @@ Every run saves annotated screenshots with each finding boxed and numbered, so a
 
 <img src="docs/images/demo-overlays.png" alt="Three renderlint findings: a dialog taller than a phone screen, a tooltip opening 64px past the left edge of the screen, and a focused link hidden under a sticky header">
 <sub>Found by driving the page: a dialog taller than a phone screen (<code>unreachable-content</code>), a tooltip that opens off the screen when hovered (<code>popup-obscured</code>), and a link that Shift+Tab scrolls under the sticky header (<code>focus-obscured</code>). The tooltip and focus screenshots are taken at that moment.</sub>
+
+<img src="docs/images/demo-near-overlap.png" alt="A dashboard panel whose centred empty-state message starts right next to the panel's subtitle, a few pixels lower, boxed by renderlint as text-near-overlap">
+<sub>A centred empty-state message laid over a panel whose title is pinned top-left: two layers that don't know about each other, 0px apart and 9px out of line at this width, overlapping at narrower ones (<code>text-near-overlap</code>).</sub>
 
 <img src="docs/images/demo-forms-annotated.png" alt="An alert-settings form: native select arrows on the border, a checkbox stretched above its label, and a search icon over the placeholder, each boxed by renderlint">
 <sub>Form controls that render but are built wrong: native select arrows on the border (<code>dropdown-arrow</code>), a checkbox stretched away from its label (<code>checkbox-layout</code>), a search icon over the placeholder (<code>input-icon-overlap</code>).</sub>
