@@ -4,6 +4,10 @@
 
 The first version published to npm, as `@yitec/renderlint`.
 
+### Text that almost collides
+
+- New rule `text-near-overlap` (warn): two pieces of text side by side, less than ¾ of the font size apart and out of line, where at least one sits in an absolutely or fixed positioned layer. The typical case is a centred empty-state message laid over a panel whose title is pinned top-left: at one width they nearly touch, at a narrower one they overlap. Text lined up with its neighbour, text on its own badge, chip or tooltip, SVG charts and icon fonts are left out. On the 99 benchmark pages and every test page (201 pages in all), it reported nothing.
+
 ### Tooltips, keyboard focus, ARIA and cramped controls
 
 Ideas taken from comparing renderlint with [lintapple](https://github.com/gholtzap/lintapple). renderlint missed 9 of the 12 defects on lintapple's demo page. The objective ones are covered now; the ones that only make sense against a design policy (font allowlist, type scale, alignment contracts) are not.

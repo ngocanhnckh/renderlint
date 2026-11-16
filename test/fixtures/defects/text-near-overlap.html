@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="expect" content=""><meta name="expect-warn" content="text-near-overlap"><title>Run overview</title>
+<style>
+body{margin:0;padding:8px;font:14px/1.5 system-ui,sans-serif;color:#dfe9e4;background:#0b1512}
+.panel{position:relative;width:300px;min-height:220px;border:1px solid #1f332c;border-radius:12px;background:#0f1d19;overflow:hidden}
+.empty{position:absolute;inset:0;display:flex;justify-content:center;padding-top:48px}
+.empty p{width:160px;margin:0}
+.head{position:absolute;left:18px;top:14px;pointer-events:none}
+.head h2{margin:0;font-size:18px;font-weight:500;line-height:1.5}
+.head small{display:block;width:46px;text-align:right;white-space:nowrap;font-size:12px;color:#9fb3ab}
+</style></head><body>
+<!-- The empty state fills the panel and centres itself; the header is pinned top-left in its own layer.
+     The message starts 6px right of the subtitle, 9px lower: they read as one broken line. -->
+<h1 style="font-size:20px">Run overview</h1>
+<section class="panel">
+  <div class="empty"><p>Topology appears as the run explores.</p></div>
+  <div class="head"><h2>Topology</h2><small>Live</small></div>
+</section>
+</body></html>

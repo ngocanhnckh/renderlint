@@ -1176,6 +1176,82 @@ RL.rule({
 });
 
 // ---------------------------------------------------------------------------
+// Two pieces of text from independently placed layers (absolute/fixed) that sit
+// side by side on the same surface, nearly touching and out of line with each
+// other: a centred empty-state message drifting into a header pinned top-left.
+// Nothing in the layout keeps them apart, so at another width they collide.
+// Real overlap is text-overlap's job.
+const NEAR_SVG = 'http://www.w3.org/2000/svg';
+function placedLayer(el, stop) {
+  for (let n = el; n && n !== stop; n = RL.parentOf(n)) {
+    const p = RL.cs(n).position;
+    if (p === 'absolute' || p === 'fixed') return n;
+  }
+  return null;
+}
+function drawnBetween(el, stop) {
+  for (let n = el; n && n !== stop; n = RL.parentOf(n)) if (RL.hasVisibleBoundary(n)) return true;
+  return false;
+}
+function readable(t) {
+  if ((t.text.match(/\p{L}/gu) || []).length < 2) return false; // counts, bullets, arrows, glyphs
+  if (t.el.namespaceURI === NEAR_SVG || (t.el.closest && t.el.closest('svg'))) return false; // charts: text-overlap
+  const s = RL.cs(t.el);
+  if (/icon|symbol|awesome|glyph/i.test(s.fontFamily)) return false; // icon-font ligatures
+  return true;
+}
+RL.rule({
+  id: 'text-near-overlap',
+  order: 90.5,
+  run(ctx) {
+    const texts = ctx.texts.filter((t) => readable(t) && !RL.isIgnored(t.el, 'text-near-overlap') && RL.effectiveOpacity(t.el) >= 0.3);
+    const fs = (el) => parseFloat(RL.cs(el).fontSize) || 16;
+    const reach = (t) => Math.max(4, fs(t.el) * 0.75);
+    const grown = new Map(texts.map((t) => {
+      const g = reach(t);
+      return [t, t.vis.map((r) => ({ x: r.x - g, y: r.y, w: r.w + 2 * g, h: r.h, right: r.right + g, bottom: r.bottom }))];
+    }));
+    const reported = new Set();
+    spatialPairs(texts, (t) => grown.get(t), (a, b) => {
+      if (a.el === b.el) return;
+      const f = Math.min(fs(a.el), fs(b.el));
+      const maxGap = Math.max(4, f * 0.75), tol = Math.max(2, f * 0.15);
+      let hit = null;
+      for (const ra of a.vis) {
+        for (const rb of b.vis) {
+          const vo = Math.min(ra.bottom, rb.bottom) - Math.max(ra.y, rb.y);
+          if (vo < Math.min(ra.h, rb.h) * 0.3) continue; // not side by side
+          const gap = Math.max(ra.x, rb.x) - Math.min(ra.right, rb.right);
+          if (gap < -3 || gap > maxGap) continue; // a real overlap, or apart
+          const dt = Math.abs(ra.y - rb.y), db = Math.abs(ra.bottom - rb.bottom);
+          const dc = Math.abs((ra.y + ra.bottom) / 2 - (rb.y + rb.bottom) / 2);
+          if (Math.min(dt, db, dc) <= tol) continue; // lined up: placed there on purpose
+          hit = { gap: Math.max(0, Math.round(gap)), offset: Math.round(dc) };
+          break;
+        }
+        if (hit) break;
+      }
+      if (!hit) return;
+      const common = RL.commonAncestor(a.el, b.el);
+      const la = placedLayer(a.el, common), lb = placedLayer(b.el, common);
+      if (!la && !lb) return true; // one flow: the layout keeps them apart
+      if (drawnBetween(a.el, common) || drawnBetween(b.el, common)) return true; // on its own badge, bubble or chip
+      const key = RL.selector(a.el) + '|' + RL.selector(b.el);
+      if (reported.has(key)) return true;
+      reported.add(key);
+      const [first, second] = a.vis[0].x <= b.vis[0].x ? [a, b] : [b, a];
+      ctx.report({
+        rule: 'text-near-overlap', el: first.el, related: second.el,
+        message: '"' + RL.snippet(first.node, 30) + '" and "' + RL.snippet(second.node, 30) + '" sit side by side ' + hit.gap + 'px apart, ' + hit.offset +
+          'px out of line, in separately positioned layers: nothing keeps them apart, so they run into each other at other sizes.',
+        details: { gap: hit.gap, offset: hit.offset, layer: RL.selector(la || lb) },
+      });
+      return true;
+    });
+  },
+});
+
+// ---------------------------------------------------------------------------
 function chainUpTo(el, ancestor) {
   const out = [];
   for (let n = el; n && n !== ancestor; n = RL.parentOf(n)) out.push(n);
