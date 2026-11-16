@@ -31,7 +31,7 @@ None of this is a syntax or type problem, so none of the usual gates fire. That 
 
 renderlint ran headless Claude Code sessions (`claude -p`), each vibe-coding a frontend from one prompt. There were 22 sessions on Opus and Haiku, building landing pages, dashboards, a kanban board, a weather app, an SVG org chart and analytics charts in HTML, React, Next.js, Vue and Svelte. Half also got a one-line setup prompt.
 
-| | Baseline apps (11) | Apps built with renderlint (11) |
+| Measure | Baseline apps (11) | Apps built with renderlint (11) |
 |---|---|---|
 | Errors at the time of the experiment | 229 | 0 |
 | Errors rescored later with the newer checks | 225 | 11, in 5 apps |

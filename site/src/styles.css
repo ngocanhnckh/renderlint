@@ -297,6 +297,25 @@ td code{display:inline-block;max-width:100%;margin:2px 0;overflow-wrap:anywhere}
 
 .notfound{padding-top:clamp(64px,10vw,140px);padding-bottom:clamp(64px,10vw,140px)}
 
+/* Motion: the hero rises in on load; blocks below the fold fade up as they scroll into view (main.js adds .rv/.in).
+   Large text and the hero image move without fading, so they still count as painted at once. */
+@media (prefers-reduced-motion:no-preference){
+@keyframes rise{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+@keyframes lift{from{transform:translateY(30px)}to{transform:none}}
+@keyframes pop{from{opacity:0;transform:translateY(18px) scale(.94)}to{opacity:1;transform:none}}
+.hero .eyebrow,.hero .lede,.hero .proof,.hero .actions,.page-head .crumbs,.page-head .lede,.page-head .meta{animation:rise .8s cubic-bezier(.2,.7,.2,1) both}
+.hero h1,.page-head h1{animation:lift .9s cubic-bezier(.2,.7,.2,1) .05s both}
+.hero .lede,.page-head .lede,.page-head .meta{animation-delay:.16s}.hero .proof{animation-delay:.26s}.hero .actions{animation-delay:.36s}
+.hero .clipcard{animation:lift 1.1s cubic-bezier(.2,.7,.2,1) .1s both}
+.hero .float{animation:pop .8s cubic-bezier(.2,.7,.2,1) .75s both}
+.rv{opacity:0;transform:translateY(32px);transition:opacity .75s cubic-bezier(.2,.7,.2,1) var(--d,0s),transform .9s cubic-bezier(.2,.7,.2,1) var(--d,0s)}
+.rv.in{opacity:1;transform:none}
+.post,.facts div,.logos li,.gate{transition:transform .3s cubic-bezier(.2,.7,.2,1),border-color .2s,box-shadow .3s}
+.post:hover,.gate:hover{transform:translateY(-4px);box-shadow:0 18px 40px -24px rgba(12,12,12,.35)}
+.facts div:hover,.logos li:hover{transform:translateY(-2px)}
+.link-arrow svg,.btn svg{transition:transform .25s cubic-bezier(.2,.7,.2,1)}
+.link-arrow:hover svg,.btn:hover svg{transform:translateX(4px)}
+}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media (max-width:560px){.sheet{margin:6px;border-radius:22px}.hero,.page-head,.cta{margin:0 4px;border-radius:20px}body{font-size:16px}.prose{font-size:17px}}
 @media print{.top,.foot,.cta,.callout,.toc{display:none}.sheet{margin:0}}

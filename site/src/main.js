@@ -24,6 +24,29 @@
     navigator.clipboard.writeText(b.getAttribute('data-copy')).then(function () { say('Copied'); }, fallback);
   });
 
+  // Scroll reveals: blocks below the fold fade up as they enter the viewport, siblings staggered.
+  // Nothing is hidden without JS, with reduced motion, or if it is already on screen at load.
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
+    var sel = '.section-head,.define>div,.facts>div,.logos li,.grid-2>*,.pairs>*,.table-wrap,.steps>li,.results .big>div,.results figure,.gates>.gate,.faq>div,.posts>*,.cta .wrap>*,.rule,.related,.prose>figure,.prose>pre,.prose>.callout';
+    var io = new IntersectionObserver(function (entries) {
+      var batch = entries.filter(function (en) { return en.isIntersecting; });
+      batch.forEach(function (en, i) {
+        var el = en.target;
+        el.style.setProperty('--d', Math.min(i, 6) * 0.08 + 's');
+        el.classList.add('in');
+        io.unobserve(el);
+        // Back to plain styles once shown, so hover transitions work as written.
+        setTimeout(function () { el.classList.remove('rv', 'in'); el.style.removeProperty('--d'); }, 1400 + i * 80);
+      });
+    }, { rootMargin: '0px 0px -48px 0px', threshold: 0 });
+    var vh = window.innerHeight;
+    document.querySelectorAll(sel).forEach(function (el) {
+      if (el.parentElement.closest('.rv') || el.getBoundingClientRect().top < vh) return;
+      el.classList.add('rv');
+      io.observe(el);
+    });
+  }
+
   // Hero clip: the poster is the page's image; the video loads only after the page has loaded,
   // never on Save-Data, and never plays by itself when the user prefers reduced motion.
   var card = document.querySelector('[data-clip]');

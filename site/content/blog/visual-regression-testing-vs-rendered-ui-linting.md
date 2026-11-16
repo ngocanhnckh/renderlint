@@ -29,7 +29,7 @@ It renders the app in headless Chromium at several widths, measures it, and appl
 
 ## How do they compare?
 
-| | Visual regression (Percy, Chromatic, BackstopJS, Playwright screenshots) | renderlint |
+| Question | Visual regression (Percy, Chromatic, BackstopJS, Playwright screenshots) | renderlint |
 |---|---|---|
 | What it reads | Pixels, against approved images | Rendered geometry and pixels |
 | Needs a baseline | Yes | No |

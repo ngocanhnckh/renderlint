@@ -36,6 +36,16 @@ node ../bin/renderlint.js dist     # must print "No UI defects found."
 
 ## Deploying
 
-`dist/` can go on any static host. Set the build command to `cd site && npm ci && npm run build` and the output directory to `site/dist`. Cloudflare Pages and Netlify also read `dist/_headers` (cache rules). `404.html` is the not-found page on all of them.
+The site is hosted on Cloudflare Pages, project `renderlint`, at https://renderlint.yitec.net (a proxied `CNAME renderlint → renderlint.pages.dev` in the `yitec.net` zone). To publish a new version:
 
-DNS for `renderlint.yitec.net`: add a `CNAME` record for `renderlint` in the `yitec.net` zone pointing at the host's target (for example `<project>.pages.dev` on Cloudflare Pages, `<site>.netlify.app` on Netlify, `<user>.github.io` on GitHub Pages), then add the custom domain in the host's settings so it issues the TLS certificate. Canonical URLs, the sitemap, feeds and Open Graph tags already use `https://renderlint.yitec.net`.
+```sh
+export CLOUDFLARE_ACCOUNT_ID=…  CLOUDFLARE_API_TOKEN=…   # a token with "Cloudflare Pages: Edit"
+npm run deploy      # builds, then uploads dist/ as the production deployment
+npm run indexnow    # tells Bing, Yandex and other IndexNow engines that every sitemap URL changed
+```
+
+`_headers` sets cache rules and sends `X-Robots-Tag: noindex` on the `*.pages.dev` hostnames, so only the custom domain is indexed. A Configuration Rule in the zone turns Cloudflare Email Obfuscation off for this host: it took file names such as `page@375.png` in the terminal output for email addresses and rewrote them.
+
+Any other static host works too: build command `cd site && npm ci && npm run build`, output directory `site/dist`, `404.html` as the not-found page. Canonical URLs, the sitemap, feeds and Open Graph tags all use `https://renderlint.yitec.net`.
+
+After the first deploy, add the site to Google Search Console and Bing Webmaster Tools and submit `https://renderlint.yitec.net/sitemap.xml`.

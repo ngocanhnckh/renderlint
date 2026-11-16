@@ -10,3 +10,9 @@
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+# The canonical host is renderlint.yitec.net; keep the Pages hostnames out of search indexes.
+https://renderlint.pages.dev/*
+  X-Robots-Tag: noindex
+https://:version.renderlint.pages.dev/*
+  X-Robots-Tag: noindex

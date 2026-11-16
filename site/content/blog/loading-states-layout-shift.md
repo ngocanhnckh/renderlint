@@ -39,7 +39,7 @@ Anything that tells the user something is on its way. renderlint accepts `aria-b
 
 Skeleton or spinner? Both pass. A skeleton shaped like the content is better, because it holds the space the content will take, so nothing jumps when it arrives. A spinner is fine for small or unpredictable areas, but the container should still reserve a minimum height.
 
-| | Skeleton | Spinner |
+| Question | Skeleton | Spinner |
 |---|---|---|
 | Tells the user something is coming | Yes | Yes |
 | Reserves space for the final content | Yes, if sized like it | Only with a `min-height` |

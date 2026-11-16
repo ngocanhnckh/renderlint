@@ -56,7 +56,7 @@ export async function image(ref) {
     cache.set(ref, r);
     return r;
   }
-  const widths = [...new Set([640, 1280, meta.width].filter((w) => w <= meta.width))].sort((a, b) => a - b).slice(-3);
+  const widths = [...new Set([640, 960, 1280, meta.width].filter((w) => w <= meta.width))].sort((a, b) => a - b).slice(-4);
   const variants = [];
   for (const w of widths) {
     const out = `/img/${base}-${w}.webp`;
