@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.2.0 (2026-10-31)
+## 0.2.0 (2026-11-18)
 
-The first version published to npm, as `@yitec/renderlint`.
+The first tagged release, and the first version for npm as `@yitec/renderlint`. Website: [renderlint.yitec.net](https://renderlint.yitec.net).
 
 ### Text that almost collides
 
@@ -87,6 +87,7 @@ Ideas taken from comparing renderlint with [lintapple](https://github.com/gholtz
 
 ### Docs
 
+- A website at [renderlint.yitec.net](https://renderlint.yitec.net) with the rules, examples and a blog. The README is shorter and links to it.
 - New pages: getting started, a page per framework, roles and coverage, server mocks, Playwright, Storybook, security, and coding agents.
 
 ## 0.1.0 (2026-10-25)
