@@ -19,7 +19,7 @@ const version = () => JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'u
 const hash = (s) => createHash('sha256').update(s.replace(/\r\n/g, '\n').trimEnd()).digest('hex').slice(0, 12);
 export const skillTemplate = (name) => readFileSync(join(PKG_ROOT, 'skills', name, 'SKILL.md'), 'utf8');
 export function skillDescription(name) {
-  const m = /^description:\s*(.+)$/m.exec(skillTemplate(name));
+  const m = skillTemplate(name).match(/^description:\s*(.+)$/m);
   return m ? m[1].trim() : '';
 }
 
@@ -33,7 +33,7 @@ export function skillState(cwd, name) {
   const file = join(cwd, SKILLS_DIR, name, 'SKILL.md');
   if (!existsSync(file)) return 'install';
   const cur = readFileSync(file, 'utf8');
-  const m = MARK.exec(cur);
+  const m = cur.match(MARK);
   if (!m || m[1] !== name) return 'foreign'; // not written by renderlint init
   const body = cur.slice(0, m.index) + cur.slice(m.index + m[0].length); // notes added below the marker are edits too
   if (hash(body) !== m[3]) return 'edited';

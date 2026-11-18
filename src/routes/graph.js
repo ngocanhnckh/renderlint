@@ -35,13 +35,13 @@ export function importsOf(file, src) {
   if (ext === '.vue' || ext === '.svelte') {
     code = Array.from(src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g), (m) => m[1]).join('\n');
     for (const m of src.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style>/g)) {
-      const s = /\bsrc=["']([^"']+)["']/.exec(m[1]);
+      const s = m[1].match(/\bsrc=["']([^"']+)["']/);
       if (s) out.push({ spec: s[1], names: null });
       out.push(...cssImports(m[2]));
     }
     for (const m of src.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["']/g)) out.push({ spec: m[1], names: null });
   } else if (ext === '.astro') {
-    const fm = /^---([\s\S]*?)---/.exec(src);
+    const fm = src.match(/^---([\s\S]*?)---/);
     code = (fm ? fm[1] : '') + '\n' + Array.from(src.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g), (m) => m[1]).join('\n');
     for (const m of src.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)) out.push(...cssImports(m[1]));
   } else if (STYLE.test(file)) {
@@ -75,9 +75,9 @@ function cssImports(css) {
 }
 
 function namedOf(clause) {
-  const m = /\{([^}]*)\}/.exec(clause);
+  const m = clause.match(/\{([^}]*)\}/);
   const names = m ? m[1].split(',').map((s) => s.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0].trim()).filter(Boolean) : [];
-  const def = /^\s*([A-Za-z_$][\w$]*)/.exec(clause);
+  const def = clause.match(/^\s*([A-Za-z_$][\w$]*)/);
   if (def && def[1] !== 'type') names.push('default');
   if (/\*\s+as\s/.test(clause)) return null;
   return names.length ? names : null;
@@ -162,7 +162,7 @@ function nuxtAutoImports(cwd) {
 }
 
 function tagNames(src) {
-  const tpl = /<template\b[^>]*>([\s\S]*)<\/template>/.exec(src);
+  const tpl = src.match(/<template\b[^>]*>([\s\S]*)<\/template>/);
   const out = new Set();
   for (const m of (tpl ? tpl[1] : '').matchAll(/<([A-Za-z][\w-]*)/g)) {
     let n = m[1];

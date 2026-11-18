@@ -64,7 +64,7 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === '/') return send(200, page('Acme', null, '<h1>Acme analytics</h1><p>Sign in to see your dashboard.</p>'));
     // everything else: signed in, the API says who the token belongs to
-    const token = (/(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie || '') || [])[1];
+    const token = ((req.headers.cookie || '').match(/(?:^|;\s*)sid=([^;]+)/) || [])[1];
     const me = token ? await api('/me', token).catch(() => null) : null;
     if (!me) return go('/login?next=' + encodeURIComponent(url.pathname));
     if (url.pathname === '/dashboard') {

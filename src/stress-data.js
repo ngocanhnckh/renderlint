@@ -12,7 +12,7 @@ export function lengthenString(s, key, factor = 2) {
   if (/^\d{4}-\d{2}-\d{2}/.test(s) || /^[\d\s.,:%+\-−$€£¥₫()/]+$/.test(s)) return s;   // dates, numbers, prices
   if (/^#?[0-9a-f]{3,8}$/i.test(s) || /^[0-9a-f-]{16,}$/i.test(s)) return s;           // colors, hashes, uuids
   if (/^[A-Z0-9_]+$/.test(s)) return s;                                                 // CONSTANTS
-  const email = /^([^@\s]+)@([^@\s]+\.[^@\s]+)$/.exec(s);
+  const email = s.match(/^([^@\s]+)@([^@\s]+\.[^@\s]+)$/);
   if (email) return email[1] + '.' + FILLER.slice(0, Math.max(8, 30 - s.length)) + '@' + email[2];
   const text = TEXT_KEY.test(key || '');
   if (!/\s/.test(s)) {

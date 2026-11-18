@@ -22,7 +22,7 @@ export async function sitemapUrls(base, { timeout = 5000, max = 20000, maxFiles 
   if (robots && !/<html/i.test(robots)) {
     let applies = false;
     for (const line of robots.split(/\r?\n/)) {
-      const m = /^\s*([\w-]+)\s*:\s*(.*?)\s*$/.exec(line);
+      const m = line.match(/^\s*([\w-]+)\s*:\s*(.*?)\s*$/);
       if (!m) continue;
       const k = m[1].toLowerCase();
       if (k === 'sitemap') maps.push(m[2]);

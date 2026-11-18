@@ -239,7 +239,7 @@ function parseColor(str) {
   if (!str) return null;
   if (colorCache.has(str)) return colorCache.get(str);
   let out = null;
-  const m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(str);
+  const m = str.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/);
   if (m) {
     let a = m[4] === undefined ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
     out = { r: +m[1], g: +m[2], b: +m[3], a };
@@ -248,7 +248,7 @@ function parseColor(str) {
   } else {
     // Let the browser convert it. Alpha is read separately for precision.
     let alpha = 1;
-    const am = /\/\s*([\d.]+%?)\s*\)$/.exec(str);
+    const am = str.match(/\/\s*([\d.]+%?)\s*\)$/);
     if (am) alpha = am[1].endsWith('%') ? parseFloat(am[1]) / 100 : parseFloat(am[1]);
     colorCtx.clearRect(0, 0, 1, 1);
     colorCtx.globalCompositeOperation = 'copy';
@@ -393,7 +393,7 @@ RL.sourceOf = function (el) {
     }
     // Generic attribute (e.g. from a babel/jsx-source plugin)
     if (!out.file && n.hasAttribute('data-source')) {
-      const m = /^(.*?):(\d+)/.exec(n.getAttribute('data-source'));
+      const m = n.getAttribute('data-source').match(/^(.*?):(\d+)/);
       if (m) { out.file = m[1]; out.line = +m[2]; }
     }
     // Svelte dev
@@ -415,7 +415,7 @@ RL.sourceOf = function (el) {
         if (!out.file && f && f._debugStack && f._debugStack.stack) {
           const fr = f._debugStack.stack.split('\n').slice(1).find((l) => /:\d+:\d+/.test(l) && !BAD_FRAME.test(l));
           if (fr) {
-            const m = /((?:https?:\/\/[^/\s]+)?\/[^\s()]+?):(\d+):\d+\)?\s*$/.exec(fr);
+            const m = fr.match(/((?:https?:\/\/[^/\s]+)?\/[^\s()]+?):(\d+):\d+\)?\s*$/);
             if (m) { out.file = m[1].replace(/^https?:\/\/[^/]+/, '').replace(/\?.*$/, ''); out.line = +m[2]; }
           }
         }
@@ -3120,7 +3120,7 @@ const RGB_RE = /^rgba?\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?), (\d+(?:\.\d+)?)(?:, (\
 // Only plain sRGB computed colours: oklch(), color-mix(), color() etc. go through a gamut
 // mapping the compositor may not share with our conversion.
 function rgbOf(str) {
-  const m = RGB_RE.exec(str);
+  const m = str.match(RGB_RE);
   return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : undefined;
 }
 const px = (v) => parseFloat(v) || 0;
@@ -3160,7 +3160,7 @@ function effectsOf(s) {
 // Transforms that keep boxes axis-aligned (their client rects are then exact).
 function plainTransform(t) {
   if (!t || t === 'none') return true;
-  const m = /^matrix\(([^)]*)\)$/.exec(t);
+  const m = t.match(/^matrix\(([^)]*)\)$/);
   if (!m) return false;
   const v = m[1].split(',').map(Number);
   return v[1] === 0 && v[2] === 0 && v[0] > 0 && v[3] > 0;
@@ -3275,7 +3275,7 @@ function pseudoRegion(el, which, elBox) {
     const x = origin.x + px(s.left) + px(s.marginLeft), y = origin.y + px(s.top) + px(s.marginTop);
     r = { x, y, right: x + w, bottom: y + h };
     if (s.transform && s.transform !== 'none') {
-      const m = /^matrix\(([^)]*)\)$/.exec(s.transform);
+      const m = s.transform.match(/^matrix\(([^)]*)\)$/);
       if (!m) return EVERYWHERE;
       const [a, b, c, d, e, f] = m[1].split(',').map(Number);
       const o = s.transformOrigin.split(' ').map(px);
@@ -3804,7 +3804,7 @@ RL.schemeSignature = function (debug) {
     if (seen.has(p)) return false;
     seen.add(p);
     return (values.get(p) || []).every((v) => {
-      const ref = /^var\(\s*(--[\w-]+)\s*(?:,(.*))?\)$/.exec(v.replace(/\s*!important$/, ''));
+      const ref = v.replace(/\s*!important$/, '').match(/^var\(\s*(--[\w-]+)\s*(?:,(.*))?\)$/);
       if (ref) return isColorVar(ref[1], seen) && (ref[2] === undefined || isColor(ref[2].trim()));
       return isColor(v.replace(/\s*!important$/, ''));
     });
@@ -3967,7 +3967,7 @@ RL.stress = function (profile, factor) {
       }));
       count++;
     } else if (profile === 'long-words') {
-      const m = DATA_TOKEN.exec(txt);
+      const m = txt.match(DATA_TOKEN);
       if (!m) continue;
       setText(n, n.textContent.replace(m[0], longToken(m[0])));
       count++;

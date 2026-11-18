@@ -16,7 +16,7 @@ const RGB_RE = /^rgba?\((\d+(?:\.\d+)?), (\d+(?:\.\d+)?), (\d+(?:\.\d+)?)(?:, (\
 // Only plain sRGB computed colours: oklch(), color-mix(), color() etc. go through a gamut
 // mapping the compositor may not share with our conversion.
 function rgbOf(str) {
-  const m = RGB_RE.exec(str);
+  const m = str.match(RGB_RE);
   return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : undefined;
 }
 const px = (v) => parseFloat(v) || 0;
@@ -56,7 +56,7 @@ function effectsOf(s) {
 // Transforms that keep boxes axis-aligned (their client rects are then exact).
 function plainTransform(t) {
   if (!t || t === 'none') return true;
-  const m = /^matrix\(([^)]*)\)$/.exec(t);
+  const m = t.match(/^matrix\(([^)]*)\)$/);
   if (!m) return false;
   const v = m[1].split(',').map(Number);
   return v[1] === 0 && v[2] === 0 && v[0] > 0 && v[3] > 0;
@@ -171,7 +171,7 @@ function pseudoRegion(el, which, elBox) {
     const x = origin.x + px(s.left) + px(s.marginLeft), y = origin.y + px(s.top) + px(s.marginTop);
     r = { x, y, right: x + w, bottom: y + h };
     if (s.transform && s.transform !== 'none') {
-      const m = /^matrix\(([^)]*)\)$/.exec(s.transform);
+      const m = s.transform.match(/^matrix\(([^)]*)\)$/);
       if (!m) return EVERYWHERE;
       const [a, b, c, d, e, f] = m[1].split(',').map(Number);
       const o = s.transformOrigin.split(' ').map(px);

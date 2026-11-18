@@ -95,6 +95,20 @@ Also covered: **`squashed-control`**, an input or select too short for its font,
 
 **Team cards:** a 404 avatar (`broken-image`, `broken-resource`), a 2:1 image forced into a circle (`image-distortion`), and a 24×24 icon with no size that grows to 204px (`oversized-icon`).
 
+## Loading states and the UX pass
+
+While a page's requests are held for a second, the Recent orders card stays empty (`loading-state`):
+
+![renderlint's screenshot of a dashboard: while the orders request is held, the Recent orders card is empty (boxed in red); once the data arrives, the table fills it](images/ux-loading-state.png)
+
+With `--ux`, renderlint clicks through the page:
+
+| | |
+|---|---|
+| ![Clicking the Orders link: one second later the page is unchanged, because a React Router loader is still fetching and nothing shows it](images/ux-action-feedback.png) | **`action-feedback`.** A React Router loader is fetching after a click, and the page shows no sign of it. |
+| ![The orders request answered with HTTP 500: the spinner keeps spinning and no error is shown](images/ux-error-feedback.png) | **`error-feedback`.** renderlint answered the request with HTTP 500. The spinner keeps spinning and no error is shown. |
+| ![renderlint clicks Invite member, a modal opens; focus stays behind it and Escape does not close it](images/demo-dialog-focus.gif) | **`dialog-focus`.** The modal leaves focus behind it and ignores Escape. |
+
 ## Live in the dev server
 
 With the Vite plugin, findings appear in a corner overlay while you work. Hovering a finding highlights the element, and each one links back to the component file and line. The same list prints in the dev-server terminal, where coding agents read logs.

@@ -223,7 +223,7 @@ const WP_SKIP_QUERY = /[?&](replytocom|feed|rest_route|add-to-cart|add_to_wishli
 // Posts, archives and pagination share templates: two of each kind are enough.
 function wpGroup(u) {
   if (/\/page\/\d+\/?$|[?&]paged=/.test(u.pathname + u.search)) return 'paged';
-  const m = /^\/(category|tag|author|product-category|product-tag)\//.exec(u.pathname) || /[?&](cat|tag|author|m)=/.exec(u.search);
+  const m = u.pathname.match(/^\/(category|tag|author|product-category|product-tag)\//) || u.search.match(/[?&](cat|tag|author|m)=/);
   if (m) return 'archive:' + m[1];
   if (/^\/\d{4}\/\d{2}\//.test(u.pathname) || /^\/\d{4}\/\d{2}\/?$/.test(u.pathname)) return 'dated';
   if (/[?&]p=\d+/.test(u.search) || /^\/(blog|news|product|products|shop)\/[^/]+\/?$/.test(u.pathname)) return 'single:' + (u.pathname.split('/')[1] || 'p');
@@ -762,7 +762,7 @@ const DIALOG_TRACE = () => {
       try {
         const frames = String(new Error().stack || '').split('\n').slice(2);
         const f = frames.find((l) => /https?:\/\//.test(l)) || '';
-        at = (/\((.*)\)\s*$/.exec(f) || /at (.*)$/.exec(f) || [, ''])[1].trim();
+        at = (f.match(/\((.*)\)\s*$/) || f.match(/at (.*)$/) || [, ''])[1].trim();
       } catch { /* no stack */ }
       debug('[renderlint:dialog] ' + at);
       return orig.apply(this, args);

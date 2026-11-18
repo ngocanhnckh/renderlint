@@ -19,5 +19,5 @@ const routes = [
   [/^\/reports\/([^/]+)$/, (id) => { app.innerHTML = `${nav}<h1>Report ${id}</h1>`; }],
   [/^\/login$/, () => { app.innerHTML = '<h1>Sign in</h1><form><label>Email <input type="email" autocomplete="username"></label> <label>Password <input type="password"></label> <button>Sign in</button></form>'; }],
 ];
-const m = routes.map(([re, fn]) => [re.exec(location.pathname), fn]).find(([x]) => x);
+const m = routes.map(([re, fn]) => [location.pathname.match(re), fn]).find(([x]) => x);
 if (m) m[1](...m[0].slice(1)); else app.innerHTML = `${nav}<h1>Page not found</h1>`;

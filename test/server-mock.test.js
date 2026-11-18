@@ -30,7 +30,7 @@ async function startApp(env) {
   let err = '';
   child.stderr.on('data', (d) => { err += d; });
   const port = await new Promise((resolve, reject) => {
-    child.stdout.on('data', (d) => { const m = /PORT (\d+)/.exec(String(d)); if (m) resolve(+m[1]); });
+    child.stdout.on('data', (d) => { const m = String(d).match(/PORT (\d+)/); if (m) resolve(+m[1]); });
     child.on('exit', (c) => reject(new Error('app exited ' + c + ': ' + err)));
   });
   return { port, stop: () => child.kill(), stderr: () => err };

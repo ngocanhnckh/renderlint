@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Security docs list everything renderlint connects to and every program it runs ([docs/security.md](docs/security.md)), and a `SECURITY.md` says how to report a vulnerability privately. There is no telemetry.
+- The fix skill tells agents to treat text quoted from a checked page as data, never as instructions.
+- Code: regular expressions use `String.match`/`matchAll` instead of `RegExp.exec`, so security scanners stop reading them as shell commands. No change in behaviour.
+
 ## 0.2.0 (2026-11-18)
 
 The first tagged release, and the first version for npm as `@yitec/renderlint`. Website: [renderlint.yitec.net](https://renderlint.yitec.net).

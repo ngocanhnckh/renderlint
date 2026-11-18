@@ -54,7 +54,7 @@ function readString(src, i) {
 
 const ws = (src, i) => { while (i < src.length && /\s/.test(src[i])) i++; return i; };
 const ID = /[A-Za-z_$][\w$]*/y;
-function readId(src, i) { ID.lastIndex = i; const m = ID.exec(src); return m ? m[0] : null; }
+function readId(src, i) { ID.lastIndex = i; const m = src.match(ID); return m ? m[0] : null; }
 
 // Skips to the next , ) ] } ; at depth 0 (the rest of an expression we don't model).
 function skipRest(src, i) {
@@ -72,7 +72,7 @@ function skipRest(src, i) {
 export function importsIn(text) {
   const out = [];
   const re = /\bimport\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g;
-  for (let m; (m = re.exec(text));) out.push(m[2]);
+  for (const m of text.matchAll(re)) out.push(m[2]);
   return out;
 }
 
@@ -161,7 +161,7 @@ function parsePrimary(src, i) {
   }
   if (c === '<' && /[A-Za-z>]/.test(src[i + 1] || '')) return readJsx(src, i);
   if (/[0-9]/.test(c || '') || (c === '-' && /[0-9]/.test(src[i + 1] || ''))) {
-    const m = /^-?[0-9][0-9_.eExXa-fA-F]*/.exec(src.slice(i, i + 40));
+    const m = src.slice(i, i + 40).match(/^-?[0-9][0-9_.eExXa-fA-F]*/);
     return { node: { t: 'num', v: Number(m[0].replace(/_/g, '')) }, end: i + m[0].length };
   }
   if (src.startsWith('...', i)) { const a = parseExpr(src, i + 3); return { node: { t: 'spread', arg: a.node }, end: a.end }; }
@@ -217,7 +217,7 @@ function parseArrowBody(src, k) {
 function returnedExpr(body) {
   const re = /\breturn\b/g;
   let last = null;
-  for (let m; (m = re.exec(body));) last = m.index;
+  for (const m of body.matchAll(re)) last = m.index;
   if (last === null) return null;
   try { return parseExpr(body, last + 6).node; } catch { return null; }
 }
@@ -243,7 +243,7 @@ function parseObject(src, i) {
     else {
       let id = readId(src, k);
       if (id === 'async' || id === 'get' || id === 'set') { const n = ws(src, k + id.length); const id2 = readId(src, n); if (id2) { k = n; id = id2; } }
-      if (!id) { const m = /^[0-9]+/.exec(src.slice(k)); id = m ? m[0] : null; }
+      if (!id) { const m = src.slice(k).match(/^[0-9]+/); id = m ? m[0] : null; }
       if (!id) { k = skipRest(src, k); if (src[k] === '}') { k++; break; } k++; continue; }
       key = id; k += id.length;
     }
@@ -274,7 +274,7 @@ function parseObject(src, i) {
 // JSX element at i: { t: 'jsx', name, attrs, children }.
 export function readJsx(src, i) {
   let k = i + 1;
-  const name = (/^[A-Za-z_$][\w$.:-]*/.exec(src.slice(k)) || [''])[0];
+  const name = (src.slice(k).match(/^[A-Za-z_$][\w$.:-]*/) || [''])[0];
   k += name.length;
   const attrs = {};
   for (;;) {
@@ -283,7 +283,7 @@ export function readJsx(src, i) {
     if (src.startsWith('/>', k)) return { node: { t: 'jsx', name, attrs, children: [] }, end: k + 2 };
     if (src[k] === '>') { k++; break; }
     if (src[k] === '{') { k = skipBalanced(src, k); continue; } // {...spread}
-    const an = (/^[A-Za-z_$][\w$.:-]*/.exec(src.slice(k)) || [''])[0];
+    const an = (src.slice(k).match(/^[A-Za-z_$][\w$.:-]*/) || [''])[0];
     if (!an) { k++; continue; }
     k = ws(src, k + an.length);
     if (src[k] !== '=') { attrs[an] = { t: 'bool', v: true }; continue; }
@@ -326,13 +326,13 @@ export function jsxElementsIn(text, names) {
 export function importMap(src) {
   const out = {};
   const re = /\bimport\s+(type\s+)?([^'";]*?)\s+from\s+['"]([^'"]+)['"]/g;
-  for (let m; (m = re.exec(src));) {
+  for (const m of src.matchAll(re)) {
     const clause = m[2], from = m[3];
-    const def = /^([A-Za-z_$][\w$]*)/.exec(clause);
+    const def = clause.match(/^([A-Za-z_$][\w$]*)/);
     if (def && def[1] !== 'type') out[def[1]] = { from, name: 'default' };
-    const ns = /\*\s+as\s+([A-Za-z_$][\w$]*)/.exec(clause);
+    const ns = clause.match(/\*\s+as\s+([A-Za-z_$][\w$]*)/);
     if (ns) out[ns[1]] = { from, name: '*' };
-    const named = /\{([^}]*)\}/.exec(clause);
+    const named = clause.match(/\{([^}]*)\}/);
     if (named) for (const part of named[1].split(',')) {
       const p = part.trim().replace(/^type\s+/, '');
       if (!p) continue;
@@ -347,8 +347,8 @@ export function importMap(src) {
 export function declarations(src) {
   const out = {};
   const re = /(?:^|[;\n}])\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=;\n]+?)?\s*=(?!=|>)/g;
-  for (let m; (m = re.exec(src));) out[m[1]] = m.index + m[0].length;
-  const d = /(?:^|[;\n])\s*export\s+default\s+/.exec(src);
+  for (const m of src.matchAll(re)) out[m[1]] = m.index + m[0].length;
+  const d = src.match(/(?:^|[;\n])\s*export\s+default\s+/);
   if (d) out.default = d.index + d[0].length;
   return out;
 }

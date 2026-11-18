@@ -38,9 +38,9 @@ const NEXT_LAYOUT = /^(layout|template|loading|error|not-found|global-error)\.(t
 
 function nextSegment(name) {
   let m;
-  if ((m = /^\[\[\.\.\.(.+)\]\]$/.exec(name))) return ':' + m[1] + '*';
-  if ((m = /^\[\.\.\.(.+)\]$/.exec(name))) return ':' + m[1] + '+';
-  if ((m = /^\[(.+)\]$/.exec(name))) return ':' + m[1];
+  if ((m = name.match(/^\[\[\.\.\.(.+)\]\]$/))) return ':' + m[1] + '*';
+  if ((m = name.match(/^\[\.\.\.(.+)\]$/))) return ':' + m[1] + '+';
+  if ((m = name.match(/^\[(.+)\]$/))) return ':' + m[1];
   try { return decodeURIComponent(name); } catch { return name; }
 }
 
@@ -114,7 +114,7 @@ function nextPages(cwd, dir) {
 // generateStaticParams / getStaticPaths / SvelteKit `entries` that return literal values.
 export function staticParamsFrom(src, fnName) {
   src = stripComments(src);
-  const m = new RegExp('export\\s+(?:async\\s+)?function\\s+' + fnName + '\\b|export\\s+const\\s+' + fnName + '\\b[^=]*=').exec(src);
+  const m = src.match(new RegExp('export\\s+(?:async\\s+)?function\\s+' + fnName + '\\b|export\\s+const\\s+' + fnName + '\\b[^=]*='));
   if (!m) return null;
   const start = src.indexOf('{', m.index + m[0].length - 1);
   let node = parseExpr(src, m[0].endsWith('=') ? m.index + m[0].length : m.index + m[0].indexOf('function')).node;
@@ -155,7 +155,7 @@ function nuxt(cwd) {
       if (!/\.(vue|tsx|jsx)$/.test(e.name)) continue;
       const name = e.name.replace(/\.[^.]+$/, '');
       const src = read(p);
-      const meta = /definePageMeta\s*\(/.exec(src);
+      const meta = src.match(/definePageMeta\s*\(/);
       let pattern = '/' + [...segs, ...(name === 'index' ? [] : [nuxtSegment(name)])].join('/');
       let layout = 'default';
       if (meta) {
@@ -184,7 +184,7 @@ function svelteSegment(name) {
 function sveltekit(cwd) {
   let routesDir = join(cwd, 'src', 'routes');
   const cfg = read(join(cwd, 'svelte.config.js'));
-  const m = /routes\s*:\s*['"]([^'"]+)['"]/.exec(cfg);
+  const m = cfg.match(/routes\s*:\s*['"]([^'"]+)['"]/);
   if (m) routesDir = resolve(cwd, m[1]);
   const globals = [join(cwd, 'src', 'app.html'), ...['ts', 'js'].map((e) => join(cwd, 'src', 'hooks.client.' + e)), ...['ts', 'js'].map((e) => join(cwd, 'src', 'hooks.server.' + e))].filter(existsSync);
   const out = [];
@@ -227,7 +227,7 @@ function astro(cwd) {
         if (v) r.values = v;
         else {
           // getStaticPaths() over a content collection: the entries' ids are the values
-          const c = /getCollection\(\s*['"]([\w-]+)['"]/.exec(src);
+          const c = src.match(/getCollection\(\s*['"]([\w-]+)['"]/);
           if (c && r.params.length === 1) {
             const dir = [join(cwd, 'src', 'content', c[1]), join(cwd, 'src', 'data', c[1])].find(isDir);
             if (dir) r.values = listContent(dir).map((id) => ({ [r.params[0]]: id }));
@@ -253,7 +253,7 @@ function listContent(dir, prefix = '') {
 // ------------------------------------------------------------------- React Router 7 / Remix
 function reactRouterApp(cwd, aliases) {
   const cfg = read(join(cwd, 'react-router.config.ts')) || read(join(cwd, 'react-router.config.js'));
-  const m = /appDirectory\s*:\s*['"]([^'"]+)['"]/.exec(cfg);
+  const m = cfg.match(/appDirectory\s*:\s*['"]([^'"]+)['"]/);
   const appDir = join(cwd, m ? m[1] : 'app');
   const root = ['root.tsx', 'root.jsx', 'root.ts', 'root.js'].map((f) => join(appDir, f)).find(existsSync);
   const routesFile = ['routes.ts', 'routes.js', 'routes.tsx'].map((f) => join(appDir, f)).find(existsSync);
@@ -390,7 +390,7 @@ function tanstack(cwd) {
     // the generated tree lists every full path and the file it comes from
     const files = {};
     for (const m of src.matchAll(/import\s*\{\s*Route\s+as\s+(\w+)\s*\}\s*from\s*['"]([^'"]+)['"]/g)) files[m[1]] = m[2];
-    const block = /interface\s+FileRoutesByFullPath\s*\{([\s\S]*?)\n\}/.exec(src);
+    const block = src.match(/interface\s+FileRoutesByFullPath\s*\{([\s\S]*?)\n\}/);
     const parent = {};
     for (const m of src.matchAll(/const\s+(\w+)\s*=\s*(\w+)\.update\(\s*\{[\s\S]*?getParentRoute\s*:\s*\(\)\s*=>\s*(\w+)/g)) parent[m[1]] = m[3];
     const fileOf = (id) => { id = id.replace(/WithChildren$/, ''); const imp = files[id] || files[id + 'Import']; return imp ? resolveImport(imp, gen, cwd, []) : null; };
@@ -526,10 +526,10 @@ function configRoutes(cwd, aliases, file, startNode, kind) {
       const target = spec && resolveImport(spec, f, cwd, aliases);
       if (target) {
         const t = R.load(target);
-        const exp = lazyKids.t === 'fn' ? /\.then\(\s*\(?\s*(\w+)\s*\)?\s*=>\s*\1\.(\w+)/.exec(lazyKids.raw) : null;
+        const exp = lazyKids.t === 'fn' ? lazyKids.raw.match(/\.then\(\s*\(?\s*(\w+)\s*\)?\s*=>\s*\1\.(\w+)/) : null;
         let start = exp && t.decl[exp[2]] !== undefined ? t.decl[exp[2]] : t.decl.default;
         let node = start !== undefined ? parseExpr(t.src, start).node : null;
-        if (!node) { const fc = /RouterModule\.forChild\s*\(/.exec(t.src); if (fc) node = parseExpr(t.src, fc.index + fc[0].length).node; }
+        if (!node) { const fc = t.src.match(/RouterModule\.forChild\s*\(/); if (fc) node = parseExpr(t.src, fc.index + fc[0].length).node; }
         if (node) visitArr(target, node, full, nextLayouts, g, depth + 1);
       }
     }
@@ -572,7 +572,7 @@ function angular(cwd, aliases) {
   const files = sourceFiles(cwd, ['src', 'projects']);
   for (const f of files) {
     const src = stripComments(read(f));
-    const m = /\b(provideRouter|RouterModule\.forRoot)\s*\(/.exec(src);
+    const m = src.match(/\b(provideRouter|RouterModule\.forRoot)\s*\(/);
     if (!m) continue;
     const node = parseExpr(src, m.index + m[0].length).node;
     const routes = configRoutes(cwd, aliases, f, node, 'angular');
@@ -593,7 +593,7 @@ function vueRouter(cwd, aliases) {
   const files = sourceFiles(cwd, ['src']);
   for (const f of files) {
     const src = stripComments(read(f));
-    const m = /\b(createRouter|new\s+(?:VueRouter|Router))\s*\(/.exec(src);
+    const m = src.match(/\b(createRouter|new\s+(?:VueRouter|Router))\s*\(/);
     if (!m) continue;
     const opts = parseExpr(src, m.index + m[0].length).node;
     if (!opts || opts.t !== 'obj' || !opts.props.routes) {
