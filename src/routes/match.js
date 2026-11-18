@@ -7,7 +7,7 @@ export function compile(pattern) {
   const keys = [];
   let re = '^', score = 0;
   for (const seg of pattern.split('/').filter(Boolean)) {
-    const m = /^:([A-Za-z_$][\w$]*)([?+*]?)$/.exec(seg);
+    const m = seg.match(/^:([A-Za-z_$][\w$]*)([?+*]?)$/);
     if (m) {
       keys.push({ name: m[1], mod: m[2] });
       if (m[2] === '') { re += '/([^/]+)'; score += 3; }
@@ -35,7 +35,7 @@ export function matchRoute(routes, path) {
   let best = null;
   for (const r of routes) {
     const c = r._c || (r._c = compile(r.pattern));
-    const m = c.re.exec(path) || c.re.exec(decoded);
+    const m = path.match(c.re) || decoded.match(c.re);
     if (!m) continue;
     if (best && best.c.score >= c.score) continue;
     const params = {};

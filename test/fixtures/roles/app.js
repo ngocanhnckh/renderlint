@@ -65,7 +65,7 @@ async function render() {
   const u = path === '/login' ? null : await me();
   if (path !== '/login' && !u) return go('/login', true); // signed-in guard
   if (path === '/admin' && u.role !== 'admin') return go('/dashboard', true); // role guard
-  const m = /^\/users\/([^/]+)$/.exec(path);
+  const m = path.match(/^\/users\/([^/]+)$/);
   const page = m ? pages['/users/:id'] : pages[path];
   const html = page ? await page(u, m && m[1]) : '<main><h1>Page not found</h1></main>';
   root.innerHTML = (u ? nav(u) : '') + html;

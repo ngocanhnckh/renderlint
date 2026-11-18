@@ -43,7 +43,7 @@ function install() {
   globalThis[KEY] = { als, plan: current };
 
   const cookie = (header, name) => {
-    const m = new RegExp('(?:^|;\\s*)' + name + '=([^;]*)').exec(header || '');
+    const m = (header || '').match(new RegExp('(?:^|;\\s*)' + name + '=([^;]*)'));
     return m ? decodeURIComponent(m[1]) : undefined;
   };
   // Only requests renderlint's browser makes to this machine are answered from mocks: one from another

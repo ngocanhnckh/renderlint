@@ -317,6 +317,8 @@ All options: [docs/configuration.md](docs/configuration.md).
 5. **Stress.** The layout rules run again at the sweep widths and with longer text, long words, bigger numbers and longer API data. Anything that only breaks under stress becomes a `fragile-layout` warning.
 6. **Report.** Findings are merged across viewports and pages, repeats are grouped, and each is mapped back to a component file where possible (React, Vue, Svelte, Astro dev builds), with a fix hint and a numbered screenshot.
 
+Everything runs on your machine: no telemetry, and the only network traffic is to the app you check (plus a one-time Chromium download). Details: [security](docs/security.md).
+
 It's tuned for a low false-positive rate. Things that are usually intentional are left alone: screen-reader-only text, `text-overflow: ellipsis`, `line-clamp`, closed accordions, off-canvas menus, carousels, scroll areas, avatar stacks, badges positioned outside cards, stretched links, modals and backdrops.
 
 ```js

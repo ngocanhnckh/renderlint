@@ -50,7 +50,7 @@ function tryFile(p) {
   try { if (statSync(p).isFile()) return p; } catch { /* missing */ }
   for (const e of ALL_EXT) if (existsSync(p + e)) return p + e;
   // TS: import './x.js' that is really x.ts
-  const m = /\.(m?js|jsx)$/.exec(p);
+  const m = p.match(/\.(m?js|jsx)$/);
   if (m) for (const e of ['.ts', '.tsx', '.mts']) { const q = p.slice(0, -m[0].length) + e; if (existsSync(q)) return q; }
   try { if (statSync(p).isDirectory()) for (const e of ALL_EXT) { const q = join(p, 'index' + e); if (existsSync(q)) return q; } } catch { /* missing */ }
   return null;

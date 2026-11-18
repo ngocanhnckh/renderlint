@@ -78,7 +78,7 @@ test('loginRedirect', () => {
   assert.equal(r('/pricing', 'https://www.app.test/pricing'), null, 'www');
   assert.equal(r('/account', '/welcome', true).to, '/welcome', 'a password form elsewhere');
   assert.equal(r('/docs', 'https://docs.other.test/start'), null, 'another site that is not a sign-in page');
-  assert.deepEqual(r('/app', 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=x'), { to: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize', external: true });
+  assert.deepEqual(r('/app', 'https://login.idp.test/common/oauth2/v2.0/authorize?client_id=x'), { to: 'https://login.idp.test/common/oauth2/v2.0/authorize', external: true });
   assert.ok(r('/app', 'https://sso.example.com/realms/acme/protocol/openid-connect/auth').external);
   assert.equal(r('/blog/authors', '/blog/authors/'), null, '"auth" inside a word is not a login path');
 });

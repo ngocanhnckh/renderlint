@@ -223,7 +223,7 @@ export async function check(options = {}) {
     if (doScan) { const wp = detectWordPress(cwd); scanned = scanSources({ cwd, dirs: config.scanDirs, rules: config.rules, wordpress: !!wp && wp.kind !== 'site' }); }
     // A dialog that opened while checking and that the source scan found on the same line is one finding: keep the file:line one.
     const inSource = new Set(scanned.filter((i) => i.rule === 'native-dialog').map((i) => i.file.replace(/\\/g, '/') + ':' + i.line));
-    const dialogLine = (i) => { const m = /^(?:https?:\/\/[^/]+)?\/?([^?#]*?)(?:\?[^:]*)?:(\d+):\d+$/.exec((i.details && i.details.at) || ''); return m ? m[1] + ':' + m[2] : null; };
+    const dialogLine = (i) => { const m = ((i.details && i.details.at) || '').match(/^(?:https?:\/\/[^/]+)?\/?([^?#]*?)(?:\?[^:]*)?:(\d+):\d+$/); return m ? m[1] + ':' + m[2] : null; };
     const kept = inSource.size ? raw.filter((i) => i.rule !== 'native-dialog' || !inSource.has(dialogLine(i))) : raw;
     const issues = mergeIssues([...kept, ...scanned], config);
     const schemes = Array.from(new Set(raw.map((i) => i.scheme).filter(Boolean)));

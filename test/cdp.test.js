@@ -20,7 +20,7 @@ async function startChrome(extra = []) {
   procs.push(p);
   const ws = await new Promise((resolve, reject) => {
     let buf = '';
-    p.stderr.on('data', (d) => { buf += d; const m = /DevTools listening on (ws:\/\/\S+)/.exec(buf); if (m) resolve(m[1]); });
+    p.stderr.on('data', (d) => { buf += d; const m = buf.match(/DevTools listening on (ws:\/\/\S+)/); if (m) resolve(m[1]); });
     p.once('exit', () => reject(new Error('chrome exited: ' + buf.slice(-500))));
   });
   return { proc: p, http: 'http://' + new URL(ws).host };

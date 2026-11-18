@@ -229,7 +229,7 @@ RL.schemeSignature = function (debug) {
     if (seen.has(p)) return false;
     seen.add(p);
     return (values.get(p) || []).every((v) => {
-      const ref = /^var\(\s*(--[\w-]+)\s*(?:,(.*))?\)$/.exec(v.replace(/\s*!important$/, ''));
+      const ref = v.replace(/\s*!important$/, '').match(/^var\(\s*(--[\w-]+)\s*(?:,(.*))?\)$/);
       if (ref) return isColorVar(ref[1], seen) && (ref[2] === undefined || isColor(ref[2].trim()));
       return isColor(v.replace(/\s*!important$/, ''));
     });
@@ -392,7 +392,7 @@ RL.stress = function (profile, factor) {
       }));
       count++;
     } else if (profile === 'long-words') {
-      const m = DATA_TOKEN.exec(txt);
+      const m = txt.match(DATA_TOKEN);
       if (!m) continue;
       setText(n, n.textContent.replace(m[0], longToken(m[0])));
       count++;

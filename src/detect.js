@@ -50,11 +50,11 @@ export function detectWordPress(cwd = process.cwd()) {
   const head = (f, n = 8192) => { try { return readFileSync(join(cwd, f), 'utf8').slice(0, n); } catch { return ''; } };
   const json = (f) => { try { return JSON.parse(readFileSync(join(cwd, f), 'utf8')); } catch { return null; } };
   let kind = null, name = null, m;
-  if ((m = /^[ \t/*#@]*Theme Name:\s*(.+)$/im.exec(head('style.css')))) { kind = 'theme'; name = m[1].trim(); }
+  if ((m = head('style.css').match(/^[ \t/*#@]*Theme Name:\s*(.+)$/im))) { kind = 'theme'; name = m[1].trim(); }
   if (!kind) {
     let files = [];
     try { files = readdirSync(cwd).filter((f) => f.endsWith('.php')).slice(0, 40); } catch { /* unreadable */ }
-    for (const f of files) if ((m = /^[ \t/*#@]*Plugin Name:\s*(.+)$/im.exec(head(f)))) { kind = 'plugin'; name = m[1].trim(); break; }
+    for (const f of files) if ((m = head(f).match(/^[ \t/*#@]*Plugin Name:\s*(.+)$/im))) { kind = 'plugin'; name = m[1].trim(); break; }
   }
   if (!kind && ['wp-config.php', 'wp-config-sample.php', 'wp-content', 'wp-load.php'].some((f) => existsSync(join(cwd, f)))) kind = 'site';
   const env = json('.wp-env.json'), envOverride = json('.wp-env.override.json');
@@ -68,9 +68,9 @@ export function detectWordPress(cwd = process.cwd()) {
   }
   // DDEV and Lando name the site after the project.
   const ddev = head('.ddev/config.yaml');
-  if ((m = /^name:\s*["']?([\w.-]+)/m.exec(ddev))) { urls.push(`https://${m[1]}.ddev.site`); devCommand = devCommand || 'ddev start'; }
+  if ((m = ddev.match(/^name:\s*["']?([\w.-]+)/m))) { urls.push(`https://${m[1]}.ddev.site`); devCommand = devCommand || 'ddev start'; }
   const lando = head('.lando.yml');
-  if ((m = /^name:\s*["']?([\w.-]+)/m.exec(lando))) { urls.push(`https://${m[1]}.lndo.site`); devCommand = devCommand || 'lando start'; }
+  if ((m = lando.match(/^name:\s*["']?([\w.-]+)/m))) { urls.push(`https://${m[1]}.lndo.site`); devCommand = devCommand || 'lando start'; }
   // docker compose with a wordpress image: the published port of that service.
   for (const f of ['docker-compose.yml', 'docker-compose.yaml', 'compose.yml', 'compose.yaml']) {
     const y = head(f, 20000);
@@ -80,13 +80,13 @@ export function detectWordPress(cwd = process.cwd()) {
     devCommand = devCommand || `docker compose -f ${f} up -d`;
   }
   // LocalWP keeps sites in "Local Sites/<site>/app/public" and serves them as http://<site>.local.
-  const local = /[\\/]Local Sites[\\/]([^\\/]+)[\\/]app[\\/]public/.exec(cwd);
+  const local = cwd.match(/[\\/]Local Sites[\\/]([^\\/]+)[\\/]app[\\/]public/);
   if (local) urls.push(`http://${local[1].toLowerCase()}.local`);
   // A WP_HOME / WP_SITEURL defined in wp-config.php (walk up from a theme or plugin).
   for (let d = cwd, i = 0; i < 6; d = dirname(d), i++) {
     if (!existsSync(join(d, 'wp-config.php'))) { if (dirname(d) === d) break; continue; }
     const cfg = readFileSync(join(d, 'wp-config.php'), 'utf8');
-    if ((m = /define\(\s*['"]WP_(?:HOME|SITEURL)['"]\s*,\s*['"](https?:\/\/[^'"]+)['"]/.exec(cfg))) urls.unshift(m[1].replace(/\/$/, ''));
+    if ((m = cfg.match(/define\(\s*['"]WP_(?:HOME|SITEURL)['"]\s*,\s*['"](https?:\/\/[^'"]+)['"]/))) urls.unshift(m[1].replace(/\/$/, ''));
     break;
   }
   for (const p of [8888, 8080, 8000, 80, 10003, 10004, 10005]) urls.push(p === 80 ? 'http://localhost' : `http://localhost:${p}`);

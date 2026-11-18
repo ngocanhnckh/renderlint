@@ -233,7 +233,7 @@ function parseColor(str) {
   if (!str) return null;
   if (colorCache.has(str)) return colorCache.get(str);
   let out = null;
-  const m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(str);
+  const m = str.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/);
   if (m) {
     let a = m[4] === undefined ? 1 : m[4].endsWith('%') ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
     out = { r: +m[1], g: +m[2], b: +m[3], a };
@@ -242,7 +242,7 @@ function parseColor(str) {
   } else {
     // Let the browser convert it. Alpha is read separately for precision.
     let alpha = 1;
-    const am = /\/\s*([\d.]+%?)\s*\)$/.exec(str);
+    const am = str.match(/\/\s*([\d.]+%?)\s*\)$/);
     if (am) alpha = am[1].endsWith('%') ? parseFloat(am[1]) / 100 : parseFloat(am[1]);
     colorCtx.clearRect(0, 0, 1, 1);
     colorCtx.globalCompositeOperation = 'copy';
@@ -387,7 +387,7 @@ RL.sourceOf = function (el) {
     }
     // Generic attribute (e.g. from a babel/jsx-source plugin)
     if (!out.file && n.hasAttribute('data-source')) {
-      const m = /^(.*?):(\d+)/.exec(n.getAttribute('data-source'));
+      const m = n.getAttribute('data-source').match(/^(.*?):(\d+)/);
       if (m) { out.file = m[1]; out.line = +m[2]; }
     }
     // Svelte dev
@@ -409,7 +409,7 @@ RL.sourceOf = function (el) {
         if (!out.file && f && f._debugStack && f._debugStack.stack) {
           const fr = f._debugStack.stack.split('\n').slice(1).find((l) => /:\d+:\d+/.test(l) && !BAD_FRAME.test(l));
           if (fr) {
-            const m = /((?:https?:\/\/[^/\s]+)?\/[^\s()]+?):(\d+):\d+\)?\s*$/.exec(fr);
+            const m = fr.match(/((?:https?:\/\/[^/\s]+)?\/[^\s()]+?):(\d+):\d+\)?\s*$/);
             if (m) { out.file = m[1].replace(/^https?:\/\/[^/]+/, '').replace(/\?.*$/, ''); out.line = +m[2]; }
           }
         }

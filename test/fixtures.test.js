@@ -23,7 +23,7 @@ const opts = (file, extra = {}) => ({
 });
 
 function metaList(html, name) {
-  const m = new RegExp(`<meta name="${name}" content="([^"]*)"`).exec(html);
+  const m = html.match(new RegExp(`<meta name="${name}" content="([^"]*)"`));
   return m ? m[1].split(',').map((x) => x.trim()).filter(Boolean) : [];
 }
 

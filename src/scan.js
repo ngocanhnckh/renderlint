@@ -34,8 +34,7 @@ function ownDialogNames(src) {
   const own = new Set();
   for (const name of DIALOG_NAMES) {
     const re = new RegExp(`(?<![\\w$.])${name}(?![\\w$])`, 'g');
-    let m;
-    while ((m = re.exec(src))) {
+    for (const m of src.matchAll(re)) {
       const before = src.slice(Math.max(0, m.index - 40), m.index), after = src.slice(m.index + name.length, m.index + name.length + 2000);
       const declared =
         /\b(?:function\*?|const|let|var|class|import|as|async|get|set)\s+$/.test(before) || // function confirm(), import confirm from, { x as confirm }
@@ -60,8 +59,7 @@ function matchParen(s) {
 function scriptPart(line, inScript) {
   let out = '', pos = 0, open = inScript;
   const re = /<script\b[^>]*>|<\/script\s*>/gi;
-  let m;
-  while ((m = re.exec(line))) {
+  for (const m of line.matchAll(re)) {
     if (open) out += line.slice(pos, m.index) + ' ';
     open = m[0][1] !== '/';
     pos = m.index + m[0].length;
@@ -71,19 +69,18 @@ function scriptPart(line, inScript) {
 }
 const COMMENTED = /(?:^|[\s;{}])\/\/|\/\*(?!.*\*\/)/; // after a // or inside an unclosed /* on this line
 function nativeDialog(line, own, template, inScript) {
-  const g = DIALOG_GLOBAL.exec(line);
+  const g = line.match(DIALOG_GLOBAL);
   if (g && !COMMENTED.test(line.slice(0, g.index))) return { name: g[1], col: g.index };
   let code = line;
   if (template) {
-    const a = /\son[a-z]+\s*=\s*(["'])((?:(?!\1).)*)\1/i.exec(line);
-    const m = a && /(?<![\w$.])(alert|confirm|prompt)\s*\(/.exec(a[2]);
+    const a = line.match(/\son[a-z]+\s*=\s*(["'])((?:(?!\1).)*)\1/i);
+    const m = a && a[2].match(/(?<![\w$.])(alert|confirm|prompt)\s*\(/);
     if (m) return { name: m[1], col: a.index + a[0].indexOf(a[2]) + m.index };
     code = inScript;
     if (!code.trim()) return null;
   }
   const re = /(?<![\w$.])(alert|confirm|prompt)\(/g;
-  let m;
-  while ((m = re.exec(code))) {
+  for (const m of code.matchAll(re)) {
     if (own.has(m[1])) continue;
     const head = code.slice(0, m.index);
     if (/\b(?:function|def|fn)\s+$/.test(head) || COMMENTED.test(head)) continue;
@@ -130,7 +127,7 @@ export function scanSources({ cwd = process.cwd(), dirs, rules = {}, wordpress =
         const prev = i > 0 ? lines[i - 1] : '';
         const ignored = (rule) => {
           for (const l of [line, prev]) {
-            const m = /renderlint-ignore(?!-file)(?:[ :]+([\w ,-]*[\w-]))?/.exec(l);
+            const m = l.match(/renderlint-ignore(?!-file)(?:[ :]+([\w ,-]*[\w-]))?/);
             if (!m) continue;
             if (!m[1]) return true;
             const list = m[1].split(/[\s,]+/);
