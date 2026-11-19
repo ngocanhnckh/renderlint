@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Phones
+
+- New rule `zoom-disabled` (error): `user-scalable=no` or `maximum-scale` under 2 in the viewport meta, which stops people zooming in on phones (WCAG 1.4.4).
+- New rule `input-zoom` (warn): at phone width, a text field, textarea or select the page sized below 16px, which iOS Safari zooms into when tapped. Fields left at the browser's default size are not judged, since iPhones use their own default.
+- New rule `html-lang` (warn): `<html>` without a `lang` attribute (WCAG 3.1.1).
+- New rule `safe-area` (warn): on a page with `viewport-fit=cover`, renderlint emulates an iPhone's status bar, notch and home indicator at phone width. It reports text and controls under them, at the top of the page or in a bar fixed to the bottom, that have no `env(safe-area-inset-*)` padding.
+
+### Fixes
+
 - Fewer false positives, all found on real sites:
   - **Covered text you can scroll clear of.** `obscured-content`, `element-overlap` and `contrast` no longer report text under something floating over it that scrolling moves it out from under: a code block's copy button, or a small fixed button such as a floating action button or chat bubble. Still reported: covers that are part of the layout, bars across the screen (a header over the hero, a cookie banner), and anything nothing can scroll clear of.
   - **Negative margins.** `content-overflow` no longer reports a box pulled up to 24px past its container by its own negative margin (VitePress's navbar menu). A box that is too wide, or pulled further, is still reported.

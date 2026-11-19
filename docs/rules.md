@@ -28,6 +28,10 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 | [`dead-link`](#dead-link) | warn | A link with href="#" (or none) and no click handler: a CTA that goes nowhere. |
 | [`nested-interactive`](#nested-interactive) | error | A link or button nested inside another link or button (invalid HTML; causes hydration errors and unpredictable clicks). |
 | [`missing-viewport-meta`](#missing-viewport-meta) | error | No &lt;meta name="viewport"> tag, so mobile browsers render the page zoomed out at desktop width. |
+| [`zoom-disabled`](#zoom-disabled) | error | `&lt;meta name="viewport">` turns pinch-zoom off (`user-scalable=no`) or caps it below 2× (`maximum-scale=1`), so people who need larger text can't zoom in on phones (WCAG 1.4.4). |
+| [`input-zoom`](#input-zoom) | warn | At phone width, a text field, textarea or select has text under 16px, so iOS Safari zooms the page in when it's tapped and leaves it zoomed after typing. |
+| [`html-lang`](#html-lang) | warn | `&lt;html>` has no `lang` attribute, so screen readers guess the language to read the page in, and browsers can't offer translation or hyphenate correctly (WCAG 3.1.1). |
+| [`safe-area`](#safe-area) | warn | The page sets `viewport-fit=cover`, so on iPhones it draws under the status bar, notch and home indicator, but text or controls sit under them: at the top of the page, or in a bar fixed to the bottom. renderlint emulates an iPhone's safe-area insets at phone width to measure this. |
 | [`tap-target`](#tap-target) | warn | A button/link is smaller than 24×24px (WCAG 2.2 AA), hard to hit on touch screens. |
 | [`font-size-min`](#font-size-min) | warn | Text smaller than 12px. |
 | [`unlabeled-control`](#unlabeled-control) | warn | An icon-only button/link or a form field without an accessible name. |
@@ -132,6 +136,30 @@ Content is wider than the viewport: the page scrolls sideways on phones, or cont
 No <meta name="viewport"> tag, so mobile browsers render the page zoomed out at desktop width.
 
 **How to fix:** Add <meta name="viewport" content="width=device-width, initial-scale=1"> to <head>.
+
+### zoom-disabled
+
+**Default:** error
+
+`<meta name="viewport">` turns pinch-zoom off (`user-scalable=no`) or caps it below 2× (`maximum-scale=1`), so people who need larger text can't zoom in on phones (WCAG 1.4.4).
+
+**How to fix:** Remove `user-scalable=no` and `maximum-scale` from the viewport meta: `width=device-width, initial-scale=1`. If they were added to stop iPhones zooming into form fields, give the fields 16px text instead (`input, select, textarea { font-size: max(16px, 1rem) }`).
+
+### input-zoom
+
+**Default:** warn
+
+At phone width, a text field, textarea or select has text under 16px, so iOS Safari zooms the page in when it's tapped and leaves it zoomed after typing.
+
+**How to fix:** Give form fields at least 16px text on phones: `input, select, textarea { font-size: max(16px, 1rem) }` (Tailwind: `text-base sm:text-sm`). Don't disable zoom to hide it.
+
+### safe-area
+
+**Default:** warn
+
+The page sets `viewport-fit=cover`, so on iPhones it draws under the status bar, notch and home indicator, but text or controls sit under them: at the top of the page, or in a bar fixed to the bottom. renderlint emulates an iPhone's safe-area insets at phone width to measure this.
+
+**How to fix:** Pad the edges that touch the screen: `padding-top: env(safe-area-inset-top)` on the header (or the body), `padding-bottom: env(safe-area-inset-bottom)` on bottom bars (`calc(12px + env(safe-area-inset-bottom))` to keep their own padding). Or drop `viewport-fit=cover`.
 
 ### fragile-layout
 
@@ -294,6 +322,14 @@ An <img> has no alt attribute.
 A link or button nested inside another link or button (invalid HTML; causes hydration errors and unpredictable clicks).
 
 **How to fix:** Restructure so interactive elements are siblings (e.g. stretched-link pattern with a positioned ::after).
+
+### html-lang
+
+**Default:** warn
+
+`<html>` has no `lang` attribute, so screen readers guess the language to read the page in, and browsers can't offer translation or hyphenate correctly (WCAG 3.1.1).
+
+**How to fix:** Set the page language on the root element: `<html lang="en">` (Next.js: `<html lang="en">` in `app/layout.tsx`; Astro and Vite: in `index.html` or the base layout).
 
 ### tap-target
 

@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path';
 import { serveStatic, probe } from './server.js';
 import { globMatch } from './runner.js';
 
-const PAGE_RULES = 'viewport-overflow accidental-scrollbar missing-viewport-meta';
+const PAGE_RULES = 'viewport-overflow accidental-scrollbar missing-viewport-meta zoom-disabled html-lang';
 
 export async function storyIndex(base) {
   for (const file of ['index.json', 'stories.json']) {

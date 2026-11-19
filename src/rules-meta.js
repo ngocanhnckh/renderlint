@@ -135,6 +135,30 @@ export const RULES = {
     summary: 'No <meta name="viewport"> tag, so mobile browsers render the page zoomed out at desktop width.',
     fix: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> to <head>.',
   },
+  'zoom-disabled': {
+    severity: 'error',
+    category: 'responsive',
+    summary: '`<meta name="viewport">` turns pinch-zoom off (`user-scalable=no`) or caps it below 2× (`maximum-scale=1`), so people who need larger text can\'t zoom in on phones (WCAG 1.4.4).',
+    fix: 'Remove `user-scalable=no` and `maximum-scale` from the viewport meta: `width=device-width, initial-scale=1`. If they were added to stop iPhones zooming into form fields, give the fields 16px text instead (`input, select, textarea { font-size: max(16px, 1rem) }`).',
+  },
+  'input-zoom': {
+    severity: 'warn',
+    category: 'responsive',
+    summary: 'At phone width, a text field, textarea or select has text under 16px, so iOS Safari zooms the page in when it\'s tapped and leaves it zoomed after typing.',
+    fix: 'Give form fields at least 16px text on phones: `input, select, textarea { font-size: max(16px, 1rem) }` (Tailwind: `text-base sm:text-sm`). Don\'t disable zoom to hide it.',
+  },
+  'html-lang': {
+    severity: 'warn',
+    category: 'a11y',
+    summary: '`<html>` has no `lang` attribute, so screen readers guess the language to read the page in, and browsers can\'t offer translation or hyphenate correctly (WCAG 3.1.1).',
+    fix: 'Set the page language on the root element: `<html lang="en">` (Next.js: `<html lang="en">` in `app/layout.tsx`; Astro and Vite: in `index.html` or the base layout).',
+  },
+  'safe-area': {
+    severity: 'warn',
+    category: 'responsive',
+    summary: 'The page sets `viewport-fit=cover`, so on iPhones it draws under the status bar, notch and home indicator, but text or controls sit under them: at the top of the page, or in a bar fixed to the bottom. renderlint emulates an iPhone\'s safe-area insets at phone width to measure this.',
+    fix: 'Pad the edges that touch the screen: `padding-top: env(safe-area-inset-top)` on the header (or the body), `padding-bottom: env(safe-area-inset-bottom)` on bottom bars (`calc(12px + env(safe-area-inset-bottom))` to keep their own padding). Or drop `viewport-fit=cover`.',
+  },
   'tap-target': {
     severity: 'warn',
     category: 'a11y',

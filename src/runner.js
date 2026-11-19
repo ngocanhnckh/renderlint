@@ -1069,6 +1069,12 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     }
     lap('focus');
 
+    // iPhone notch and home indicator: only pages that draw under them (viewport-fit=cover), at phone width.
+    if (focus && vp.width < 600 && config.rules['safe-area'] !== 'off') {
+      issues.push(...await safeAreaCheck(page));
+      lap('safe area');
+    }
+
     if (config.screenshots) {
       // Mark errors (or warnings when there are no errors) so the screenshot stays readable.
       const visible = issues.filter((i) => i.rect && !i.ownShot && effectiveSeverity(i, config) !== 'off'); // an open menu has its own screenshot
@@ -1373,6 +1379,23 @@ export async function confirmUnreachable(page, found, issues) {
     if (moved) issues.splice(issues.indexOf(f), 1);
   }
   await page.evaluate(() => { for (const e of document.querySelectorAll('[data-rl-unreach]')) e.removeAttribute('data-rl-unreach'); }).catch(() => {});
+}
+
+// Emulates an iPhone's safe-area insets (portrait: 47px status bar and notch, 34px home indicator) so that
+// env(safe-area-inset-*) resolves as on the device, and asks which text and controls end up under them.
+const IPHONE_INSETS = { top: 47, bottom: 34, left: 0, right: 0 };
+async function safeAreaCheck(page) {
+  const cover = await page.evaluate(() => { const vm = window.__renderlint.viewportMeta(); return !!vm && vm['viewport-fit'] === 'cover'; }).catch(() => false);
+  if (!cover) return [];
+  let cdp;
+  try {
+    cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: IPHONE_INSETS });
+    await page.evaluate(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); return new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); });
+    return await page.evaluate((i) => window.__renderlint.safeAreaHits(i), IPHONE_INSETS);
+  } catch { return []; } finally {
+    if (cdp) { await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: {} }).catch(() => {}); await cdp.detach().catch(() => {}); }
+  }
 }
 
 // focus-obscured: walk the page with Tab, then back with Shift+Tab (which brings each control in at the top
