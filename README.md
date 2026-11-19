@@ -138,6 +138,9 @@ Every run saves annotated screenshots with each finding boxed and numbered, so a
 <img src="docs/images/demo-near-overlap.png" alt="A dashboard panel whose centred empty-state message starts right next to the panel's subtitle, a few pixels lower, boxed by renderlint as text-near-overlap">
 <sub>A centred empty-state message laid over a panel whose title is pinned top-left: 0px apart at this width, overlapping at narrower ones (<code>text-near-overlap</code>).</sub>
 
+<img src="docs/images/demo-mobile.png" alt="Two phone screenshots. Left: an app with viewport-fit=cover whose header text sits under the iPhone clock and notch and whose tab bar sits on the home indicator, boxed as safe-area. Right: a sign-up form with zoom turned off and 14px fields, flagged zoom-disabled">
+<sub>On phones: a header under the notch and a tab bar on the home indicator (<code>safe-area</code>; renderlint emulates the iPhone's insets), and a form that turns zoom off to hide that iPhones zoom into its 14px fields (<code>zoom-disabled</code>, <code>input-zoom</code>).</sub>
+
 <img src="docs/images/demo-forms-annotated.png" alt="An alert-settings form: native select arrows on the border, a checkbox stretched above its label, and a search icon over the placeholder, each boxed by renderlint">
 <sub>Form controls that render but are built wrong (<code>dropdown-arrow</code>, <code>checkbox-layout</code>, <code>input-icon-overlap</code>).</sub>
 
