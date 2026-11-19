@@ -16,6 +16,10 @@ import { DISCOVER_ROUTES, NG_ROUTES_HOOK, NOT_SHOWN_SCRIPT, fillParams, isDynami
 import { randomUUID } from 'node:crypto';
 
 const DYNAMIC_IMPORT_FAIL = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i;
+const LOOPBACK = /^https?:\/\/(localhost|127(?:\.\d+){3}|\[::1\])(?::\d+)?(?:\/|$)/;
+// A dev server still compiling a chunk (Vite, Nuxt) fails its dynamic import once. Not a build renderlint serves itself:
+// there, as in production, the error means a chunk is missing or broken.
+const coldChunkError = (msg, origin, config) => DYNAMIC_IMPORT_FAIL.test(msg) && LOOPBACK.test(origin) && !config.staticBuild;
 
 export const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -820,10 +824,8 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     const msg = String(err && err.message || err).split('\n')[0].slice(0, 300);
     if (consoleSeen.has(msg)) return;
     consoleSeen.add(msg);
-    // A dev server that is still compiling a chunk (Vite, Nuxt) fails its dynamic import once; in production the
-    // same error means a deploy removed a chunk the page still asks for.
-    const coldChunk = DYNAMIC_IMPORT_FAIL.test(msg) && /^https?:\/\/(localhost|127\.|\[::1\])/.test(origin);
-    issues.push({ rule: 'console-error', severity: coldChunk ? 'warn' : 'error', message: 'Uncaught error: ' + msg + (coldChunk ? ' On a dev server this usually means the module was still compiling: re-run, or check a production build (`renderlint dist`).' : ''), details: { stack: String(err && err.stack || '').split('\n').slice(0, 6).join('\n'), ...(coldChunk ? { devServerChunk: true } : {}) } });
+    const coldChunk = coldChunkError(msg, origin, config);
+    issues.push({ rule: 'console-error', severity: coldChunk ? 'warn' : 'error', message: 'Uncaught error: ' + msg + (coldChunk ? ' On a dev server this usually means the module was still compiling: re-run once the dev server has compiled, or check a production build (`renderlint dist`).' : ''), details: { stack: String(err && err.stack || '').split('\n').slice(0, 6).join('\n'), ...(coldChunk ? { devServerChunk: true } : {}) } });
   });
   // alert(), confirm() and prompt(): a native browser dialog in place of the app's own UI. The wrapper
   // (DIALOG_TRACE) logs where it was called just before the dialog opens; confirm and prompt are answered
@@ -855,8 +857,8 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     const msg = text.split('\n')[0].slice(0, 300);
     if (consoleSeen.has(msg)) return;
     consoleSeen.add(msg);
-    const coldChunk = DYNAMIC_IMPORT_FAIL.test(msg) && /^https?:\/\/(localhost|127\.|\[::1\])/.test(origin);
-    issues.push({ rule: 'console-error', severity: /hydrat/i.test(text) ? 'error' : 'warn', message: 'console.error: ' + msg + (coldChunk ? ' On a dev server this usually means the module was still compiling: re-run, or check a production build (`renderlint dist`).' : '') });
+    const coldChunk = coldChunkError(msg, origin, config);
+    issues.push({ rule: 'console-error', severity: /hydrat/i.test(text) ? 'error' : 'warn', message: 'console.error: ' + msg + (coldChunk ? ' On a dev server this usually means the module was still compiling: re-run once the dev server has compiled, or check a production build (`renderlint dist`).' : '') });
   });
   const failed = new Set();
   const jsonReads = [];

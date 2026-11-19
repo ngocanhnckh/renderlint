@@ -944,15 +944,18 @@ RL.isSolid = function (el) {
   return RL.hasVisibleBoundary(el);
 };
 
-// A negative margin pulls a box past its container's padding on purpose (a nav
-// item aligned optically with the edge, a full-bleed image): overflow up to that
-// margin isn't a defect.
+// A small negative margin pulls a box past its container's padding on purpose (a
+// nav item aligned optically with the screen edge): overflow up to that margin
+// isn't a defect. Not a box that is too wide anyway, and not a big pull.
 function pulledOut(el, container, o) {
+  const er = el.getBoundingClientRect(), cr = container.getBoundingClientRect();
   for (const k of ['top', 'right', 'bottom', 'left']) {
     if (!(o[k] > 0)) continue;
+    const prop = 'margin' + k[0].toUpperCase() + k.slice(1);
     let pull = 0;
-    for (let n = el; n && n !== container; n = RL.parentOf(n)) pull = Math.max(pull, -(parseFloat(RL.cs(n)['margin' + k[0].toUpperCase() + k.slice(1)]) || 0));
-    if (pull > 0 && o[k] <= pull + 1) o[k] = 0;
+    for (let n = el; n && n !== container; n = RL.parentOf(n)) pull = Math.max(pull, -(parseFloat(RL.cs(n)[prop]) || 0));
+    const along = k === 'left' || k === 'right' ? er.width <= cr.width : er.height <= cr.height;
+    if (pull > 0 && pull <= 24 && along && o[k] <= pull + 1) o[k] = 0;
   }
 }
 
@@ -1352,11 +1355,12 @@ RL.rule({
 });
 
 // ---------------------------------------------------------------------------
-// Text in a scroll box, under something that doesn't scroll with it (a copy button
-// pinned to a code block's corner, a fixed floating button): scrolling moves the
-// text out from under it, so it can be read. It has to land somewhere visible:
-// a header pinned to the top edge has no room above it, so what's under it stays
-// hidden, and nothing scrolls above the top of the page.
+// Text in a scroll box, under something floating over it that doesn't scroll with
+// it (a copy button pinned to a code block's corner, a small fixed floating button):
+// scrolling moves the text out from under it, so it can be read. It has to land
+// somewhere visible: a header pinned to the top edge has no room above it, so what's
+// under it stays hidden, and nothing scrolls above the top of the page. A cover that
+// is part of the layout (a footer pulled up over a list) is a defect, floating or not.
 const ROOM = 8;
 function movesClear(x, y, cr, vis, range) {
   return (y > cr.y && cr.y - vis.y >= ROOM && range.up >= y - cr.y + 1) || // scroll down: the text moves up, above the cover
@@ -1364,23 +1368,43 @@ function movesClear(x, y, cr, vis, range) {
     (x > cr.x && cr.x - vis.x >= ROOM && range.left >= x - cr.x + 1) ||
     (x < cr.right && vis.right - cr.right >= ROOM && range.right >= cr.right - x + 1);
 }
+function floating(cover, stop) {
+  for (let n = cover; n && n !== stop; n = RL.parentOf(n)) {
+    const p = RL.cs(n).position;
+    if (p === 'absolute' || p === 'fixed') return true;
+  }
+  return false;
+}
+function inFixed(el) { // moves with the page unless something around it is fixed (sticky scrolls until it sticks)
+  for (let n = el; n; n = RL.parentOf(n)) if (n.nodeType === 1 && RL.cs(n).position === 'fixed') return true;
+  return false;
+}
+function pageScrolls() {
+  return ![document.documentElement, document.body].some((n) => n && /hidden|clip/.test(RL.cs(n).overflowY));
+}
 function scrollsClear(el, cover, x, y) {
+  if (!floating(cover, RL.commonAncestor(el, cover))) return false;
   const cr = RL.rectOf(cover); // page coordinates, like x and y
+  const screen = { x: scrollX, y: scrollY, w: innerWidth, h: innerHeight, right: scrollX + innerWidth, bottom: scrollY + innerHeight };
   for (let n = RL.parentOf(el), d = 0; n && n !== document.body && n !== document.documentElement && d < 30; n = RL.parentOf(n), d++) {
-    if (RL.containsComposed(n, cover)) return false; // the cover scrolls along
     const s = RL.cs(n);
     const sx = /auto|scroll/.test(s.overflowX) && n.scrollWidth > n.clientWidth + 1, sy = /auto|scroll/.test(s.overflowY) && n.scrollHeight > n.clientHeight + 1;
     if (!sx && !sy) continue;
+    if (RL.containsComposed(n, cover)) break; // the cover scrolls along with this box and the ones around it
     const range = { up: sy ? n.scrollHeight - n.clientHeight - n.scrollTop : 0, down: sy ? n.scrollTop : 0,
       left: sx ? n.scrollWidth - n.clientWidth - n.scrollLeft : 0, right: sx ? n.scrollLeft : 0 };
-    if (movesClear(x, y, cr, RL.rectOf(n), range)) return true;
+    const clip = RL.clipBoxOf(RL.parentOf(n));
+    const vis = RL.intersect(RL.intersect(RL.rectOf(n), clip || RL.rectOf(n)) || RL.rectOf(n), screen); // only what's on screen
+    if (vis && movesClear(x, y, cr, vis, range)) return true;
   }
-  // A fixed layer stays put while the page scrolls.
+  // A small fixed layer (a floating action button, a chat bubble, back-to-top) stays put while the page
+  // scrolls. Bars across the screen (headers, bottom bars, cookie banners) are judged as they are.
   const layer = RL.fixedAncestor(cover);
-  if (layer && RL.cs(layer).position === 'fixed' && !RL.containsComposed(layer, el) && !RL.fixedAncestor(el)) {
+  const lr = layer && layer.getBoundingClientRect();
+  const small = lr && lr.width <= innerWidth * 0.5 && lr.width * lr.height <= innerWidth * innerHeight * 0.1;
+  if (small && RL.cs(layer).position === 'fixed' && !RL.containsComposed(layer, el) && !inFixed(el) && pageScrolls()) {
     const se = document.scrollingElement || document.documentElement;
-    const vis = { x: scrollX, y: scrollY, right: scrollX + innerWidth, bottom: scrollY + innerHeight };
-    if (movesClear(x, y, cr, vis, { up: se.scrollHeight - innerHeight - scrollY, down: scrollY, left: 0, right: 0 })) return true;
+    if (movesClear(x, y, cr, screen, { up: se.scrollHeight - innerHeight - scrollY, down: scrollY, left: 0, right: 0 })) return true;
   }
   return false;
 }
@@ -1422,7 +1446,7 @@ RL.rule({
         if (RL.isIgnored(e, 'obscured-content')) break;
         // Layered illustrations / mockups (stacked absolutely positioned or transformed cards) are deliberate.
         if (RL.layeredBetween(tg.el, RL.commonAncestor(tg.el, e))) break;
-        if (scrollsClear(tg.el, e, tg.x, tg.y)) { RL.flagged.add(tg.el); break; } // covered for now: its contrast can't be measured here
+        if (scrollsClear(tg.el, e, tg.x, tg.y)) { RL.coveredNow.add(tg.el); continue; } // covered for now, so its contrast can't be measured here; a cover beneath may not move
         const fixed = RL.fixedAncestor(e);
         const tgFixed = RL.fixedAncestor(tg.el);
         if (fixed && !tgFixed && scrolled) break; // header over content only because we scrolled
@@ -2011,6 +2035,7 @@ RL.contrastCandidates = function (texts) {
     if (RL.isDisabled(t.el)) continue;
     // Text already reported as overflowing/obscured: its contrast is a symptom, not a separate defect.
     if (RL.flagged && RL.flagged.has(t.el)) continue;
+    if (RL.coveredNow && RL.coveredNow.has(t.el)) continue;
     const s = RL.cs(t.el);
     const fs = parseFloat(s.fontSize) || 16;
     const weight = parseInt(s.fontWeight, 10) || 400;
@@ -3651,6 +3676,7 @@ RL.analyze = function (options) {
   const enabled = (id) => !options.rules || options.rules[id] === undefined || options.rules[id] !== 'off';
   RL.resetCaches();
   RL.flagged = new Set();
+  RL.coveredNow = new Set(); // text under a cover that scrolling moves it out from under: contrast can't measure it here
   const t0 = performance.now();
   const startX = scrollX, startY = scrollY;
   const scrollTop = () => { if (!options.noScroll) window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); };

@@ -216,7 +216,8 @@ export async function check(options = {}) {
     // Roles: every role checks the entry pages plus its own pages (relative to the base, like "pages").
     const root = (base || new URL(urls[0]).origin).replace(/\/$/, '');
     const abs = (p) => (/^https?:/.test(p) ? p : root + (p.startsWith('/') ? p : '/' + p));
-    const runConfig = config.roles ? { ...config, roles: Object.fromEntries(Object.entries(config.roles).map(([n, r]) => [n, { ...r, pages: r.pages.map(abs) }])) } : config;
+    const runConfig0 = config.roles ? { ...config, roles: Object.fromEntries(Object.entries(config.roles).map(([n, r]) => [n, { ...r, pages: r.pages.map(abs) }])) } : config;
+    const runConfig = staticFiles ? { ...runConfig0, staticBuild: true } : runConfig0; // a build renderlint serves itself: not a dev server
     const { issues: raw, pages, roleCoverage } = await runChecks(browser, { urls, config: runConfig, log, serverLog: plan && plan.reader, coverage });
     let scanned = [];
     const doScan = options.scan !== undefined ? options.scan : config.scan && !options.storybook && !targets.some((t) => /^https?:/.test(t));
