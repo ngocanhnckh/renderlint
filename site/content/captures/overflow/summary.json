@@ -1,0 +1,100 @@
+{
+  "before": {
+    "errors": 5,
+    "warnings": 1,
+    "issues": [
+      {
+        "rule": "text-clipped",
+        "severity": "error",
+        "message": "Text is cut off by an overflow:hidden container (137px past the right edge).",
+        "selector": "main > div.grid:nth-of-type(1) > div.card.kpi:nth-of-type(1) > div.v:nth-of-type(2)",
+        "text": "$1,284,930.55",
+        "viewports": [
+          375,
+          320,
+          360,
+          414,
+          480,
+          768,
+          600,
+          720
+        ]
+      },
+      {
+        "rule": "text-overflow",
+        "severity": "error",
+        "message": "Text spills outside its container (227px past the right edge).",
+        "selector": "main > div.card.acct:nth-of-type(2) > p:nth-of-type(2)",
+        "text": "Email: dana.whitfield-procurement@northwind-enterprise.example.com",
+        "viewports": [
+          375,
+          320,
+          360,
+          414,
+          480,
+          768,
+          600,
+          720,
+          900,
+          1024,
+          1280,
+          1100,
+          1366,
+          1440,
+          1536,
+          1920
+        ]
+      },
+      {
+        "rule": "text-overflow",
+        "severity": "error",
+        "message": "Text spills outside its box (46px past the right edge).",
+        "selector": "main > div.card.acct:nth-of-type(2) > p:nth-of-type(3) > span.btn",
+        "text": "Start your free trial today",
+        "viewports": [
+          375,
+          320,
+          360,
+          414,
+          480,
+          768,
+          600,
+          720,
+          900,
+          1024,
+          1280,
+          1100,
+          1366,
+          1440,
+          1536,
+          1920
+        ]
+      },
+      {
+        "rule": "viewport-overflow",
+        "severity": "error",
+        "message": "Element extends 4px beyond the 320px viewport, causing horizontal page scroll.",
+        "selector": "main > div.card.acct:nth-of-type(2)",
+        "text": "Account Owner: Dana Whitfield Email: dana.whitfield-procurement@north…",
+        "viewports": [
+          320
+        ]
+      },
+      {
+        "rule": "fragile-layout",
+        "severity": "warn",
+        "message": "With bigger numbers (three more digits): Text is cut off by an overflow:hidden container (34px past the right edge).",
+        "selector": "main > div.grid:nth-of-type(1) > div.card.kpi:nth-of-type(3) > div.v:nth-of-type(2)",
+        "text": "86,000",
+        "viewports": [
+          375
+        ]
+      }
+    ]
+  },
+  "after": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": []
+  }
+}

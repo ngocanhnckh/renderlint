@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.renderlint/
+# copied in by scripts/render-video.mjs
+video/hero/*.woff2
+video/hero/gsap.min.js
+# old OG images from before the switch to JPEG
+static/og/*.png
+video/hero/.hyperframes/
+# internal brief used while drafting the articles
+content/BLOG-BRIEF.md

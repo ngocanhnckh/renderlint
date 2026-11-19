@@ -1,0 +1,25 @@
+{
+  "before": {
+    "errors": 1,
+    "warnings": 0,
+    "issues": [
+      {
+        "rule": "unreachable-content",
+        "severity": "error",
+        "message": "Content can't be scrolled to: 30 pieces of text, reaching 1224px below the bottom of this box (overflow-y: hidden), and neither it nor anything around the content scrolls (\"Order #4810\", \"Shipped to Porto, 2 items, paid by card.\", \"Order #4811\").",
+        "selector": "div.app > div.mainc > section",
+        "text": "Order #4801 Shipped to Porto, 2 items, paid by card. Order #4802 Ship…",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      }
+    ]
+  },
+  "after": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": []
+  }
+}

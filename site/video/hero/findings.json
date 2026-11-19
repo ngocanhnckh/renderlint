@@ -1,0 +1,42 @@
+{
+  "errors": 5,
+  "warnings": 1,
+  "boxes": [
+    {
+      "n": 1,
+      "rule": "text-overflow",
+      "x": 43,
+      "y": 277,
+      "w": 262,
+      "h": 22.5,
+      "msg": "Text spills outside its container (227px past the right edge)."
+    },
+    {
+      "n": 2,
+      "rule": "text-overflow",
+      "x": 43,
+      "y": 311.5,
+      "w": 160,
+      "h": 40,
+      "msg": "Text spills outside its box (46px past the right edge)."
+    },
+    {
+      "n": 3,
+      "rule": "text-clipped",
+      "x": 43,
+      "y": 129,
+      "w": 60.328125,
+      "h": 45,
+      "msg": "Text is cut off by an overflow:hidden container (137px past the right edge)."
+    },
+    {
+      "n": 4,
+      "rule": "text-clipped",
+      "x": 157.328125,
+      "y": 109.5,
+      "w": 60.328125,
+      "h": 45,
+      "msg": "Text is cut off by an overflow:hidden container (137px past the right edge)."
+    }
+  ]
+}

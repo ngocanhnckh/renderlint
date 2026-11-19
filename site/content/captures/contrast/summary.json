@@ -1,0 +1,133 @@
+{
+  "before": {
+    "errors": 10,
+    "warnings": 0,
+    "issues": [
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.64:1, needs 3:1 — #ffffff on a non-uniform background (≈#9bd0fc).",
+        "selector": "main > section.hero > h1",
+        "text": "Lisbon, 21°",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.59:1, needs 4.5:1 — #e0f2fe on a non-uniform background (≈#8dc5fb).",
+        "selector": "main > section.hero > p",
+        "text": "Light breeze from the north-west. Clear skies until the evening.",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.66:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#a0cdfc).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(1)",
+        "text": "Tue 22° Sunny",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.50:1, needs 4.5:1 — #e3f2ff on a non-uniform background (≈#9ccafc).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(1) > small",
+        "text": "Sunny",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 2.02:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#86bafa).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(2)",
+        "text": "Wed 19° Cloudy",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.76:1, needs 4.5:1 — #e0effe on a non-uniform background (≈#84b8fa).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(2) > small",
+        "text": "Cloudy",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.85:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#91c2fc).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(3)",
+        "text": "Thu 18° Showers",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.63:1, needs 4.5:1 — #e1f0fe on a non-uniform background (≈#8ec0fb).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(3) > small",
+        "text": "Showers",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 2.29:1, needs 4.5:1 — #ffffff on a non-uniform background (≈#7badf8).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(4)",
+        "text": "Fri 23° Sunny",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      },
+      {
+        "rule": "contrast",
+        "severity": "error",
+        "message": "Low text contrast: 1.97:1, needs 4.5:1 — #deedfe on a non-uniform background (≈#79abf7).",
+        "selector": "main > section.hero > div.days > div.day:nth-of-type(4) > small",
+        "text": "Sunny",
+        "viewports": [
+          375,
+          768,
+          1280
+        ]
+      }
+    ]
+  },
+  "after": {
+    "errors": 0,
+    "warnings": 0,
+    "issues": []
+  }
+}

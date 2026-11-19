@@ -1,0 +1,13 @@
+renderlint — 1 page(s) × viewports 375px, 768px, 1280px
+
+⚠ loading-state (1)  An area of the page stays blank while its data loads: no spinner, skeleton, progress bar or "Loading…" text, so on a slow connection the page looks empty, broken or frozen. renderlint reloads each page with its fetch/XHR requests held for a second (as on a slow network), looks at what is shown, releases them and finds the areas the data filled. Any loading sign on the page counts: aria-busy, role=progressbar/status, a running animation, motion on screen, "Loading…"/"Saving…" text, skeleton or spinner class names, placeholder blocks where the content appears. With `--ux`, also checked after each click.
+  warn  While this page waited for its data (GET /orders.json; renderlint held it 1s, as on a slow network), the area where "Order · Customer · Total · Status" appears showed nothing: no spinner, skeleton, progress bar or "Loading…" text. On a slow connection the page looks empty or frozen. Render a loading state in #orders until the data arrives (a skeleton shaped like the content, or a spinner), and an error message if the request fails.
+        at #orders  "Order Customer Total Status A-1042 Lena Fischer €184.00 Paid A-1043 T…"
+        page /loading-before.html · at 375px
+
+How to fix
+  loading-state: Render a loading state where the data will appear until it arrives: a skeleton shaped like the content (best: no layout jump), or a spinner. With TanStack Query / SWR use isPending / isLoading; with React Suspense a fallback; with React Router loaders useNavigation(); in Next.js a loading.tsx. Show an error message if the request fails.
+
+If a finding is intentional, mark the element: data-renderlint-ignore="<rule>" (space-separated, or empty for all rules), or in CSS: --renderlint-ignore: <rule>; — both apply to the element and its descendants. Add data-renderlint-reason="…" to explain why.
+
+✔ 0 errors, 1 warning(s) · screenshots in .renderlint/screens
