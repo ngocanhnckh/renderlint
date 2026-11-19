@@ -25,6 +25,7 @@ RL.analyze = function (options) {
   const enabled = (id) => !options.rules || options.rules[id] === undefined || options.rules[id] !== 'off';
   RL.resetCaches();
   RL.flagged = new Set();
+  RL.coveredNow = new Set(); // text under a cover that scrolling moves it out from under: contrast can't measure it here
   const t0 = performance.now();
   const startX = scrollX, startY = scrollY;
   const scrollTop = () => { if (!options.noScroll) window.scrollTo({ left: 0, top: 0, behavior: 'instant' }); };

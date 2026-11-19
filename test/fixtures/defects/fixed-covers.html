@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="expect" content="contrast,obscured-content"><title>Launch</title>
+<style>
+body{margin:0;font:16px/1.6 system-ui,sans-serif;color:#111827;background:#fff}
+/* The header is fixed but the page has no padding for it: the hero's first line sits under it at the top,
+   and nothing scrolls above the top of the page. */
+header{position:fixed;top:0;left:0;right:0;height:64px;background:#0f172a;color:#fff;display:flex;align-items:center;padding:0 16px;z-index:10}
+.hero{padding:20px 16px 0}
+.hero .pill{display:inline-block;padding:2px 10px;border-radius:999px;background:#e0e7ff;color:#1e3a8a;font-size:14px}
+section{padding:0 16px}
+/* A footer pulled up over a scrolling list with a negative margin: it's part of the layout, not floating,
+   so scrolling the list never uncovers its last rows. */
+.list{height:200px;overflow:auto;border:1px solid #9ca3af;margin:16px}.list p{margin:8px 12px}
+.foot{margin:-60px 16px 0;position:relative;background:#1f2937;color:#fff;height:80px;padding:10px}
+</style></head><body>
+<header><b>Acme</b></header>
+<div class="hero"><span class="pill">New: version 2 is out</span><h1 style="margin:48px 0 8px">Ship faster</h1></div>
+<section>
+<p>Acme builds the tools your team needs to plan, track and ship work. Every project starts with a board, a timeline and a place to talk.</p>
+<p>Boards keep the work visible. Timelines keep it on schedule. Threads keep everyone in the loop without another meeting.</p>
+<p>Start with a template or from scratch, invite your team, and connect the tools you already use.</p>
+</section>
+<div class="list"><p>Order #1000 shipped</p><p>Order #1001 shipped</p><p>Order #1002 shipped</p><p>Order #1003 shipped</p><p>Order #1004 shipped</p><p>Order #1005 shipped</p><p>Order #1006 shipped</p><p>Order #1007 shipped</p><p>Order #1008 shipped</p><p>Order #1009 shipped</p><p>Order #1010 shipped</p><p>Order #1011 shipped</p></div><div class="foot">Showing 12 orders</div>
+</body></html>

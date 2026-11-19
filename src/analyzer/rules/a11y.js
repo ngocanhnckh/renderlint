@@ -249,6 +249,7 @@ RL.contrastCandidates = function (texts) {
     if (RL.isDisabled(t.el)) continue;
     // Text already reported as overflowing/obscured: its contrast is a symptom, not a separate defect.
     if (RL.flagged && RL.flagged.has(t.el)) continue;
+    if (RL.coveredNow && RL.coveredNow.has(t.el)) continue;
     const s = RL.cs(t.el);
     const fs = parseFloat(s.fontSize) || 16;
     const weight = parseInt(s.fontWeight, 10) || 400;

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fewer false positives, all found on real sites:
+  - **Covered text you can scroll clear of.** `obscured-content`, `element-overlap` and `contrast` no longer report text under something floating over it that scrolling moves it out from under: a code block's copy button, or a small fixed button such as a floating action button or chat bubble. Still reported: covers that are part of the layout, bars across the screen (a header over the hero, a cookie banner), and anything nothing can scroll clear of.
+  - **Negative margins.** `content-overflow` no longer reports a box pulled up to 24px past its container by its own negative margin (VitePress's navbar menu). A box that is too wide, or pulled further, is still reported.
+  - **Dev servers.** "Failed to fetch dynamically imported module" on a localhost dev server, usually a chunk still compiling, is now a warning with a hint, not an error. On a build renderlint serves itself it stays an error.
+- Fix: findings seen only at some widths were labelled "all viewports" when their sweep widths happened to number as many as the configured viewports.
 - Security docs list everything renderlint connects to and every program it runs ([docs/security.md](docs/security.md)), and a `SECURITY.md` says how to report a vulnerability privately. There is no telemetry.
 - The fix skill tells agents to treat text quoted from a checked page as data, never as instructions.
 - Code: regular expressions use `String.match`/`matchAll` instead of `RegExp.exec`, so security scanners stop reading them as shell commands. No change in behaviour.

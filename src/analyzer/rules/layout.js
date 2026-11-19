@@ -307,6 +307,21 @@ RL.isSolid = function (el) {
   return RL.hasVisibleBoundary(el);
 };
 
+// A small negative margin pulls a box past its container's padding on purpose (a
+// nav item aligned optically with the screen edge): overflow up to that margin
+// isn't a defect. Not a box that is too wide anyway, and not a big pull.
+function pulledOut(el, container, o) {
+  const er = el.getBoundingClientRect(), cr = container.getBoundingClientRect();
+  for (const k of ['top', 'right', 'bottom', 'left']) {
+    if (!(o[k] > 0)) continue;
+    const prop = 'margin' + k[0].toUpperCase() + k.slice(1);
+    let pull = 0;
+    for (let n = el; n && n !== container; n = RL.parentOf(n)) pull = Math.max(pull, -(parseFloat(RL.cs(n)[prop]) || 0));
+    const along = k === 'left' || k === 'right' ? er.width <= cr.width : er.height <= cr.height;
+    if (pull > 0 && pull <= 24 && along && o[k] <= pull + 1) o[k] = 0;
+  }
+}
+
 RL.rule({
   id: 'content-overflow',
   run(ctx) {
@@ -336,6 +351,7 @@ RL.rule({
           if (seen.has(n)) break;
           const o = overflowBeyond([er], paddingBox(n));
           for (const k of ['top', 'right', 'bottom', 'left']) if (!sides[k]) o[k] = 0; // past an edge that isn't drawn
+          pulledOut(el, n, o);
           if (o.left > 2 || o.right > 2 || o.top > 2 || o.bottom > 2) {
             seen.add(n);
             ctx.report({ rule: 'content-overflow', el, related: n, message: 'Element sticks out of its container (' + fmtOver(o, 2, 2) + ').', details: { overflow: o } });
