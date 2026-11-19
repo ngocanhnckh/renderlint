@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Adopting it on an existing app
+
+- `renderlint baseline` writes today's findings to `renderlint-baseline.json`. While that file exists, runs fail only on findings that aren't in it; known ones are counted, not shown (`--no-baseline` shows them, `baseline: false` in the config ignores the file). Each run says how many baselined findings are fixed. Findings are matched by rule, element and text, ignoring list positions, generated class names and numbers.
+- Every run compares itself with the previous one: `Since the last run: 3 fixed, 1 new`, in the terminal, `report.md` and the Claude Code hook. Pages a run didn't check aren't counted as fixed.
+- The agent instructions, the fix skill and the hook tell agents never to rewrite the baseline themselves.
+
 ### Phones
 
 - New rule `zoom-disabled` (error): `user-scalable=no` or `maximum-scale` under 2 in the viewport meta, which stops people zooming in on phones (WCAG 1.4.4).

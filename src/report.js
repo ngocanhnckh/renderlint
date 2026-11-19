@@ -117,14 +117,16 @@ function roleCoverageLines(c) {
 }
 
 export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = {}) {
-  const { issues, pages, config, stats } = result;
+  const { pages, config, stats } = result;
+  const issues = result.issues.filter((i) => !i.known); // baselined findings: counted below, not listed
   const lines = [];
   const vps = config.viewports.map((v) => v.width + 'px').join(', ');
   lines.push(bold('renderlint') + dim(` — ${pages.length} page(s) × viewports ${vps}${stats.schemes.length > 1 ? ' × ' + stats.schemes.join('/') : ''}${stats.scanned ? ` + source scan (${stats.scanned} findings)` : ''}`));
   if (result.coverage) lines.push(...formatCoverage(result.coverage));
   if (result.roleCoverage) lines.push(...roleCoverageLines(result.roleCoverage));
   if (!issues.length) {
-    lines.push(green('✔ No UI defects found.'));
+    lines.push(green(stats.baseline ? '✔ No new UI defects.' : '✔ No UI defects found.'));
+    lines.push(...progressLines(stats));
     return lines.join('\n');
   }
   lines.push('');
@@ -170,15 +172,31 @@ export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = 
   lines.push(dim(IGNORE_HELP));
   const e = stats.errors, w = stats.warnings;
   lines.push('');
+  lines.push(...progressLines(stats));
   lines.push((e ? red(bold(`✖ ${e} error(s)`)) : green('✔ 0 errors')) + ', ' + (w ? yellow(`${w} warning(s)`) : '0 warnings') +
     (stats.suppressed ? dim(` · ${stats.suppressed} element(s) marked data-renderlint-ignore`) : '') +
     dim(' · screenshots in ' + relative(cwd, config.outputDir) + '/screens'));
   return lines.join('\n');
 }
 
+// "Since the last run: 3 fixed, 1 new" and the baseline's state.
+export function progressLines(stats) {
+  const out = [];
+  const p = stats.progress;
+  if (p) out.push(dim('Since the last run: ') + (p.fixed ? green(`${p.fixed} fixed`) : '0 fixed') + ', ' + (p.new ? yellow(`${p.new} new`) : '0 new') + dim('.'));
+  const b = stats.baseline;
+  if (b && b.known) out.push(dim(`${b.known} known finding(s) in ${b.file} not shown (--no-baseline shows them).`));
+  if (b && b.fixed) out.push(green(`${b.fixed} finding(s) in ${b.file} are fixed:`) + dim(' run `npx renderlint baseline` to drop them from the file.'));
+  return out;
+}
+
 export function formatMarkdown(result) {
-  const { issues, stats } = result;
-  const out = ['# renderlint report', '', `**${stats.errors} error(s), ${stats.warnings} warning(s)** across ${result.pages.length} page(s).`, ''];
+  const { stats } = result;
+  const issues = result.issues.filter((i) => !i.known);
+  const p = stats.progress, b = stats.baseline;
+  const out = ['# renderlint report', '', `**${stats.errors} error(s), ${stats.warnings} warning(s)** across ${result.pages.length} page(s).` +
+    (p ? ` Since the last run: ${p.fixed} fixed, ${p.new} new.` : '') +
+    (b && b.known ? ` ${b.known} known finding(s) in \`${b.file}\` not listed${b.fixed ? `; ${b.fixed} of the baselined ones are fixed` : ''}.` : ''), ''];
   if (result.coverage) {
     const cov = result.coverage;
     out.push(`**Coverage:** ${cov.line} (${cov.percent}% of routes).`, '', '| Route | Status | Instances | Checked | File |', '|---|---|---|---|---|');
@@ -197,7 +215,7 @@ export function formatMarkdown(result) {
 }
 
 export function formatGithub(result) {
-  return result.issues.map((i) => {
+  return result.issues.filter((i) => !i.known).map((i) => {
     const level = i.severity === 'error' ? 'error' : 'warning';
     const loc = i.file ? `file=${i.file},line=${i.line},col=${i.column},` : (i.source && i.source.file && !/^https?:/.test(i.source.file) ? `file=${i.source.file.replace(/^\//, '')},line=${i.source.line || 1},` : '');
     return `::${level} ${loc}title=renderlint ${i.rule}::${i.message}${i.selector ? ` (${i.selector}${i.pages.length ? ' on ' + i.pages.join(', ') : ''})` : ''}`;

@@ -44,7 +44,7 @@ export function planIncremental(cwd, map) {
 // After an incremental run: new file state, and the errors of the routes that were re-checked.
 export function updatePageMap(outputDir, map, plan, result) {
   const errorsByPath = new Map();
-  for (const i of result.issues) if (i.severity === 'error') for (const p of i.pages || []) errorsByPath.set(p, (errorsByPath.get(p) || 0) + 1);
+  for (const i of result.issues) if (i.severity === 'error' && !i.known) for (const p of i.pages || []) errorsByPath.set(p, (errorsByPath.get(p) || 0) + 1);
   // a route counts as re-checked only when every instance it was checked on before was checked now
   const done = new Set((result.pages || []).map((p) => p.path));
   const rechecked = new Set(plan.routes.filter((pat) => { const r = map.routes.find((x) => x.pattern === pat); return !r || !result.pages || r.checked.every((p) => done.has(p)); }));
