@@ -130,8 +130,11 @@ export async function main(argv) {
   if (cmd === 'baseline') {
     const { baselinePath, writeBaseline, relPath, BASELINE_FILE } = await import('./baseline.js');
     const path = baselinePath(result.config.baseline === false ? { baseline: BASELINE_FILE } : result.config, process.cwd());
-    const n = writeBaseline(path, result.issues);
-    process.stdout.write(`\nrenderlint: wrote ${n} finding(s) (${result.stats.errors} error(s), ${result.stats.warnings} warning(s)) to ${relPath(path, process.cwd())}. ` +
+    const { count, kept } = writeBaseline(path, result.issues, { checkedPages: result.pages.map((p) => p.path), sourceScan: result.stats.sourceScan });
+    const broken = result.issues.filter((i) => i.rule === 'page-error').length;
+    process.stdout.write(`\nrenderlint: wrote ${count} finding(s) to ${relPath(path, process.cwd())}` +
+      (kept ? ` (${kept} of them kept from the earlier file, for pages this run didn't check)` : '') + '. ' +
+      (broken ? `${broken} page(s) that could not be loaded are not accepted: fix those. ` : '') +
       'Commit it: from now on, runs fail only on findings that are not in it. Fix the known ones over time and run `npx renderlint baseline` again to shrink it.\n');
     return 0;
   }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { findingKey, writeBaseline, readBaseline, applyBaseline, trackProgress } from '../src/baseline.js';
+import { findingKey, findingKeys, writeBaseline, readBaseline, applyBaseline, trackProgress } from '../src/baseline.js';
 
 const issue = (o) => ({ rule: 'text-overflow', severity: 'error', selector: 'main > div.card:nth-of-type(2) > p', text: 'Total $4,939.27', pages: ['/'], count: 1, ...o });
 
@@ -14,13 +14,23 @@ test('findingKey ignores list positions, generated class names and numbers', () 
   assert.equal(findingKey(issue({ selector: 'div.css-1q2w3e > p' })), findingKey(issue({ selector: 'div.css-9z8x7c > p' })));
   assert.notEqual(findingKey(issue({ rule: 'contrast' })), a);
   assert.notEqual(findingKey(issue({ text: 'Subtotal' })), a);
-  assert.equal(findingKey({ rule: 'emoji', file: 'src\\App.tsx', line: 12, text: '🚀' }), 'emoji | src/App.tsx:12 | 🚀');
+  // BEM elements are real names, not hashes
+  assert.notEqual(findingKey(issue({ selector: 'div.card__title > p' })), findingKey(issue({ selector: 'div.card__image > p' })));
+  assert.notEqual(findingKey(issue({ selector: 'nav > .nav_search' })), findingKey(issue({ selector: 'nav > .nav_cancel' })));
+  // source findings: by file and text, not line, so lines added above don't matter; repeats are numbered
+  assert.equal(findingKey({ rule: 'emoji', file: 'src\\App.tsx', line: 12, text: '🚀' }), findingKey({ rule: 'emoji', file: 'src/App.tsx', line: 40, text: '🚀' }));
+  assert.deepEqual(findingKeys([{ rule: 'emoji', file: 'a.tsx', text: '🚀' }, { rule: 'emoji', file: 'a.tsx', text: '🚀' }]).map((k) => k.slice(-3)), [' 🚀', ' #2']);
+  // page-level findings ignore the page's copy; findings without element or text use the message
+  assert.equal(findingKey({ rule: 'html-lang', selector: 'body', text: 'Welcome to Acme' }), findingKey({ rule: 'html-lang', selector: 'body', text: 'Welcome to Acme Corp' }));
+  assert.notEqual(findingKey({ rule: 'console-error', message: 'TypeError: a is undefined' }), findingKey({ rule: 'console-error', message: 'Failed to load /api/x' }));
+  assert.equal(findingKey({ rule: 'console-error', message: 'HTTP 500 at line 12' }), findingKey({ rule: 'console-error', message: 'HTTP 500 at line 13' }));
+  assert.notEqual(findingKey(issue({ schemes: ['dark'] })), findingKey(issue({ schemes: ['light', 'dark'] })));
 });
 
 test('a baseline hides known findings and notices fixed ones', () => {
   const dir = mkdtempSync(join(tmpdir(), 'rl-bl-'));
   const path = join(dir, 'renderlint-baseline.json');
-  assert.equal(writeBaseline(path, [issue({}), issue({ rule: 'contrast', text: 'Fine print', pages: ['/about'] }), issue({ pages: ['/'] })]), 2);
+  assert.equal(writeBaseline(path, [issue({}), issue({ rule: 'contrast', text: 'Fine print', pages: ['/about'] }), issue({ rule: 'page-error', selector: '', text: '', message: 'HTTP 500', pages: ['/x'] })]).count, 2);
   const bl = readBaseline(path);
   const now = [issue({ selector: 'main > div.card:nth-of-type(3) > p' }), issue({ rule: 'emoji', text: '🚀' })];
   const r = applyBaseline(now, bl, ['/', '/about']);
@@ -30,6 +40,14 @@ test('a baseline hides known findings and notices fixed ones', () => {
   const again = [issue({})];
   assert.equal(applyBaseline(again, bl, ['/']).fixed, 0);
   assert.equal(readBaseline(join(dir, 'missing.json')), null);
+  // a broken page is never known
+  const broken = [issue({ rule: 'page-error', selector: '', text: '', message: 'HTTP 500', pages: ['/x'] })];
+  applyBaseline(broken, bl, ['/x']);
+  assert.equal(broken[0].known, undefined);
+  // rewriting from a run that checked only / keeps the /about entry
+  const w = writeBaseline(path, [issue({ rule: 'emoji', text: '✨' })], { checkedPages: ['/'] });
+  assert.deepEqual([w.count, w.kept], [2, 1]);
+  assert.ok(Array.from(readBaseline(path).keys.keys()).some((k) => k.startsWith('contrast')));
 });
 
 test('progress compares with the previous run, only on pages checked both times', () => {

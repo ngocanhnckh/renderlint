@@ -233,17 +233,17 @@ export async function check(options = {}) {
       errors: issues.filter((i) => i.severity === 'error').reduce((n, i) => n + (i.count || 1), 0),
       warnings: issues.filter((i) => i.severity === 'warn').reduce((n, i) => n + (i.count || 1), 0),
       findings: issues.length,
-      pages: pages.length, ms: Date.now() - started, scanned: scanned.length,
+      pages: pages.length, ms: Date.now() - started, scanned: scanned.length, sourceScan: !!doScan,
       schemes: schemes.length ? schemes : ['light'],
       suppressed: 0,
     };
     // Progress since the last run, then the baseline: known findings stay in the report but don't fail the run.
     const checkedPages = pages.map((p) => p.path);
-    const progress = trackProgress(config.outputDir, issues, checkedPages);
+    const progress = trackProgress(config.outputDir, issues, checkedPages, { sourceScan: !!doScan });
     if (progress && (progress.fixed || progress.new)) stats.progress = progress;
     const bl = options.writeBaseline ? null : readBaseline(baselinePath(config, cwd));
     if (bl) {
-      const b = applyBaseline(issues, bl, checkedPages);
+      const b = applyBaseline(issues, bl, checkedPages, { sourceScan: !!doScan });
       stats.errors = issues.filter((i) => i.severity === 'error' && !i.known).reduce((n, i) => n + (i.count || 1), 0);
       stats.warnings = issues.filter((i) => i.severity === 'warn' && !i.known).reduce((n, i) => n + (i.count || 1), 0);
       stats.baseline = { file: relPath(b.file, cwd), known: b.known, fixed: b.fixed };
