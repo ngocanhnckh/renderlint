@@ -88,7 +88,7 @@ It works with any framework that renders in a browser: React, Next.js, Vue, Nuxt
 
 ## What it catches
 
-58 rules, tuned so that a finding is almost always a real defect.
+62 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
@@ -111,7 +111,8 @@ It works with any framework that renders in a browser: React, Next.js, Vue, Nuxt
 | With `--ux`: a click with no response for a second, a failed save nobody is told about, a double submit, a dead button, a freeze, an empty list with no message, a modal that ignores Escape, a Back button that doesn't go back | `action-feedback`, `error-feedback`, `double-submit`, `dead-control`, `ui-freeze`, `slow-render`, `empty-state`, `dialog-focus`, `back-navigation` |
 | Scroll-reveal sections that never appear on phones | `invisible-content` |
 | No focus ring, focus hidden under a sticky header, icon buttons with no label, tiny tap targets and text, hover-only tooltips | `focus-indicator`, `focus-obscured`, `unlabeled-control`, `tap-target`, `font-size-min`, `tooltip-keyboard` |
-| `aria-labelledby` pointing at a missing id; an `aria-label` that doesn't contain the visible text | `aria-reference`, `label-in-name` |
+| `aria-labelledby` pointing at a missing id; an `aria-label` that doesn't contain the visible text; no `<html lang>` | `aria-reference`, `label-in-name`, `html-lang` |
+| Pinch-zoom turned off, form fields iPhones zoom into (text under 16px), a header under the iPhone notch or a tab bar under the home indicator | `zoom-disabled`, `input-zoom`, `safe-area` (renderlint emulates an iPhone's notch and home indicator) |
 | No viewport meta, a pointless 3px scrollbar, `href="#"` links | `missing-viewport-meta`, `accidental-scrollbar`, `dead-link` |
 | Hydration errors, crashes, 404s, pages that only showed the login form or "Access denied" | `page-error`, `console-error`, `broken-resource`, `auth-required`, `page-not-shown` |
 

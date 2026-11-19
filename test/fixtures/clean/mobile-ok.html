@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover"><meta name="expect" content=""><meta name="no-warn" content="zoom-disabled,input-zoom,html-lang,safe-area"><title>Inbox</title>
+<style>body{margin:0;font:16px/1.5 system-ui,sans-serif;color:#111827;background:#fff}
+header{position:fixed;top:0;left:0;right:0;padding:env(safe-area-inset-top) 16px 0;height:52px;display:flex;align-items:center;background:#0f172a;color:#fff;z-index:2}
+main{padding:calc(68px + env(safe-area-inset-top)) 16px calc(80px + env(safe-area-inset-bottom))}
+label{display:block;margin:12px 0 4px;font-size:14px}input[type=search],textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #6b7280;border-radius:8px;font:16px system-ui,sans-serif}
+nav{position:fixed;bottom:0;left:0;right:0;padding-bottom:env(safe-area-inset-bottom);height:56px;display:flex;justify-content:space-around;align-items:center;background:#f1f5f9;border-top:1px solid #cbd5e1}
+nav a{color:#0f172a;text-decoration:none;font-size:14px;padding:12px}
+/* A hidden field and a small search field at desktop width only are not phone fields. */
+@media (min-width:600px){.desk input{font-size:14px}}</style></head><body>
+<header><b>Inbox</b></header>
+<main><h1 style="margin-top:0">Messages</h1>
+<label for="q">Search</label><div class="desk"><input id="q" type="search" placeholder="Search messages"></div>
+<label for="m">Reply</label><textarea id="m" rows="3"></textarea>
+<input type="hidden" value="x"><input type="checkbox" aria-label="Mark read" style="font-size:12px"></main>
+<nav aria-label="Tabs"><a href="#inbox">Inbox</a><a href="#search">Search</a><a href="#settings">Settings</a></nav>
+</body></html>
