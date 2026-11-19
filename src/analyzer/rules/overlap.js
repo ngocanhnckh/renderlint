@@ -225,6 +225,9 @@ RL.rule({
       // A positioned button inside a text field's box (show-password, clear) is an adornment;
       // if it covers the text area, input-icon-overlap reports that.
       if (why === 'positioned' && (isAdornment(a, b) || isAdornment(b, a))) return true;
+      // A fixed floating button over content that scrolls out from under it.
+      const cx = inter.x + inter.w / 2, cy = inter.y + inter.h / 2;
+      if (why === 'positioned' && (scrollsClear(a, b, cx, cy) || scrollsClear(b, a, cx, cy))) return true;
       if (reported.some(([x, y]) => (RL.containsComposed(x, a) && RL.containsComposed(y, b)) || (RL.containsComposed(x, b) && RL.containsComposed(y, a)))) return true;
       reported.push([a, b]);
       ctx.report({
@@ -238,6 +241,39 @@ RL.rule({
 });
 
 // ---------------------------------------------------------------------------
+// Text in a scroll box, under something that doesn't scroll with it (a copy button
+// pinned to a code block's corner, a fixed floating button): scrolling moves the
+// text out from under it, so it can be read. It has to land somewhere visible:
+// a header pinned to the top edge has no room above it, so what's under it stays
+// hidden, and nothing scrolls above the top of the page.
+const ROOM = 8;
+function movesClear(x, y, cr, vis, range) {
+  return (y > cr.y && cr.y - vis.y >= ROOM && range.up >= y - cr.y + 1) || // scroll down: the text moves up, above the cover
+    (y < cr.bottom && vis.bottom - cr.bottom >= ROOM && range.down >= cr.bottom - y + 1) ||
+    (x > cr.x && cr.x - vis.x >= ROOM && range.left >= x - cr.x + 1) ||
+    (x < cr.right && vis.right - cr.right >= ROOM && range.right >= cr.right - x + 1);
+}
+function scrollsClear(el, cover, x, y) {
+  const cr = RL.rectOf(cover); // page coordinates, like x and y
+  for (let n = RL.parentOf(el), d = 0; n && n !== document.body && n !== document.documentElement && d < 30; n = RL.parentOf(n), d++) {
+    if (RL.containsComposed(n, cover)) return false; // the cover scrolls along
+    const s = RL.cs(n);
+    const sx = /auto|scroll/.test(s.overflowX) && n.scrollWidth > n.clientWidth + 1, sy = /auto|scroll/.test(s.overflowY) && n.scrollHeight > n.clientHeight + 1;
+    if (!sx && !sy) continue;
+    const range = { up: sy ? n.scrollHeight - n.clientHeight - n.scrollTop : 0, down: sy ? n.scrollTop : 0,
+      left: sx ? n.scrollWidth - n.clientWidth - n.scrollLeft : 0, right: sx ? n.scrollLeft : 0 };
+    if (movesClear(x, y, cr, RL.rectOf(n), range)) return true;
+  }
+  // A fixed layer stays put while the page scrolls.
+  const layer = RL.fixedAncestor(cover);
+  if (layer && RL.cs(layer).position === 'fixed' && !RL.containsComposed(layer, el) && !RL.fixedAncestor(el)) {
+    const se = document.scrollingElement || document.documentElement;
+    const vis = { x: scrollX, y: scrollY, right: scrollX + innerWidth, bottom: scrollY + innerHeight };
+    if (movesClear(x, y, cr, vis, { up: se.scrollHeight - innerHeight - scrollY, down: scrollY, left: 0, right: 0 })) return true;
+  }
+  return false;
+}
+
 RL.rule({
   id: 'obscured-content',
   order: 92,
@@ -275,6 +311,7 @@ RL.rule({
         if (RL.isIgnored(e, 'obscured-content')) break;
         // Layered illustrations / mockups (stacked absolutely positioned or transformed cards) are deliberate.
         if (RL.layeredBetween(tg.el, RL.commonAncestor(tg.el, e))) break;
+        if (scrollsClear(tg.el, e, tg.x, tg.y)) { RL.flagged.add(tg.el); break; } // covered for now: its contrast can't be measured here
         const fixed = RL.fixedAncestor(e);
         const tgFixed = RL.fixedAncestor(tg.el);
         if (fixed && !tgFixed && scrolled) break; // header over content only because we scrolled

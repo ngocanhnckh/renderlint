@@ -1,0 +1,37 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="expect" content=""><meta name="no-warn" content="obscured-content,element-overlap,content-overflow"><title>Docs page</title>
+<style>
+body{margin:0;font:16px/1.6 system-ui,sans-serif;color:#111827;background:#fff}
+main{max-width:720px;margin:0 auto;padding:16px 16px 120px}
+/* A code block with a copy button pinned to its corner; long lines scroll sideways under it (Expressive Code, Docusaurus, GitHub). */
+figure{position:relative;margin:16px 0;border:1px solid #d1d5db;border-radius:8px;background:#f8fafc}
+pre{margin:0;padding:14px 16px;overflow-x:auto;font:14px/1.6 ui-monospace,monospace;color:#1f2937}
+.copy{position:absolute;top:8px;right:8px}
+.copy button{width:36px;height:36px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#111827;font:12px system-ui;opacity:.85}
+/* A navbar whose last item is pulled 12px past the padding on purpose (VitePress .VPNavBarExtra). */
+nav{display:flex;gap:12px;align-items:center;border:1px solid #e5e7eb;border-radius:8px;padding:0 12px;height:48px}
+nav .extra{margin-left:auto;margin-right:-12px;padding:0 12px;height:48px;border:0;background:#eef2ff;color:#1e3a8a;font:inherit}
+/* A floating action button fixed to the corner, over content that scrolls under it (Redoc). */
+.fab{position:fixed;right:20px;bottom:44px;width:56px;height:56px;border-radius:50%;border:0;background:#1d4ed8;color:#fff;font:600 14px system-ui;z-index:100}
+.card{border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin:12px 0;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card button{padding:8px 14px;border-radius:6px;border:1px solid #1d4ed8;background:#fff;color:#1d4ed8;font:inherit}
+</style></head><body>
+<main>
+<h1>Manual setup</h1>
+<nav aria-label="Main"><a href="#guide">Guide</a><a href="#api">API</a><button class="extra" aria-label="More links">More</button></nav>
+<figure><pre><code>import { defineConfig } from 'astro/config'; import starlight from '@astrojs/starlight'; // a long first line
+export default defineConfig({ integrations: [starlight({ title: 'My delightful docs site' })] });</code></pre><div class="copy"><button type="button" title="Copy to clipboard">Copy</button></div></figure>
+<div class="card"><span>Get a pet by id</span><button>Try it</button></div>
+<div class="card"><span>Update a pet</span><button>Try it</button></div>
+<div class="card"><span>Delete a pet</span><button>Try it</button></div>
+<div class="card"><span>Find pets by status</span><button>Try it</button></div>
+<div class="card"><span>Find pets by tags</span><button>Try it</button></div>
+<div class="card"><span>Upload an image</span><button>Try it</button></div>
+<div class="card"><span>Place an order</span><button>Try it</button></div>
+<div class="card"><span>Find an order</span><button>Try it</button></div>
+<div class="card"><span>Delete an order</span><button>Try it</button></div>
+<div class="card"><span>Create a user</span><button>Try it</button></div>
+<div class="card"><span>Log a user in</span><button>Try it</button></div>
+<div class="card"><span>Log a user out</span><button>Try it</button></div>
+</main>
+<button class="fab" aria-label="Open menu">Menu</button>
+</body></html>

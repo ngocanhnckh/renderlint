@@ -15,6 +15,8 @@ import { ROLE_COOKIE, RUN_COOKIE, STRESS_COOKIE, STATE_COOKIE } from './server-p
 import { DISCOVER_ROUTES, NG_ROUTES_HOOK, NOT_SHOWN_SCRIPT, fillParams, isDynamic, notShownFindings, pagePatterns, patternRegex, redirectedTo, routeOf } from './routes/runtime.js';
 import { randomUUID } from 'node:crypto';
 
+const DYNAMIC_IMPORT_FAIL = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed/i;
+
 export const SETTLE_SCRIPT = async ({ autoScroll }) => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const T = [performance.now()]; const mark = () => T.push(Math.round(performance.now() - T[0]));
@@ -818,7 +820,10 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     const msg = String(err && err.message || err).split('\n')[0].slice(0, 300);
     if (consoleSeen.has(msg)) return;
     consoleSeen.add(msg);
-    issues.push({ rule: 'console-error', severity: 'error', message: 'Uncaught error: ' + msg, details: { stack: String(err && err.stack || '').split('\n').slice(0, 6).join('\n') } });
+    // A dev server that is still compiling a chunk (Vite, Nuxt) fails its dynamic import once; in production the
+    // same error means a deploy removed a chunk the page still asks for.
+    const coldChunk = DYNAMIC_IMPORT_FAIL.test(msg) && /^https?:\/\/(localhost|127\.|\[::1\])/.test(origin);
+    issues.push({ rule: 'console-error', severity: coldChunk ? 'warn' : 'error', message: 'Uncaught error: ' + msg + (coldChunk ? ' On a dev server this usually means the module was still compiling: re-run, or check a production build (`renderlint dist`).' : ''), details: { stack: String(err && err.stack || '').split('\n').slice(0, 6).join('\n'), ...(coldChunk ? { devServerChunk: true } : {}) } });
   });
   // alert(), confirm() and prompt(): a native browser dialog in place of the app's own UI. The wrapper
   // (DIALOG_TRACE) logs where it was called just before the dialog opens; confirm and prompt are answered
@@ -850,7 +855,8 @@ async function checkOne(browser, url, { replay, sources = [], vp, scheme, config
     const msg = text.split('\n')[0].slice(0, 300);
     if (consoleSeen.has(msg)) return;
     consoleSeen.add(msg);
-    issues.push({ rule: 'console-error', severity: /hydrat/i.test(text) ? 'error' : 'warn', message: 'console.error: ' + msg });
+    const coldChunk = DYNAMIC_IMPORT_FAIL.test(msg) && /^https?:\/\/(localhost|127\.|\[::1\])/.test(origin);
+    issues.push({ rule: 'console-error', severity: /hydrat/i.test(text) ? 'error' : 'warn', message: 'console.error: ' + msg + (coldChunk ? ' On a dev server this usually means the module was still compiling: re-run, or check a production build (`renderlint dist`).' : '') });
   });
   const failed = new Set();
   const jsonReads = [];

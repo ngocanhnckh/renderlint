@@ -148,8 +148,10 @@ export function formatPretty(result, { maxPerRule = 12, cwd = process.cwd() } = 
       }
       const where = [];
       if (i.pages.length) where.push('page ' + i.pages.slice(0, 4).join(', ') + (i.pages.length > 4 ? ` +${i.pages.length - 4}` : ''));
-      if (i.viewports.length && i.viewports.length < config.viewports.length) where.push('at ' + i.viewports.sort((a, b) => a - b).map((v) => v + 'px').join(', '));
-      else if (i.viewports.length) where.push('all viewports');
+      const vws = (i.viewports || []).slice().sort((a, b) => a - b);
+      const allVps = config.viewports.every((v) => vws.includes(typeof v === 'object' ? v.width : v));
+      if (vws.length && allVps) where.push('all viewports');
+      else if (vws.length) where.push('at ' + (vws.length > 6 ? vws.slice(0, 5).map((v) => v + 'px').join(', ') + ` +${vws.length - 5} more` : vws.map((v) => v + 'px').join(', ')));
       if (i.schemes && i.schemes.length === 1 && i.schemes[0] === 'dark') where.push('dark mode only');
       if (i.markers.length) where.push('see ' + relative(cwd, i.markers[0].screenshot) + ' #' + i.markers[0].n);
       if (where.length) lines.push(dim('        ' + where.join(' · ')));
