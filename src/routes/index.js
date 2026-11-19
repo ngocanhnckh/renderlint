@@ -35,7 +35,7 @@ export function finishCoverage(cov, { pages, issues, config }) {
   s.line = coverageLine(s);
   // errors per route, for the hook's per-route state
   const errorsByPath = new Map();
-  for (const i of issues) if (i.severity === 'error') for (const p of i.pages || []) errorsByPath.set(p, (errorsByPath.get(p) || 0) + 1);
+  for (const i of issues) if (i.severity === 'error' && !i.known) for (const p of i.pages || []) errorsByPath.set(p, (errorsByPath.get(p) || 0) + 1);
   for (const r of s.list) r.errors = (r.checked || []).reduce((n, p) => n + (errorsByPath.get(p) || 0), 0);
   mkdirSync(config.outputDir, { recursive: true });
   writeFileSync(join(config.outputDir, 'coverage.json'), JSON.stringify(s, null, 1));

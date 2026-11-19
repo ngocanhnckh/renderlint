@@ -7,6 +7,7 @@ import { loadConfig, normalize, DEFAULTS } from './config.js';
 import { launchBrowser, reachApp } from './browser.js';
 import { serveStatic, startAndWait, waitForUrl, probe } from './server.js';
 import { runChecks, pruneScreens } from './runner.js';
+import { trackProgress, readBaseline, baselinePath, applyBaseline, relPath } from './baseline.js';
 import { mergeIssues, formatPretty, formatMarkdown, formatGithub } from './report.js';
 import { scanSources } from './scan.js';
 import { serverPlan } from './server-plan.js';
@@ -232,10 +233,21 @@ export async function check(options = {}) {
       errors: issues.filter((i) => i.severity === 'error').reduce((n, i) => n + (i.count || 1), 0),
       warnings: issues.filter((i) => i.severity === 'warn').reduce((n, i) => n + (i.count || 1), 0),
       findings: issues.length,
-      pages: pages.length, ms: Date.now() - started, scanned: scanned.length,
+      pages: pages.length, ms: Date.now() - started, scanned: scanned.length, sourceScan: !!doScan,
       schemes: schemes.length ? schemes : ['light'],
       suppressed: 0,
     };
+    // Progress since the last run, then the baseline: known findings stay in the report but don't fail the run.
+    const checkedPages = pages.map((p) => p.path);
+    const progress = trackProgress(config.outputDir, issues, checkedPages, { sourceScan: !!doScan });
+    if (progress && (progress.fixed || progress.new)) stats.progress = progress;
+    const bl = options.writeBaseline ? null : readBaseline(baselinePath(config, cwd));
+    if (bl) {
+      const b = applyBaseline(issues, bl, checkedPages, { sourceScan: !!doScan });
+      stats.errors = issues.filter((i) => i.severity === 'error' && !i.known).reduce((n, i) => n + (i.count || 1), 0);
+      stats.warnings = issues.filter((i) => i.severity === 'warn' && !i.known).reduce((n, i) => n + (i.count || 1), 0);
+      stats.baseline = { file: relPath(b.file, cwd), known: b.known, fixed: b.fixed };
+    }
     const cov = coverage ? finishCoverage(coverage, { pages, issues, config }) : null;
     if (cov) stats.coverage = { urls: cov.urls, routes: cov.routes, percent: cov.percent, counts: cov.counts };
     const result = { ok: config.failOn === 'never' ? true : config.failOn === 'warn' ? stats.errors + stats.warnings === 0 : stats.errors === 0, issues, pages, stats, config, coverage: cov };

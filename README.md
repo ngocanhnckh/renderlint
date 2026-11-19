@@ -83,7 +83,7 @@ It works with any framework that renders in a browser: React, Next.js, Vue, Nuxt
 - [How it compares](#how-it-compares) · [Does it work?](#does-it-work)
 - [Every page, every role, behind a login](#every-page-every-role-behind-a-login)
 - [Make it impossible to ship defects](#make-it-impossible-to-ship-defects)
-- [Intentional? Say so.](#intentional-say-so) · [Configuration](#configuration) · [How it works](#how-it-works) · [Limitations](#limitations)
+- [Adopting it on an existing app](#adopting-it-on-an-existing-app) · [Intentional? Say so.](#intentional-say-so) · [Configuration](#configuration) · [How it works](#how-it-works) · [Limitations](#limitations)
 - Docs: [getting started](docs/getting-started.md) · [frameworks](docs/frameworks/README.md) · [rules](docs/rules.md) · [configuration](docs/configuration.md) · [authentication](docs/authentication.md) · [roles and coverage](docs/roles-and-coverage.md) · [server mocks](docs/server-mocks.md) · [Playwright](docs/playwright.md) · [Storybook](docs/storybook.md) · [integrations](docs/integrations.md) · [coding agents](docs/agents.md) · [WordPress](docs/wordpress.md) · [security](docs/security.md) · [results](docs/results.md)
 
 ## What it catches
@@ -278,6 +278,24 @@ renderlint exits non-zero when it finds errors, so you can gate any step on it:
 
 `init` is idempotent: run it again to update the skills it installed.
 </details>
+
+## Adopting it on an existing app
+
+An app that already has 200 findings can't go from red to green in one commit. Accept today's findings, then fail only on new ones:
+
+```bash
+npx renderlint baseline     # writes renderlint-baseline.json: commit it
+npx renderlint              # known findings are counted, not shown; new ones fail the run
+```
+
+```
+Since the last run: 3 fixed, 1 new.
+187 known finding(s) in renderlint-baseline.json not shown (--no-baseline shows them).
+4 finding(s) in renderlint-baseline.json are fixed: run `npx renderlint baseline` to drop them from the file.
+✖ 1 error(s), 0 warnings
+```
+
+Every run compares itself with the previous one, so you and your agent see progress ("3 fixed, 1 new") even without a baseline. Agents are told never to rewrite the baseline themselves. See [configuration](docs/configuration.md).
 
 ## Intentional? Say so.
 

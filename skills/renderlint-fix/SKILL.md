@@ -59,6 +59,10 @@ Don'ts:
 
 When the same component is flagged on many pages, fix the component once.
 
+## Known findings (baseline)
+
+If the project has a `renderlint-baseline.json`, findings listed there are not shown and don't fail the run: they were accepted when renderlint was adopted. Fix every new finding. Don't run `npx renderlint baseline` or edit the file to get to 0: only the user decides what it accepts. When a run says baselined findings are fixed, tell the user they can rewrite the file.
+
 ## Intentional? Say so, rarely
 
 If a finding is really intended (a decorative marquee, a deliberately cropped hero image), mark the element:

@@ -33,6 +33,7 @@ export const DEFAULTS = {
   routes: undefined,       // route coverage: read the app's routes from its source (Next, Nuxt, SvelteKit, Astro, React Router, TanStack, Angular, Vue Router), sitemap and build output, else from its router at runtime; false: off
   params: {},              // values for dynamic routes: { "/products/:id": ["a1", "b2"], "slug": "hello" } (default: from links, the build and the API data)
   coverage: {},            // { perRoute: 2, min: 100, ignore: ["/admin/*"], baseline: ".renderlint/coverage-baseline.json" }
+  baseline: undefined,     // renderlint-baseline.json if it exists: fail only on findings not in it; a path, or false to ignore it
   exclude: [],             // path globs to skip while crawling, e.g. "/blog/*"
   viewports: [375, 768, 1280],
   colorSchemes: 'auto',    // 'auto' (light + dark if the app has dark-mode CSS) | ['light'] | ['light','dark']

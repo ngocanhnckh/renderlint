@@ -14,6 +14,7 @@ Usage
   renderlint watch [url]                Re-check whenever source files change
   renderlint hook                       Claude Code Stop-hook mode (blocks finishing while errors remain)
   renderlint routes                     List the routes found in the source (and which files each renders)
+  renderlint baseline [targets...]      Accept today's findings: write renderlint-baseline.json (commit it); later runs fail only on new ones
 
 Targets
   http://localhost:5173                 a running app (dev or preview server)
@@ -28,6 +29,7 @@ Options
   --no-crawl             do not follow links
   --max-pages <n>        page limit when crawling (default 12; with routes found in the source, every route)
   --no-routes            don't read routes from the source, sitemap and build output
+  --no-baseline          ignore renderlint-baseline.json: report and fail on every finding
   --per-route <n>        instances checked per dynamic route (default 2)
   --min-coverage <pct>   fail when fewer routes than this were checked (e.g. 100)
   --coverage-baseline <file>  fail when a route checked in this earlier coverage.json is no longer checked
@@ -58,7 +60,7 @@ Options
 export async function main(argv) {
   // `--stress` may be used without a value: don't let it swallow the next argument.
   argv = argv.flatMap((a, i) => (a === '--stress' && !/^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? ['--stress', '1.5'] : [a]));
-  const cmd = ['init', 'scan', 'explain', 'watch', 'hook', 'check', 'storybook', 'routes'].includes(argv[0]) ? argv.shift() : 'check';
+  const cmd = ['init', 'scan', 'explain', 'watch', 'hook', 'check', 'storybook', 'routes', 'baseline'].includes(argv[0]) ? argv.shift() : 'check';
   if (argv.includes('-h') || argv.includes('--help')) { process.stdout.write(HELP); return 0; }
   if (argv.includes('-v') || argv.includes('--version')) {
     process.stdout.write(JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version + '\n');
@@ -85,7 +87,7 @@ export async function main(argv) {
       verbose: { type: 'boolean' }, 'max-per-rule': { type: 'string' }, out: { type: 'string' },
       globals: { type: 'string', multiple: true }, stories: { type: 'string' },
       sweep: { type: 'string' }, 'no-sweep': { type: 'boolean' }, 'no-stress-data': { type: 'boolean' }, concurrency: { type: 'string' }, dedupe: { type: 'string' }, cdp: { type: 'string' }, 'no-loading': { type: 'boolean' }, ux: { type: 'boolean' },
-      'no-routes': { type: 'boolean' }, 'per-route': { type: 'string' }, 'min-coverage': { type: 'string' }, 'coverage-baseline': { type: 'string' },
+      'no-routes': { type: 'boolean' }, 'no-baseline': { type: 'boolean' }, 'per-route': { type: 'string' }, 'min-coverage': { type: 'string' }, 'coverage-baseline': { type: 'string' },
   };
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: false, options });
   const unknown = Object.keys(values).filter((k) => !(k in options));
@@ -111,6 +113,7 @@ export async function main(argv) {
     concurrency: values.concurrency ? +values.concurrency : undefined, dedupe: values.dedupe, cdp: values.cdp,
     loading: values['no-loading'] ? false : undefined, ux: values.ux ? true : undefined,
     routes: values['no-routes'] ? false : undefined,
+    baseline: values['no-baseline'] ? false : undefined,
     ...(values['per-route'] || values['min-coverage'] || values['coverage-baseline'] ? { coverage: { perRoute: values['per-route'] ? +values['per-route'] : undefined, min: values['min-coverage'] ? +values['min-coverage'] : undefined, baseline: values['coverage-baseline'] } } : {}),
   };
   const format = values.json ? 'json' : values.format || 'pretty';
@@ -119,10 +122,21 @@ export async function main(argv) {
   const { check, formatPretty, formatMarkdown, formatGithub } = await import('./index.js');
   let result;
   try {
-    result = await check({ targets: cmd === 'storybook' ? [] : positionals, storybook: cmd === 'storybook' ? { target: positionals[0], globals: values.globals, stories: values.stories ? values.stories.split(',') : undefined } : undefined, config, configFile: values.config, scan: values['no-scan'] ? false : undefined, log: values.verbose || !quiet ? log : () => {} });
+    result = await check({ writeBaseline: cmd === 'baseline', targets: cmd === 'storybook' ? [] : positionals, storybook: cmd === 'storybook' ? { target: positionals[0], globals: values.globals, stories: values.stories ? values.stories.split(',') : undefined } : undefined, config, configFile: values.config, scan: values['no-scan'] ? false : undefined, log: values.verbose || !quiet ? log : () => {} });
   } catch (e) {
     process.stderr.write('\n' + (e && e.message || e) + '\n');
     return 2;
+  }
+  if (cmd === 'baseline') {
+    const { baselinePath, writeBaseline, relPath, BASELINE_FILE } = await import('./baseline.js');
+    const path = baselinePath(result.config.baseline === false ? { baseline: BASELINE_FILE } : result.config, process.cwd());
+    const { count, kept } = writeBaseline(path, result.issues, { checkedPages: result.pages.map((p) => p.path), sourceScan: result.stats.sourceScan });
+    const broken = result.issues.filter((i) => i.rule === 'page-error').length;
+    process.stdout.write(`\nrenderlint: wrote ${count} finding(s) to ${relPath(path, process.cwd())}` +
+      (kept ? ` (${kept} of them kept from the earlier file, for pages this run didn't check)` : '') + '. ' +
+      (broken ? `${broken} page(s) that could not be loaded are not accepted: fix those. ` : '') +
+      'Commit it: from now on, runs fail only on findings that are not in it. Fix the known ones over time and run `npx renderlint baseline` again to shrink it.\n');
+    return 0;
   }
   if (format === 'json') process.stdout.write(JSON.stringify({ ok: result.ok, stats: result.stats, issues: result.issues }, null, 2) + '\n');
   else if (format === 'md') process.stdout.write(formatMarkdown(result) + '\n');
