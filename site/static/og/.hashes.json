@@ -13,5 +13,6 @@
   "blog-catch-ui-bugs-ai-coding-agents": "cc01d0e1c8b9231a4b7148f0756166458dcb5e9d",
   "blog-visual-regression-testing-vs-rendered-ui-linting": "7407bb7677a013de0c9e17f4b16c349e8a36ed7d",
   "blog-replace-alert-confirm-prompt": "a6daae9da4d876caccd402ef5b594a203d85ee33",
-  "blog-form-control-layout-bugs": "ff045bfba94a6b0125b8eef879b64ca47d996e6e"
+  "blog-form-control-layout-bugs": "ff045bfba94a6b0125b8eef879b64ca47d996e6e",
+  "blog-layout-bugs-fixed-ant-design-mantine-nuxt-ui-panda-css": "80a22364ffdd552c8b875026c730d064afe0eb1a"
 }

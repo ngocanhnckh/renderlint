@@ -104,6 +104,11 @@ code,kbd,pre{font-family:var(--mono);font-size:.88em}
 .logos li{display:inline-flex;align-items:center;gap:9px;padding:9px 16px 9px 13px;border:1px solid var(--line);border-radius:999px;font:500 15px/1.2 var(--sans);color:var(--ink-2)}
 .logos li svg{width:19px;height:19px;fill:currentColor;flex-shrink:0}
 .logos a{text-decoration:none}
+.logos.merged{padding-top:clamp(20px,3vw,32px)}
+.logos.merged li{padding:0}
+.logos.merged li a{display:inline-flex;align-items:center;gap:9px;padding:9px 16px 9px 13px;color:inherit}
+.logos.merged li a:hover{color:var(--ink)}
+.logos .merged-more{margin:18px 0 0}
 
 /* sections */
 .section{padding-top:clamp(64px,9vw,128px)}

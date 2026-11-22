@@ -53,6 +53,17 @@ export const WORKS_WITH = [
   ['Claude Code', 'siClaude'], ['GitHub Actions', 'siGithubactions'],
 ].map(([name, si]) => `<li>${si ? brand(si) : ''}${esc(name)}</li>`).join('');
 
+// Projects that merged fixes for bugs renderlint found (PRs merged 19–20 November 2026).
+// Panda CSS is not in Simple Icons: its mark is from the project's own repo (apps/playground/src/components/Logo.tsx), drawn in one colour.
+const PANDA_MARK = '<svg viewBox="0 0 95 96" role="img" aria-hidden="true"><path fill-rule="evenodd" d="M0 11C0 4.92487 4.92487 0 11 0H84C90.0751 0 95 4.92487 95 11V85C95 91.0751 90.0751 96 84 96H11C4.92487 96 0 91.0751 0 85V11Z M60.8796 21.4585C55.6382 19.9529 50.2921 19.7483 44.844 20.2355C41.7952 20.5523 38.8641 21.1575 36.037 22.2195C29.9261 24.5149 25.3378 28.4905 22.6019 34.4762C20.6404 38.7674 19.9316 43.3259 19.8577 48.003C19.7796 52.9459 20.399 57.8204 21.3833 62.6531C22.2754 67.0336 23.4635 71.3285 25.1603 75.474C25.3215 75.8679 25.5223 76.0009 25.9526 76C31.3191 75.9884 36.6857 75.9885 42.0523 75.9885C43.641 75.9885 45.2298 75.9885 46.8185 75.9882C46.9401 75.9882 47.0618 75.9815 47.2017 75.9738C47.2731 75.9699 47.3493 75.9657 47.4326 75.962C47.4003 75.8852 47.3715 75.8148 47.3444 75.7486C47.2913 75.6187 47.245 75.5057 47.1934 75.3952C46.8053 74.565 46.4092 73.7383 46.0131 72.9116C45.154 71.1184 44.2948 69.3252 43.5177 67.4972C41.161 61.9527 39.3562 56.244 38.8055 50.2012C38.5625 47.5349 38.5962 44.8838 39.336 42.2858C40.1816 39.3161 41.9962 37.2196 45.0045 36.3431C47.767 35.5383 50.5678 35.5436 53.3153 36.432C55.7674 37.225 57.366 38.8999 58.0461 41.4078C58.5683 43.3338 58.5682 45.2806 58.173 47.2223C57.8688 48.7173 57.2563 50.0816 56.1539 51.1729C54.1763 53.1305 51.7066 53.5806 49.0565 53.4306C48.585 53.4039 48.115 53.3522 47.6306 53.2989C47.4037 53.274 47.1737 53.2487 46.939 53.2255C46.9457 53.3005 46.9495 53.3696 46.9529 53.4343C46.9598 53.5617 46.9658 53.6721 46.992 53.7775C47.1049 54.2314 47.2125 54.687 47.3202 55.1426C47.5794 56.24 47.8387 57.3376 48.172 58.4122C48.8266 60.5223 49.5878 62.5816 50.4507 64.5922C56.6017 64.1122 62.2673 62.5831 68.2805 58.9734C68.3708 58.9165 68.4528 58.865 68.535 58.8138C71.1179 57.2059 73.2084 55.1199 74.6501 52.4264C76.9847 48.0644 77.4398 43.3997 76.7462 38.5848C76.0304 33.6159 73.8004 29.4451 69.9619 26.1735C67.2995 23.9043 64.2208 22.4183 60.8796 21.4585Z"/></svg>';
+export const MERGED_POST = '/blog/layout-bugs-fixed-ant-design-mantine-nuxt-ui-panda-css/';
+export const MERGED_IN = [
+  ['Ant Design', 'siAntdesign', 'https://github.com/ant-design/ant-design/pull/59920'],
+  ['Mantine', 'siMantine', 'https://github.com/mantinedev/mantine/pull/9447'],
+  ['Nuxt UI', 'siNuxt', 'https://github.com/nuxt/ui/pull/7445'],
+  ['Panda CSS', null, 'https://github.com/chakra-ui/panda/pull/4110'],
+].map(([name, si, pr]) => `<li><a href="${pr}" rel="noopener" aria-label="${esc(name)}: merged pull request">${si ? brand(si) : PANDA_MARK}${esc(name)}</a></li>`).join('');
+
 // ---- shared chrome ----------------------------------------------------------------------------
 export const copyCmd = (cmd, label = 'Copy') => `<div class="cmd"><code>${esc(cmd)}</code><button class="copy" type="button" data-copy="${esc(cmd)}" aria-label="Copy the command ${esc(cmd)}">${ICON.copy}<span>${label}</span></button></div>`;
 
@@ -72,7 +83,7 @@ function footer() {
 <nav aria-labelledby="f1"><h2 id="f1">Product</h2><ul><li><a href="/get-started/">Get started</a></li><li><a href="/examples/">Before and after</a></li><li><a href="/rules/">All ${Object.keys(RULES).length} rules</a></li><li><a href="/blog/">Blog</a></li></ul></nav>
 <nav aria-labelledby="f2"><h2 id="f2">Project</h2><ul><li><a href="${REPO}">GitHub</a></li><li><a href="${REPO}/tree/master/docs">Documentation</a></li><li><a href="${REPO}/blob/master/CHANGELOG.md">Changelog</a></li><li><a href="${NPM}">npm package</a></li></ul></nav>
 <nav aria-labelledby="f3"><h2 id="f3">Follow</h2><ul><li><a href="/feed.xml">Atom feed</a></li><li><a href="/rss.xml">RSS feed</a></li><li><a href="/llms.txt">llms.txt</a></li><li><a href="https://gitlab.com/anhnn.a05/renderlint">GitLab mirror</a></li></ul></nav>
-<div class="legal"><span>© 2026 renderlint contributors. MIT licensed.</span><span>Framework names and logos belong to their owners and are shown only to say what renderlint works with.</span></div>
+<div class="legal"><span>© 2026 renderlint contributors. MIT licensed.</span><span>Project names and logos belong to their owners. They are shown only to say what renderlint works with and which projects have merged fixes for bugs it found.</span></div>
 </div></footer>`;
 }
 
@@ -162,7 +173,9 @@ async function renderMarkdown(md) {
         return `<h${depth} id="${id}">${inner}</h${depth}>\n`;
       },
       code({ text, lang }) {
-        if (lang === 'text' || lang === 'console') return `<pre class="term"><code>${terminal(text)}</code></pre>\n`;
+        // Quoted tool output can contain emoji from the page it checked (e.g. "🥦 Broccoli"): that is content, not an icon.
+        const quoted = /\p{Extended_Pictographic}/u.test(text) ? ' data-renderlint-ignore="emoji" data-renderlint-reason="quoted renderlint output from another site"' : '';
+        if (lang === 'text' || lang === 'console') return `<pre class="term"${quoted}><code>${terminal(text)}</code></pre>\n`;
         return `<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(text)}</code></pre>\n`;
       },
     },
@@ -198,7 +211,7 @@ for (const f of fs.readdirSync(blogDir).filter((f) => f.endsWith('.md'))) {
   posts.push({ ...data, file: f, body, words, minutes: Math.max(1, Math.round(words / 230)), rules: (data.rule || '').split(',').map((s) => s.trim()).filter(Boolean), tags: (data.tags || '').split(',').map((s) => s.trim()).filter(Boolean) });
 }
 // a stable reading order: the order of the brief
-const ORDER = ['text-overflow-clipped-text-responsive-layouts', 'color-contrast-gradients-images', 'content-you-cant-scroll-to', 'dropdown-cut-off-overflow-hidden-z-index', 'loading-states-layout-shift', 'test-every-route-and-role-behind-login', 'catch-ui-bugs-ai-coding-agents', 'visual-regression-testing-vs-rendered-ui-linting', 'replace-alert-confirm-prompt', 'form-control-layout-bugs'];
+const ORDER = ['layout-bugs-fixed-ant-design-mantine-nuxt-ui-panda-css', 'text-overflow-clipped-text-responsive-layouts', 'color-contrast-gradients-images', 'content-you-cant-scroll-to', 'dropdown-cut-off-overflow-hidden-z-index', 'loading-states-layout-shift', 'test-every-route-and-role-behind-login', 'catch-ui-bugs-ai-coding-agents', 'visual-regression-testing-vs-rendered-ui-linting', 'replace-alert-confirm-prompt', 'form-control-layout-bugs'];
 posts.sort((a, b) => (ORDER.indexOf(a.slug) + 1 || 99) - (ORDER.indexOf(b.slug) + 1 || 99));
 const fmtDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -274,7 +287,7 @@ const mdInline = (s) => new Marked().parseInline(esc(s).replace(/&lt;(\/?)(svg|d
 }
 
 // ---- home, get started, examples, 404 ---------------------------------------------------------
-const ctx = { posts, postCard, copyCmd, ICON, WORKS_WITH, img, image, terminal, esc, crumbs, RULES, VERSION, REPO, NPM, INSTALL, PKG, SITE };
+const ctx = { posts, postCard, copyCmd, ICON, WORKS_WITH, MERGED_IN, MERGED_POST, img, image, terminal, esc, crumbs, RULES, VERSION, REPO, NPM, INSTALL, PKG, SITE };
 const software = {
   '@type': 'SoftwareApplication', '@id': `${SITE}/#software`, name: 'renderlint', alternateName: PKG,
   description: 'An open-source command-line tool that renders a web app in headless Chromium and reports visual UI defects: overflowing and clipped text, low contrast measured from pixels, overlapping elements, unreachable content, hidden menus, broken form controls and missing loading states.',
@@ -373,6 +386,7 @@ Key facts:
 - Works with any framework that renders in a browser: Next.js, React, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, React Router/Remix, TanStack Router, Vite, plain HTML, WordPress and Elementor. Integrations: build scripts, a Vite plugin, a Claude Code Stop hook, AGENTS.md and skills for other agents, Playwright Test, Storybook, GitHub Actions annotations.
 - No baseline images: it judges each page on its own, unlike visual regression testing.
 - In an experiment with 22 headless Claude Code sessions, the 11 apps built without renderlint had 229 errors between them; the 11 built with it finished at 0.
+- Bugs it found on the documentation sites of Ant Design, Mantine, Nuxt UI and Panda CSS were fixed and merged upstream in November 2026: ${SITE}${MERGED_POST}
 - Install: \`${INSTALL}\` then \`npx renderlint\`. Requires Node.js 18.17+. Source: ${REPO}
 `;
 write('llms.txt', `${llmsIntro}
