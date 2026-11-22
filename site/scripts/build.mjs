@@ -157,6 +157,8 @@ function page({ url, title, description, body, current, ld = [], og, type = 'web
 <link rel="preload" href="/fonts/instrument-serif-400.woff2" as="font" type="font/woff2" crossorigin>
 <meta property="og:type" content="${type}">
 <meta property="og:site_name" content="renderlint">
+<meta name="application-name" content="renderlint">
+<meta name="apple-mobile-web-app-title" content="renderlint">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${canonical}">
@@ -340,7 +342,7 @@ const software = {
 page({
   url: '/', title: 'renderlint: a linter for the rendered UI', current: '/', og: 'home',
   description: 'renderlint opens your app in a real browser, finds visual UI defects like overflow, low contrast and hidden menus, and fails the build until they are fixed.',
-  ld: [software, { '@type': 'WebSite', '@id': `${SITE}/#website`, name: 'renderlint', url: `${SITE}/`, publisher: { '@id': `${SITE}/#org` } }, faqLd(FAQ)],
+  ld: [software, { '@type': 'WebSite', '@id': `${SITE}/#website`, name: 'renderlint', alternateName: ['renderlint CLI', 'renderlint.yitec.net'], url: `${SITE}/`, inLanguage: 'en', publisher: { '@id': `${SITE}/#org` } }, faqLd(FAQ)],
   body: await home(ctx), llms: 'What renderlint is, what it catches, how it works, results and FAQ.',
   extraHead: '<link rel="preload" href="/media/hero-poster.webp" as="image" type="image/webp" fetchpriority="high">\n',
 });
