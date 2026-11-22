@@ -27,7 +27,7 @@
   // Scroll reveals: blocks below the fold fade up as they enter the viewport, siblings staggered.
   // Nothing is hidden without JS, with reduced motion, or if it is already on screen at load.
   if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
-    var sel = '.section-head,.define>div,.facts>div,.logos li,.grid-2>*,.pairs>*,.table-wrap,.steps>li,.results .big>div,.results figure,.gates>.gate,.faq>div,.posts>*,.cta .wrap>*,.rule,.related,.prose>figure,.prose>pre,.prose>.callout';
+    var sel = '.section-head,.define>div,.facts>div,.logos .marquee,.grid-2>*,.pairs>*,.table-wrap,.steps>li,.results .big>div,.results figure,.gates>.gate,.faq>div,.posts>*,.cta .wrap>*,.rule,.related,.prose>figure,.prose>pre,.prose>.callout';
     var io = new IntersectionObserver(function (entries) {
       var batch = entries.filter(function (en) { return en.isIntersecting; });
       batch.forEach(function (en, i) {

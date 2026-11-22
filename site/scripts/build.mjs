@@ -44,25 +44,66 @@ export const ICON = {
 };
 export const MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="#0c0c0c"/><rect x="8" y="10.5" width="16" height="11" rx="2.2" fill="none" stroke="#ec6a42" stroke-width="2.6"/><path d="M8 7h9" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>';
 
-// "Works with": only what README/docs say renderlint supports. Monochrome Simple Icons (CC0); Playwright has no mark there.
-const brand = (si) => icons[si] ? `<svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="${icons[si].path}"/></svg>` : '';
-export const WORKS_WITH = [
-  ['Next.js', 'siNextdotjs'], ['React', 'siReact'], ['Vue', 'siVuedotjs'], ['Nuxt', 'siNuxt'], ['Svelte / SvelteKit', 'siSvelte'],
-  ['Astro', 'siAstro'], ['Angular', 'siAngular'], ['React Router / Remix', 'siReactrouter'], ['TanStack Router', 'siTanstack'],
-  ['Vite', 'siVite'], ['Storybook', 'siStorybook'], ['Playwright', null], ['WordPress', 'siWordpress'], ['Elementor', 'siElementor'],
-  ['Claude Code', 'siClaude'], ['GitHub Actions', 'siGithubactions'],
-].map(([name, si]) => `<li>${si ? brand(si) : ''}${esc(name)}</li>`).join('');
+// "Works with": only what README/docs say renderlint supports. Simple Icons (CC0) in each brand's colour; Playwright has no mark there.
+// Stars and weekly npm downloads come from the GitHub and npm APIs at build time (cached in content/stats.json for a day; the cache is used when offline).
+const brand = (si, color) => icons[si] ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path${color ? ` style="fill:${color}"` : ''} d="${icons[si].path}"/></svg>` : '';
+const STATS_FILE = path.join(site, 'content', 'stats.json');
+const statsCache = fs.existsSync(STATS_FILE) ? JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) : { fetched: 0, repos: {}, npm: {} };
+const fresh = Date.now() - statsCache.fetched < 24 * 3600e3;
+async function getJson(url) {
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'renderlint-site-build', Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+async function stats(list) {
+  if (!fresh) {
+    let got = 0;
+    await Promise.all(list.map(async (x) => {
+      if (x.repo) { const j = await getJson(`https://api.github.com/repos/${x.repo}`); if (j?.stargazers_count) { statsCache.repos[x.repo] = j.stargazers_count; got++; } }
+      if (x.npm) { const j = await getJson(`https://api.npmjs.org/downloads/point/last-week/${x.npm}`); if (j?.downloads) { statsCache.npm[x.npm] = j.downloads; got++; } }
+    }));
+    if (got) { statsCache.fetched = Date.now(); statsCache.date = new Date().toISOString().slice(0, 10); }
+  }
+  return list.map((x) => ({ ...x, stars: statsCache.repos[x.repo], downloads: statsCache.npm[x.npm] }));
+}
+const compact = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e8 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}k` : String(n);
+const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>';
+const DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6.5 11 12 16.5 17.5 11M5 20h14"/></svg>';
+function chip(x, hidden) {
+  const nums = [x.stars && `<span class="n">${STAR}${compact(x.stars)}<span class="sr"> GitHub stars</span></span>`, x.downloads && `<span class="n">${DOWN}${compact(x.downloads)}/wk<span class="sr"> npm downloads a week</span></span>`].filter(Boolean).join('');
+  const inner = `<span class="mk">${x.mark}</span><span class="tx"><b>${esc(x.name)}</b><span class="nums">${nums || `<span class="n">${esc(x.note || '')}</span>`}</span></span>`;
+  return `<li style="--c:${x.color}">${x.href ? `<a class="card" href="${x.href}" rel="noopener"${hidden ? ' tabindex="-1"' : ''}>${inner}</a>` : `<span class="card">${inner}</span>`}</li>`;
+}
+// An endless strip: one real list, then copies for the loop (hidden from assistive tech and the keyboard).
+function marquee(items, { min = 10, reverse = false, seconds = 40 } = {}) {
+  const reps = Math.max(1, Math.ceil(min / items.length));
+  const set = (hidden) => `<ul class="set"${hidden ? ' aria-hidden="true"' : ''}>${Array.from({ length: reps }, (_, i) => items.map((x) => chip(x, hidden || i > 0).replace('<li ', i > 0 ? '<li class="dup" aria-hidden="true" ' : '<li ')).join('')).join('')}</ul>`;
+  return `<div class="marquee${reverse ? ' rev' : ''}" style="--t:${seconds}s" data-renderlint-ignore="text-clipped content-overflow viewport-overflow obscured-content element-overlap" data-renderlint-reason="endless logo strip: chips scroll through a clipped window on purpose"><div class="track">${set(false)}${set(true)}</div></div>`;
+}
+const WW = await stats([
+  ['Next.js', 'siNextdotjs', '#000000', 'vercel/next.js', 'next'], ['React', 'siReact', '#149eca', 'facebook/react', 'react'], ['Vue', 'siVuedotjs', '#42b883', 'vuejs/core', 'vue'],
+  ['Nuxt', 'siNuxt', '#00DC82', 'nuxt/nuxt', 'nuxt'], ['Svelte / SvelteKit', 'siSvelte', '#FF3E00', 'sveltejs/svelte', 'svelte'], ['Astro', 'siAstro', '#BC52EE', 'withastro/astro', 'astro'],
+  ['Angular', 'siAngular', '#DD0031', 'angular/angular', '@angular/core'], ['React Router / Remix', 'siReactrouter', '#CA4245', 'remix-run/react-router', 'react-router'],
+  ['TanStack Router', 'siTanstack', '#1f1f1f', 'TanStack/router', '@tanstack/react-router'], ['Vite', 'siVite', '#9135FF', 'vitejs/vite', 'vite'],
+  ['Storybook', 'siStorybook', '#FF4785', 'storybookjs/storybook', 'storybook'], ['Playwright', null, '#2EAD33', 'microsoft/playwright', '@playwright/test'],
+  ['WordPress', 'siWordpress', '#21759B', 'WordPress/WordPress', null], ['Elementor', 'siElementor', '#92003B', 'elementor/elementor', null],
+  ['Claude Code', 'siClaude', '#D97757', 'anthropics/claude-code', '@anthropic-ai/claude-code'], ['GitHub Actions', 'siGithubactions', '#2088FF', null, null, 'CI annotations on PRs'],
+].map(([name, si, color, repo, npm, note]) => ({ name, color, repo, npm, note, mark: si ? brand(si, color) : `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="${color}"/></svg>` })));
+export const WORKS_WITH = marquee(WW, { min: 16, seconds: 70 });
 
 // Projects that merged fixes for bugs renderlint found (PRs merged 19–20 November 2026).
-// Panda CSS is not in Simple Icons: its mark is from the project's own repo (apps/playground/src/components/Logo.tsx), drawn in one colour.
-const PANDA_MARK = '<svg viewBox="0 0 95 96" role="img" aria-hidden="true"><path fill-rule="evenodd" d="M0 11C0 4.92487 4.92487 0 11 0H84C90.0751 0 95 4.92487 95 11V85C95 91.0751 90.0751 96 84 96H11C4.92487 96 0 91.0751 0 85V11Z M60.8796 21.4585C55.6382 19.9529 50.2921 19.7483 44.844 20.2355C41.7952 20.5523 38.8641 21.1575 36.037 22.2195C29.9261 24.5149 25.3378 28.4905 22.6019 34.4762C20.6404 38.7674 19.9316 43.3259 19.8577 48.003C19.7796 52.9459 20.399 57.8204 21.3833 62.6531C22.2754 67.0336 23.4635 71.3285 25.1603 75.474C25.3215 75.8679 25.5223 76.0009 25.9526 76C31.3191 75.9884 36.6857 75.9885 42.0523 75.9885C43.641 75.9885 45.2298 75.9885 46.8185 75.9882C46.9401 75.9882 47.0618 75.9815 47.2017 75.9738C47.2731 75.9699 47.3493 75.9657 47.4326 75.962C47.4003 75.8852 47.3715 75.8148 47.3444 75.7486C47.2913 75.6187 47.245 75.5057 47.1934 75.3952C46.8053 74.565 46.4092 73.7383 46.0131 72.9116C45.154 71.1184 44.2948 69.3252 43.5177 67.4972C41.161 61.9527 39.3562 56.244 38.8055 50.2012C38.5625 47.5349 38.5962 44.8838 39.336 42.2858C40.1816 39.3161 41.9962 37.2196 45.0045 36.3431C47.767 35.5383 50.5678 35.5436 53.3153 36.432C55.7674 37.225 57.366 38.8999 58.0461 41.4078C58.5683 43.3338 58.5682 45.2806 58.173 47.2223C57.8688 48.7173 57.2563 50.0816 56.1539 51.1729C54.1763 53.1305 51.7066 53.5806 49.0565 53.4306C48.585 53.4039 48.115 53.3522 47.6306 53.2989C47.4037 53.274 47.1737 53.2487 46.939 53.2255C46.9457 53.3005 46.9495 53.3696 46.9529 53.4343C46.9598 53.5617 46.9658 53.6721 46.992 53.7775C47.1049 54.2314 47.2125 54.687 47.3202 55.1426C47.5794 56.24 47.8387 57.3376 48.172 58.4122C48.8266 60.5223 49.5878 62.5816 50.4507 64.5922C56.6017 64.1122 62.2673 62.5831 68.2805 58.9734C68.3708 58.9165 68.4528 58.865 68.535 58.8138C71.1179 57.2059 73.2084 55.1199 74.6501 52.4264C76.9847 48.0644 77.4398 43.3997 76.7462 38.5848C76.0304 33.6159 73.8004 29.4451 69.9619 26.1735C67.2995 23.9043 64.2208 22.4183 60.8796 21.4585Z"/></svg>';
+// Panda CSS is not in Simple Icons: its mark is from the project's own repo (apps/playground/src/components/Logo.tsx).
 export const MERGED_POST = '/blog/layout-bugs-fixed-ant-design-mantine-nuxt-ui-panda-css/';
-export const MERGED_IN = [
-  ['Ant Design', 'siAntdesign', 'https://github.com/ant-design/ant-design/pull/59920'],
-  ['Mantine', 'siMantine', 'https://github.com/mantinedev/mantine/pull/9447'],
-  ['Nuxt UI', 'siNuxt', 'https://github.com/nuxt/ui/pull/7445'],
-  ['Panda CSS', null, 'https://github.com/chakra-ui/panda/pull/4110'],
-].map(([name, si, pr]) => `<li><a href="${pr}" rel="noopener" aria-label="${esc(name)}: merged pull request">${si ? brand(si) : PANDA_MARK}${esc(name)}</a></li>`).join('');
+const PANDA_COLOR = '<svg viewBox="0 0 95 96" aria-hidden="true"><path fill="#F6E458" d="M0 11C0 4.92487 4.92487 0 11 0H84C90.0751 0 95 4.92487 95 11V85C95 91.0751 90.0751 96 84 96H11C4.92487 96 0 91.0751 0 85V11Z"/><path fill="#111" d="M60.8796 21.4585C55.6382 19.9529 50.2921 19.7483 44.844 20.2355C41.7952 20.5523 38.8641 21.1575 36.037 22.2195C29.9261 24.5149 25.3378 28.4905 22.6019 34.4762C20.6404 38.7674 19.9316 43.3259 19.8577 48.003C19.7796 52.9459 20.399 57.8204 21.3833 62.6531C22.2754 67.0336 23.4635 71.3285 25.1603 75.474C25.3215 75.8679 25.5223 76.0009 25.9526 76C31.3191 75.9884 36.6857 75.9885 42.0523 75.9885C43.641 75.9885 45.2298 75.9885 46.8185 75.9882C46.9401 75.9882 47.0618 75.9815 47.2017 75.9738C47.2731 75.9699 47.3493 75.9657 47.4326 75.962C47.4003 75.8852 47.3715 75.8148 47.3444 75.7486C47.2913 75.6187 47.245 75.5057 47.1934 75.3952C46.8053 74.565 46.4092 73.7383 46.0131 72.9116C45.154 71.1184 44.2948 69.3252 43.5177 67.4972C41.161 61.9527 39.3562 56.244 38.8055 50.2012C38.5625 47.5349 38.5962 44.8838 39.336 42.2858C40.1816 39.3161 41.9962 37.2196 45.0045 36.3431C47.767 35.5383 50.5678 35.5436 53.3153 36.432C55.7674 37.225 57.366 38.8999 58.0461 41.4078C58.5683 43.3338 58.5682 45.2806 58.173 47.2223C57.8688 48.7173 57.2563 50.0816 56.1539 51.1729C54.1763 53.1305 51.7066 53.5806 49.0565 53.4306C48.585 53.4039 48.115 53.3522 47.6306 53.2989C47.4037 53.274 47.1737 53.2487 46.939 53.2255C46.9457 53.3005 46.9495 53.3696 46.9529 53.4343C46.9598 53.5617 46.9658 53.6721 46.992 53.7775C47.1049 54.2314 47.2125 54.687 47.3202 55.1426C47.5794 56.24 47.8387 57.3376 48.172 58.4122C48.8266 60.5223 49.5878 62.5816 50.4507 64.5922C56.6017 64.1122 62.2673 62.5831 68.2805 58.9734C68.3708 58.9165 68.4528 58.865 68.535 58.8138C71.1179 57.2059 73.2084 55.1199 74.6501 52.4264C76.9847 48.0644 77.4398 43.3997 76.7462 38.5848C76.0304 33.6159 73.8004 29.4451 69.9619 26.1735C67.2995 23.9043 64.2208 22.4183 60.8796 21.4585Z"/></svg>';
+const MERGED = await stats([
+  ['Ant Design', brand('siAntdesign', '#0170FE'), '#0170FE', 'ant-design/ant-design', 'antd', 'https://github.com/ant-design/ant-design/pull/59920'],
+  ['Mantine', brand('siMantine', '#339AF0'), '#339AF0', 'mantinedev/mantine', '@mantine/core', 'https://github.com/mantinedev/mantine/pull/9447'],
+  ['Nuxt UI', brand('siNuxt', '#00DC82'), '#00DC82', 'nuxt/ui', '@nuxt/ui', 'https://github.com/nuxt/ui/pull/7445'],
+  ['Panda CSS', PANDA_COLOR, '#E3C600', 'chakra-ui/panda', '@pandacss/dev', 'https://github.com/chakra-ui/panda/pull/4110'],
+].map(([name, mark, color, repo, npm, href]) => ({ name, mark, color, repo, npm, href })));
+export const MERGED_IN = marquee(MERGED, { min: 10, reverse: true, seconds: 45 });
+fs.writeFileSync(STATS_FILE, JSON.stringify(statsCache, null, 1) + '\n');
 
 // ---- shared chrome ----------------------------------------------------------------------------
 export const copyCmd = (cmd, label = 'Copy') => `<div class="cmd"><code>${esc(cmd)}</code><button class="copy" type="button" data-copy="${esc(cmd)}" aria-label="Copy the command ${esc(cmd)}">${ICON.copy}<span>${label}</span></button></div>`;

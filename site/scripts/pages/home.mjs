@@ -79,12 +79,12 @@ export async function home(c) {
 
 <section class="wrap logos" aria-labelledby="works-h">
 <p id="works-h">Works with anything that renders in a browser, including</p>
-<ul>${WORKS_WITH}</ul>
+${WORKS_WITH}
 </section>
 
 <section class="wrap logos merged" aria-labelledby="merged-h">
 <p id="merged-h">Bugs renderlint found, now fixed upstream in</p>
-<ul>${MERGED_IN}</ul>
+${MERGED_IN}
 <p class="merged-more"><a class="link-arrow" href="${MERGED_POST}">How renderlint found them, and the fixes ${ICON.arrow}</a></p>
 </section>
 
