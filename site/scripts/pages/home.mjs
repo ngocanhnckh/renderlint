@@ -146,12 +146,13 @@ ${catches.map(([w, r]) => `<tr><td${ignore(w)}>${w}</td><td>${ruleLinks(r)}</td>
 <section class="wrap section" aria-labelledby="cmp-h">
 <div class="section-head"><div><span class="kicker">Comparison</span><h2 id="cmp-h">How does it compare with other tools?</h2></div>
 <p>renderlint doesn’t replace your other tools. It covers the gap between “the code is valid” and “the page looks right”.</p></div>
-<div class="table-wrap"><table class="compare"><thead><tr><th scope="col">Tool</th><th scope="col">Reads</th><th scope="col">Overflow, overlap, clipping</th><th scope="col">Contrast on gradients and images</th><th scope="col">Needs a baseline</th><th scope="col">Tells you the fix</th></tr></thead><tbody>
+<div class="table-wrap wide"><table class="compare"><thead><tr><th scope="col">Tool</th><th scope="col">Reads</th><th scope="col">Overflow, overlap, clipping</th><th scope="col">Contrast on gradients and images</th><th scope="col">Needs a baseline</th><th scope="col">Tells you the fix</th></tr></thead><tbody>
 <tr><td>ESLint, stylelint, TypeScript</td><td>Source code</td><td>No</td><td>No</td><td>No</td><td>Yes, for code issues</td></tr>
 <tr><td>axe-core, Lighthouse</td><td>DOM and computed CSS</td><td>No</td><td>Reported as “needs review”</td><td>No</td><td>Yes, for accessibility rules</td></tr>
 <tr><td>Visual regression (Percy, Chromatic, BackstopJS, Playwright screenshots)</td><td>Pixels, against approved images</td><td>Only as a diff from the baseline</td><td>Only as a diff</td><td>Yes: a defect in the first version becomes the baseline</td><td>No: shows what changed, not what’s wrong</td></tr>
 <tr class="us"><td>renderlint</td><td>Rendered geometry and pixels</td><td>Yes, at every width and with stressed content</td><td>Yes, from the real pixels behind each glyph</td><td>No</td><td>Yes: element, source file, screenshot and fix</td></tr>
 </tbody></table></div>
+<p class="scroll-hint">Swipe the table sideways to see every column.</p>
 <p><a class="link-arrow" href="/blog/visual-regression-testing-vs-rendered-ui-linting/">Visual regression testing vs rendered-UI linting ${ICON.arrow}</a></p>
 </section>
 

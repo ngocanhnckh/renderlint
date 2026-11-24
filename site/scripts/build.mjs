@@ -224,7 +224,12 @@ async function renderMarkdown(md) {
     },
   });
   let html = marked.parse(md);
-  html = html.replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>');
+  // Tables with 3+ columns (or a long code token) get a minimum width and scroll inside .table-wrap; narrower ones fit the column.
+  html = html.replace(/<table>([\s\S]*?)<\/table>/g, (m, inner) => {
+    const cols = ((inner.match(/<tr>([\s\S]*?)<\/tr>/) || [, ''])[1].match(/<t[hd][\s>]/g) || []).length;
+    const longCode = /<code>[^<]*?[^\s<]{16,}/.test(inner);
+    return `<div class="table-wrap${cols >= 3 || longCode ? ' wide' : ''}"><table>${inner}</table></div>`;
+  });
   // external links open in place but are marked for screen readers? keep plain; add rel for safety
   html = html.replace(/<a href="(https?:\/\/(?!renderlint\.yitec\.net)[^"]+)"/g, '<a href="$1" rel="noopener"');
   return { html, toc };

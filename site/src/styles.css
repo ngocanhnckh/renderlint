@@ -175,7 +175,7 @@ table{border-collapse:collapse;width:100%;font-size:15px;line-height:1.45}
 th,td{text-align:left;vertical-align:top;padding:12px 16px;border-bottom:1px solid var(--line-2)}
 thead th{background:var(--soft);font-weight:600}
 tbody tr:last-child td{border-bottom:0}
-td code{display:inline-block;max-width:100%;margin:2px 0;overflow-wrap:anywhere}
+td code{display:inline-block;max-width:100%;margin:2px 0;overflow-wrap:break-word}
 .compare td:first-child,.compare th:first-child{font-weight:600;min-width:150px}
 .compare tr.us td{background:#fff4ef}
 
@@ -344,5 +344,10 @@ td code{display:inline-block;max-width:100%;margin:2px 0;overflow-wrap:anywhere}
 .cta :not(pre)>code,.callout :not(pre)>code{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.18);color:#fff}
 .cmd code{color:inherit}
 @media (max-width:560px){.cmd{font-size:13.5px;padding-left:16px}.copy span{display:none}.copy{width:40px;padding:0;justify-content:center}.float{padding:14px 16px;max-width:170px}.float b{font-size:40px;margin:6px 0 2px}.float span{font-size:14px}}
-@media (max-width:560px){th,td{padding:10px 10px;hyphens:auto;-webkit-hyphens:auto;overflow-wrap:anywhere}table{font-size:14px}.compare td:first-child,.compare th:first-child{min-width:120px}}
+/* Narrow screens: tables keep readable columns and scroll inside .table-wrap instead of breaking words letter by letter.
+   The minimum widths stay well above the frame width wherever they apply, so a table never scrolls by just a few pixels. */
+.scroll-hint{display:none}
+@media (max-width:700px){.table-wrap.wide table{min-width:680px}}
+@media (max-width:820px){.compare{min-width:760px}.compare td:first-child,.compare th:first-child{position:sticky;left:0;z-index:1;background:var(--paper);box-shadow:inset -1px 0 0 var(--line-2)}.compare thead th:first-child{background:var(--soft)}.compare tr.us td:first-child{background:#fff4ef}.scroll-hint{display:block;font-size:13px;color:var(--muted);margin:-1em 0 1.6em}}
+@media (max-width:560px){th,td{padding:10px 10px}table{font-size:14px}.compare td:first-child,.compare th:first-child{min-width:112px}}
 @media (max-width:560px){.copy.said{width:auto;padding:0 12px}.copy.said span{display:inline}}
