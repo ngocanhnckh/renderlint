@@ -8,6 +8,7 @@ Every rule can be set to `"error"`, `"warn"` or `"off"` in `renderlint.config.js
 |---|---|---|
 | [`text-overflow`](#text-overflow) | error | Text spills outside the box (card, button, badge, input) that is supposed to contain it. |
 | [`text-crowding`](#text-crowding) | error | Text still fits inside its card, button or badge, but has run through the side padding and nearly touches the edge (a KPI number, a long label). |
+| [`crushed-text`](#crushed-text) | error | Ordinary words are split across lines because their box is narrower than the word: a table squeezed onto a phone (often with `overflow-wrap: anywhere` or `hyphens: auto` on the cells), a narrow grid column, a fixed-width badge. The text technically fits, but reads as "Ren-de-red geom-et-ry". Not reported: hyphenation in a column wide enough for the word, URLs, IDs, code and preformatted text. |
 | [`text-clipped`](#text-clipped) | error | Text is partially cut off by an `overflow: hidden` container or the edge of an &lt;svg> (e.g. chart axis labels). |
 | [`unreachable-content`](#unreachable-content) | error | Content lies below the bottom of a box that clips (`overflow: hidden` or `clip`), or below the screen on a page that doesn't scroll, and nothing around it scrolls: users can never see it. Typical causes: a fixed-height app shell (`height: 100vh; overflow: hidden`) whose page or tab area isn't a scroller, or a scroll lock (`body { overflow: hidden }`) left on. Before reporting, renderlint turns the mouse wheel over the box: content that a script scrolls is not reported. Not reported: content moved away on purpose (transformed, absolute or fixed), small boxes (teasers, collapsed panels), boxes with a "Show more" control, faded or line-clamped text, and the page while a dialog is open. |
 | [`content-overflow`](#content-overflow) | error | A child element (image, button, inner card) sticks out of its visible container. |
@@ -86,6 +87,14 @@ Text spills outside the box (card, button, badge, input) that is supposed to con
 Text still fits inside its card, button or badge, but has run through the side padding and nearly touches the edge (a KPI number, a long label).
 
 **How to fix:** Give the text room to shrink or wrap: `min-width: 0` and `overflow-wrap: anywhere` on flex/grid children, a fluid font size for big numbers (`font-size: clamp(1.5rem, 4cqi, 2.5rem)` with `container-type: inline-size` on the card), fewer columns at that width, or a shorter format (`4.9K`).
+
+### crushed-text
+
+**Default:** error
+
+Ordinary words are split across lines because their box is narrower than the word: a table squeezed onto a phone (often with `overflow-wrap: anywhere` or `hyphens: auto` on the cells), a narrow grid column, a fixed-width badge. The text technically fits, but reads as "Ren-de-red geom-et-ry". Not reported: hyphenation in a column wide enough for the word, URLs, IDs, code and preformatted text.
+
+**How to fix:** Give the words room instead of breaking them. For a table: let it scroll in a wrapper (`overflow-x: auto` on the wrapper, a `min-width` on the table, and no `overflow-wrap: anywhere` on its cells), or stack it into cards on phones. For a grid or flex column: fewer columns at that width, or a `min-width` that fits the longest word. Keep `overflow-wrap: anywhere` for URLs and IDs only.
 
 ### text-clipped
 

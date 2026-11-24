@@ -102,12 +102,13 @@ It works with any framework that renders in a browser: React, Next.js, Vue, Nuxt
 
 ## What it catches
 
-62 rules, tuned so that a finding is almost always a real defect.
+63 rules, tuned so that a finding is almost always a real defect.
 
 | What you see | renderlint rule |
 |---|---|
 | Longer text pokes out of a card, button or badge, or runs right up to its border | `text-overflow`, `text-clipped`, `text-crowding` |
 | A layout that fits today's sample copy but breaks with real data | `fragile-layout` |
+| A table or narrow column squeezed onto a phone so words break mid-word ("Ren-dered geom-etry") | `crushed-text` |
 | Gray-on-gray or white-on-yellow text you can barely read | `contrast` (measured from real pixels, so it works on gradients and images) |
 | Elements overlap when the window shrinks, instead of wrapping | `element-overlap`, `viewport-overflow`, `content-overflow` |
 | Chart and diagram labels collide or get cut off | `text-overlap`, `text-clipped` (works on SVG charts) |
