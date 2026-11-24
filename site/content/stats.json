@@ -1,5 +1,5 @@
 {
- "fetched": 1795495015055,
+ "fetched": 1795513162981,
  "repos": {
   "vercel/next.js": 143620,
   "withastro/astro": 64157,
@@ -16,10 +16,12 @@
   "angular/angular": 101489,
   "elementor/elementor": 7107,
   "facebook/react": 252817,
-  "ant-design/ant-design": 100355,
-  "mantinedev/mantine": 31981,
+  "ant-design/ant-design": 100357,
+  "mantinedev/mantine": 31983,
   "chakra-ui/panda": 6258,
-  "nuxt/ui": 7100
+  "nuxt/ui": 7101,
+  "ruby/ruby": 23853,
+  "gohugoio/hugo": 90554
  },
  "npm": {
   "next": 98003359,

@@ -9,7 +9,7 @@ export const FAQ = [
   { q: 'Can it check pages behind a login?', a: 'Yes. Give it the token your route guard reads and mock the API, log in once through your real form, or run a script for SSO. With roles, every page is checked as each role. A page that only showed the login form or “Access denied” is reported as auth-required or page-not-shown, never passed.' },
   { q: 'How do I use it with Claude Code and other coding agents?', a: 'Run npx -y @yitec/renderlint init. It adds a Claude Code Stop hook, so Claude can’t end its turn while UI errors remain in files it changed (it gives up after 4 attempts), writes the workflow into AGENTS.md for Codex, Cursor, Copilot, Gemini CLI and others, and installs three skills for setup, fixing and Playwright/Storybook.' },
   { q: 'How long does a check take?', a: 'A single page takes about 4 to 10 seconds at three viewports with the sweep and stress passes. Pages are checked side by side, and pages that render identically share their checks. Use --sweep 1024 or --no-sweep for a faster inner loop.' },
-  { q: 'Has renderlint found bugs in real open-source projects?', a: 'Yes. Scans of popular documentation sites found layout bugs in Ant Design, Mantine, Nuxt UI and Panda CSS, four projects with more than 145,000 GitHub stars between them. Each fix was one to seven lines of CSS, and all four pull requests were merged in November 2026.' },
+  { q: 'Has renderlint found bugs in real open-source projects?', a: 'Yes. Scans of popular websites and documentation sites found layout bugs in Ant Design, Hugo, Mantine, Ruby (ruby-lang.org), Nuxt UI and Panda CSS, six projects with more than 260,000 GitHub stars between them. Each fix was one to seven lines of CSS or one class, and all six were merged in November 2026 (Hugo’s maintainer landed the fix in a follow-up pull request that credits us as co-author).' },
   { q: 'What can’t it check?', a: 'Labels inside <canvas> charts are pixels, so they can’t be inspected. What sits behind clicks (dialogs, tabs, filled forms) is only linted when you list it in states or reach it in a Playwright test. Contrast follows the WCAG 2 AA formula, not APCA. Server mocks are Node only.' },
 ];
 
@@ -85,7 +85,7 @@ ${WORKS_WITH}
 <section class="wrap logos merged" aria-labelledby="merged-h">
 <p id="merged-h">Bugs renderlint found, now fixed upstream in</p>
 ${MERGED_IN}
-<p class="merged-more"><a class="link-arrow" href="${MERGED_POST}">How renderlint found them, and the fixes ${ICON.arrow}</a></p>
+<p class="merged-more"><a class="link-arrow" href="${MERGED_POST}">How renderlint found the first four ${ICON.arrow}</a></p>
 </section>
 
 <section class="wrap section" aria-labelledby="what-h">
