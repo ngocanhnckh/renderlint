@@ -26,6 +26,20 @@ Text spilling out of cards, gray-on-gray captions, chart labels on top of each o
 
 renderlint renders every page at phone, tablet and desktop widths (and dark mode), sweeps the widths in between, and re-checks with longer text, bigger numbers and longer API data. Each defect is reported with the element, the source file, an annotated screenshot and a concrete fix, in plain text an agent can act on.
 
+## Fixed upstream
+
+renderlint found these bugs on the websites and docs of popular open-source projects. Each fix was sent as a pull request and merged by the project's maintainers. Star and download counts update live.
+
+<table>
+<tr><th>Project</th><th align="left">Stars and downloads</th><th align="left">What renderlint found</th><th align="left">Fix</th></tr>
+<tr><td align="center"><a href="https://ant.design"><img src="docs/images/upstream/ant-design.svg" width="32" height="32" alt="Ant Design logo"></a><br><a href="https://github.com/ant-design/ant-design"><b>Ant&nbsp;Design</b></a></td><td><a href="https://github.com/ant-design/ant-design"><img src="https://img.shields.io/github/stars/ant-design/ant-design?style=flat&label=stars&color=f5a623" alt="Ant Design GitHub stars"></a><br><a href="https://www.npmjs.com/package/antd"><img src="https://img.shields.io/npm/dw/antd?style=flat&label=npm&color=cb3837" alt="Ant Design weekly npm downloads"></a></td><td>Component pages scrolled sideways on phones: at 375px the Table page was 810px wide, because a media query built on a CSS variable never matched.</td><td><a href="https://github.com/ant-design/ant-design/pull/59920">#59920</a> (merged)</td></tr>
+<tr><td align="center"><a href="https://mantine.dev"><img src="docs/images/upstream/mantine.svg" width="32" height="32" alt="Mantine logo"></a><br><a href="https://github.com/mantinedev/mantine"><b>Mantine</b></a></td><td><a href="https://github.com/mantinedev/mantine"><img src="https://img.shields.io/github/stars/mantinedev/mantine?style=flat&label=stars&color=f5a623" alt="Mantine GitHub stars"></a><br><a href="https://www.npmjs.com/package/@mantine/core"><img src="https://img.shields.io/npm/dw/%40mantine%2Fcore?style=flat&label=npm&color=cb3837" alt="Mantine weekly npm downloads"></a></td><td>The Combobox transfer-list demo hid 218px of itself under the code panel at phone widths.</td><td><a href="https://github.com/mantinedev/mantine/pull/9447">#9447</a> (merged)</td></tr>
+<tr><td align="center"><a href="https://ui.nuxt.com"><img src="docs/images/upstream/nuxt-ui.svg" width="32" height="32" alt="Nuxt UI logo"></a><br><a href="https://github.com/nuxt/ui"><b>Nuxt&nbsp;UI</b></a></td><td><a href="https://github.com/nuxt/ui"><img src="https://img.shields.io/github/stars/nuxt/ui?style=flat&label=stars&color=f5a623" alt="Nuxt UI GitHub stars"></a><br><a href="https://www.npmjs.com/package/@nuxt/ui"><img src="https://img.shields.io/npm/dw/%40nuxt%2Fui?style=flat&label=npm&color=cb3837" alt="Nuxt UI weekly npm downloads"></a></td><td>The team page scrolled sideways from 768px to about 850px and cut off the contribution counts.</td><td><a href="https://github.com/nuxt/ui/pull/7445">#7445</a> (merged)</td></tr>
+<tr><td align="center"><a href="https://panda-css.com"><img src="docs/images/upstream/panda-css.svg" width="32" height="32" alt="Panda CSS logo"></a><br><a href="https://github.com/chakra-ui/panda"><b>Panda&nbsp;CSS</b></a></td><td><a href="https://github.com/chakra-ui/panda"><img src="https://img.shields.io/github/stars/chakra-ui/panda?style=flat&label=stars&color=f5a623" alt="Panda CSS GitHub stars"></a><br><a href="https://www.npmjs.com/package/@pandacss/dev"><img src="https://img.shields.io/npm/dw/%40pandacss%2Fdev?style=flat&label=npm&color=cb3837" alt="Panda CSS weekly npm downloads"></a></td><td>The previous/next cards pushed most docs pages 97px sideways at 320px (flex items without <code>min-width: 0</code>).</td><td><a href="https://github.com/chakra-ui/panda/pull/4110">#4110</a> (merged)</td></tr>
+</table>
+
+How renderlint found them, and what the fixes were: [Layout bugs fixed in Ant Design, Mantine, Nuxt UI and Panda CSS](https://renderlint.yitec.net/blog/layout-bugs-fixed-ant-design-mantine-nuxt-ui-panda-css/).
+
 ## Quick start
 
 **Paste this into your coding agent** (Claude Code, Cursor, Codex, Copilot, Gemini CLI, Windsurf, Aider, Zed, Amp…):
@@ -76,7 +90,7 @@ It works with any framework that renders in a browser: React, Next.js, Vue, Nuxt
 
 ## Contents
 
-- [What it catches](#what-it-catches)
+- [Fixed upstream](#fixed-upstream) · [What it catches](#what-it-catches)
 - [See it](#see-it)
 - [Loading states and the UX pass](#loading-states-and-the-ux-pass)
 - [Content you didn't render](#content-you-didnt-render)
