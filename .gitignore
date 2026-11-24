@@ -8,3 +8,4 @@ node_modules/
 /bench/loading/experiment/shots*/
 .env
 .env.*
+*.env
