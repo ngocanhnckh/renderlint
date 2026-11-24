@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Word breaks that are fine</title>
+<style>body{font-family:sans-serif;margin:0;padding:16px;background:#fff;color:#111;max-width:640px}
+.card{width:220px;border:1px solid #ccc;border-radius:8px;padding:12px;margin-bottom:16px;overflow-wrap:anywhere}
+.hy{width:180px;hyphens:auto;text-align:justify;margin-bottom:16px}
+.wrap{overflow-x:auto;margin-bottom:16px}.wrap table{min-width:560px;border-collapse:collapse}
+td,th{border:1px solid #ccc;padding:8px;text-align:left}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;width:200px;background:#f4f4f4;padding:8px}
+code{overflow-wrap:anywhere}
+.nar{width:120px;font-size:14px}</style></head><body>
+<h1>Word breaks that are fine</h1>
+<div class="card"><p>Email: verylongemailaddress_without_breaks@enterprise-example.com</p><p>Link: https://example.com/a/really/long/path/that/has/to/wrap/somewhere</p><p>Order ID 7f3a9c1e2b4d5f6a8b0c1d2e3f4a5b6c</p></div>
+<p class="hy">Hyphenation in a column that is wide enough for every word, with automatic hyphenation turned on: internationalization, documentation, responsibilities, characteristically.</p>
+<div class="wrap"><table><tr><th>Tool</th><th>Reads</th><th>Overflow</th><th>Contrast</th><th>Baseline</th><th>Fix</th></tr><tr><td>renderlint</td><td>Rendered geometry and pixels</td><td>Yes, at every width</td><td>Yes, from the real pixels</td><td>No</td><td>Element, source file and screenshot</td></tr></table></div>
+<pre>const value = document.documentElement.scrollWidth - window.innerWidth;</pre>
+<p class="nar">Run <code>document.documentElement.scrollWidth</code> in the console.</p>
+<p class="nar">Words like configuration wrap whole.</p>
+</body></html>

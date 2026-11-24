@@ -763,6 +763,81 @@ RL.rule({
   },
 });
 
+// Ordinary words split across lines because their box is narrower than the
+// word: a table squeezed onto a phone with `overflow-wrap: anywhere`, a narrow
+// grid column, a badge with a fixed width. Hyphenation in a column that is wide
+// enough is fine (the word would fit), and so are URLs, IDs and code.
+const CRUSH_WORD = /^[\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}][\p{Script=Latin}\p{Script=Cyrillic}\p{Script=Greek}\p{M}'’]{3,19}$/u;
+const CRUSH_SKIP = 'pre,code,kbd,samp,var,textarea,input,select,option,svg,math,[contenteditable=""],[contenteditable="true"]';
+
+function contentWidth(el) {
+  const s = RL.cs(el), r = paddingBox(el);
+  return r.w - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0);
+}
+
+RL.rule({
+  id: 'crushed-text',
+  run(ctx) {
+    const range = document.createRange();
+    const groups = new Map(); // table, or the text's own block → { words, boxes, minW }
+    for (const t of ctx.texts) {
+      if (RL.isIgnored(t.el, 'crushed-text') || RL.flagged.has(t.el)) continue;
+      if (t.el.closest(CRUSH_SKIP)) continue;
+      const s = RL.cs(t.el);
+      if (/^pre/.test(s.whiteSpace) || s.whiteSpace === 'break-spaces' || (s.writingMode && !/^horizontal/.test(s.writingMode))) continue;
+      const block = RL.nearestBlock(t.el);
+      if (block.namespaceURI === SVG_NS) continue;
+      const fs = fontSize(t.el);
+      const width = contentWidth(block);
+      if (width <= 0 || width > fs * 24) continue; // only narrow boxes can crush a 20-letter word
+      const data = t.node.data;
+      const re = /\S+/g;
+      let m;
+      while ((m = re.exec(data))) {
+        // Strip surrounding punctuation; split hyphenated compounds (a break at the hyphen is normal).
+        const tok = m[0];
+        const lead = tok.match(/^[("'“‘«\[]*/)[0].length;
+        const core = tok.slice(lead).replace(/[)"'”’»\].,;:!?…]+$/, '');
+        let off = m.index + lead;
+        for (const part of core.split(/(-|‐|–|—|\/)/)) {
+          const start = off;
+          off += part.length;
+          if (!CRUSH_WORD.test(part)) continue;
+          range.setStart(t.node, start);
+          range.setEnd(t.node, start + part.length);
+          const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0.5 && r.height > 0.5);
+          if (rects.length < 2) continue;
+          const lines = [];
+          for (const r of rects) if (!lines.some((y) => Math.abs(y - r.top) < fs * 0.5)) lines.push(r.top);
+          if (lines.length < 2) continue;
+          const wordW = rects.reduce((a, r) => a + r.width, 0);
+          if (wordW <= width + 0.5) continue; // it would fit: hyphenation or a deliberate break, not crushing
+          const table = block.closest('td,th') ? block.closest('table') : null;
+          const key = table || block;
+          let g = groups.get(key);
+          if (!g) { g = { el: t.el, words: [], cells: new Set(), minW: Infinity, fs, table }; groups.set(key, g); }
+          g.words.push(part);
+          g.cells.add(block);
+          g.minW = Math.min(g.minW, width);
+        }
+      }
+    }
+    for (const [key, g] of groups) {
+      const uniq = Array.from(new Set(g.words));
+      const shown = uniq.slice(0, 3).map((w) => '"' + w + '"').join(', ');
+      const w = Math.max(0, Math.round(g.minW));
+      const where = g.table
+        ? 'Table columns are squeezed to ' + w + 'px, so words break mid-word across lines (' + shown + (uniq.length > 3 ? ', …' : '') + ') in ' + g.cells.size + ' cell' + (g.cells.size === 1 ? '' : 's') + '.'
+        : 'Text is squeezed into a ' + w + 'px-wide box, so words break mid-word across lines (' + shown + (uniq.length > 3 ? ', …' : '') + ').';
+      ctx.report({
+        rule: 'crushed-text', el: g.table ? key : g.el, related: undefined,
+        message: where,
+        details: { width: w, words: uniq.slice(0, 10), count: g.words.length, cells: g.cells.size, fontSize: g.fs },
+      });
+    }
+  },
+});
+
 // ---------------------------------------------------------------------------
 RL.rule({
   id: 'text-clipped',

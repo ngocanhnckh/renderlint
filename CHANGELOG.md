@@ -10,6 +10,7 @@
 
 ### Phones
 
+- New rule `crushed-text` (error): an ordinary word that is wider than its box, so it breaks mid-word across lines. The usual cause is a table squeezed onto a phone with `overflow-wrap: anywhere` or `hyphens: auto` on its cells. Findings are grouped per table. Not reported: hyphenation in a column wide enough for the word, URLs, IDs, code and preformatted text.
 - New rule `zoom-disabled` (error): `user-scalable=no` or `maximum-scale` under 2 in the viewport meta, which stops people zooming in on phones (WCAG 1.4.4).
 - New rule `input-zoom` (warn): at phone width, a text field, textarea or select the page sized below 16px, which iOS Safari zooms into when tapped. Fields left at the browser's default size are not judged, since iPhones use their own default.
 - New rule `html-lang` (warn): `<html>` without a `lang` attribute (WCAG 3.1.1).

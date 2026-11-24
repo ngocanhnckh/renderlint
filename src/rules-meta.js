@@ -15,6 +15,12 @@ export const RULES = {
     summary: 'Text still fits inside its card, button or badge, but has run through the side padding and nearly touches the edge (a KPI number, a long label).',
     fix: 'Give the text room to shrink or wrap: `min-width: 0` and `overflow-wrap: anywhere` on flex/grid children, a fluid font size for big numbers (`font-size: clamp(1.5rem, 4cqi, 2.5rem)` with `container-type: inline-size` on the card), fewer columns at that width, or a shorter format (`4.9K`).',
   },
+  'crushed-text': {
+    severity: 'error',
+    category: 'layout',
+    summary: 'Ordinary words are split across lines because their box is narrower than the word: a table squeezed onto a phone (often with `overflow-wrap: anywhere` or `hyphens: auto` on the cells), a narrow grid column, a fixed-width badge. The text technically fits, but reads as "Ren-de-red geom-et-ry". Not reported: hyphenation in a column wide enough for the word, URLs, IDs, code and preformatted text.',
+    fix: 'Give the words room instead of breaking them. For a table: let it scroll in a wrapper (`overflow-x: auto` on the wrapper, a `min-width` on the table, and no `overflow-wrap: anywhere` on its cells), or stack it into cards on phones. For a grid or flex column: fewer columns at that width, or a `min-width` that fits the longest word. Keep `overflow-wrap: anywhere` for URLs and IDs only.',
+  },
   'text-clipped': {
     severity: 'error',
     category: 'layout',
