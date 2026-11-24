@@ -37,8 +37,9 @@ const cache = new Map();
 export function resolveImage(ref) {
   if (ref.startsWith('captures/')) return path.join(site, 'content', ref);
   if (ref.startsWith('docs/')) return path.join(repo, 'docs', 'images', ref.slice(5));
+  if (ref.startsWith('oss/')) return path.join(site, 'content', ref);
   if (ref.startsWith('static/')) return path.join(site, ref);
-  throw new Error(`Unknown image reference: ${ref} (use captures/…, docs/… or static/…)`);
+  throw new Error(`Unknown image reference: ${ref} (use captures/…, docs/…, oss/… or static/…)`);
 }
 export async function image(ref) {
   if (cache.has(ref)) return cache.get(ref);

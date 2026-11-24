@@ -9,6 +9,7 @@ export const FAQ = [
   { q: 'Can it check pages behind a login?', a: 'Yes. Give it the token your route guard reads and mock the API, log in once through your real form, or run a script for SSO. With roles, every page is checked as each role. A page that only showed the login form or “Access denied” is reported as auth-required or page-not-shown, never passed.' },
   { q: 'How do I use it with Claude Code and other coding agents?', a: 'Run npx -y @yitec/renderlint init. It adds a Claude Code Stop hook, so Claude can’t end its turn while UI errors remain in files it changed (it gives up after 4 attempts), writes the workflow into AGENTS.md for Codex, Cursor, Copilot, Gemini CLI and others, and installs three skills for setup, fixing and Playwright/Storybook.' },
   { q: 'How long does a check take?', a: 'A single page takes about 4 to 10 seconds at three viewports with the sweep and stress passes. Pages are checked side by side, and pages that render identically share their checks. Use --sweep 1024 or --no-sweep for a faster inner loop.' },
+  { q: 'Has renderlint found bugs in real open-source projects?', a: 'Yes. Scans of popular websites and documentation sites found layout bugs in Ant Design, Hugo, Mantine, Ruby (ruby-lang.org), Nuxt UI and Panda CSS, six projects with more than 260,000 GitHub stars between them. Each fix was one to seven lines of CSS or one class, and all six were merged in November 2026 (Hugo’s maintainer landed the fix in a follow-up pull request that credits us as co-author).' },
   { q: 'What can’t it check?', a: 'Labels inside <canvas> charts are pixels, so they can’t be inspected. What sits behind clicks (dialogs, tabs, filled forms) is only linted when you list it in states or reach it in a Playwright test. Contrast follows the WCAG 2 AA formula, not APCA. Server mocks are Node only.' },
 ];
 
@@ -31,7 +32,7 @@ ${p.noShot ? '' : `<pre class="term"><code>${terminal(excerpt(before, compact ? 
 export { pairCard };
 
 export async function home(c) {
-  const { posts, postCard, copyCmd, ICON, WORKS_WITH, img, esc, terminal, RULES, VERSION, REPO, INSTALL } = c;
+  const { posts, postCard, copyCmd, ICON, WORKS_WITH, MERGED_IN, MERGED_POST, img, esc, terminal, RULES, VERSION, REPO, INSTALL } = c;
   const n = Object.keys(RULES).length;
   const featured = [];
   for (const id of ['overflow', 'menu', 'unreachable', 'contrast']) featured.push(await pairCard(PAIRS.find((p) => p.id === id), c, { compact: true }));
@@ -78,7 +79,13 @@ export async function home(c) {
 
 <section class="wrap logos" aria-labelledby="works-h">
 <p id="works-h">Works with anything that renders in a browser, including</p>
-<ul>${WORKS_WITH}</ul>
+${WORKS_WITH}
+</section>
+
+<section class="wrap logos merged" aria-labelledby="merged-h">
+<p id="merged-h">Bugs renderlint found, now fixed upstream in</p>
+${MERGED_IN}
+<p class="merged-more"><a class="link-arrow" href="${MERGED_POST}">How renderlint found the first four ${ICON.arrow}</a></p>
 </section>
 
 <section class="wrap section" aria-labelledby="what-h">
@@ -139,12 +146,13 @@ ${catches.map(([w, r]) => `<tr><td${ignore(w)}>${w}</td><td>${ruleLinks(r)}</td>
 <section class="wrap section" aria-labelledby="cmp-h">
 <div class="section-head"><div><span class="kicker">Comparison</span><h2 id="cmp-h">How does it compare with other tools?</h2></div>
 <p>renderlint doesn’t replace your other tools. It covers the gap between “the code is valid” and “the page looks right”.</p></div>
-<div class="table-wrap"><table class="compare"><thead><tr><th scope="col">Tool</th><th scope="col">Reads</th><th scope="col">Overflow, overlap, clipping</th><th scope="col">Contrast on gradients and images</th><th scope="col">Needs a baseline</th><th scope="col">Tells you the fix</th></tr></thead><tbody>
+<div class="table-wrap wide"><table class="compare"><thead><tr><th scope="col">Tool</th><th scope="col">Reads</th><th scope="col">Overflow, overlap, clipping</th><th scope="col">Contrast on gradients and images</th><th scope="col">Needs a baseline</th><th scope="col">Tells you the fix</th></tr></thead><tbody>
 <tr><td>ESLint, stylelint, TypeScript</td><td>Source code</td><td>No</td><td>No</td><td>No</td><td>Yes, for code issues</td></tr>
 <tr><td>axe-core, Lighthouse</td><td>DOM and computed CSS</td><td>No</td><td>Reported as “needs review”</td><td>No</td><td>Yes, for accessibility rules</td></tr>
 <tr><td>Visual regression (Percy, Chromatic, BackstopJS, Playwright screenshots)</td><td>Pixels, against approved images</td><td>Only as a diff from the baseline</td><td>Only as a diff</td><td>Yes: a defect in the first version becomes the baseline</td><td>No: shows what changed, not what’s wrong</td></tr>
 <tr class="us"><td>renderlint</td><td>Rendered geometry and pixels</td><td>Yes, at every width and with stressed content</td><td>Yes, from the real pixels behind each glyph</td><td>No</td><td>Yes: element, source file, screenshot and fix</td></tr>
 </tbody></table></div>
+<p class="scroll-hint">Swipe the table sideways to see every column.</p>
 <p><a class="link-arrow" href="/blog/visual-regression-testing-vs-rendered-ui-linting/">Visual regression testing vs rendered-UI linting ${ICON.arrow}</a></p>
 </section>
 

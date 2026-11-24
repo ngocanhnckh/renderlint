@@ -44,14 +44,69 @@ export const ICON = {
 };
 export const MARK = '<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="1" width="30" height="30" rx="9" fill="#0c0c0c"/><rect x="8" y="10.5" width="16" height="11" rx="2.2" fill="none" stroke="#ec6a42" stroke-width="2.6"/><path d="M8 7h9" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>';
 
-// "Works with": only what README/docs say renderlint supports. Monochrome Simple Icons (CC0); Playwright has no mark there.
-const brand = (si) => icons[si] ? `<svg viewBox="0 0 24 24" role="img" aria-hidden="true"><path d="${icons[si].path}"/></svg>` : '';
-export const WORKS_WITH = [
-  ['Next.js', 'siNextdotjs'], ['React', 'siReact'], ['Vue', 'siVuedotjs'], ['Nuxt', 'siNuxt'], ['Svelte / SvelteKit', 'siSvelte'],
-  ['Astro', 'siAstro'], ['Angular', 'siAngular'], ['React Router / Remix', 'siReactrouter'], ['TanStack Router', 'siTanstack'],
-  ['Vite', 'siVite'], ['Storybook', 'siStorybook'], ['Playwright', null], ['WordPress', 'siWordpress'], ['Elementor', 'siElementor'],
-  ['Claude Code', 'siClaude'], ['GitHub Actions', 'siGithubactions'],
-].map(([name, si]) => `<li>${si ? brand(si) : ''}${esc(name)}</li>`).join('');
+// "Works with": only what README/docs say renderlint supports. Simple Icons (CC0) in each brand's colour; Playwright has no mark there.
+// Stars and weekly npm downloads come from the GitHub and npm APIs at build time (cached in content/stats.json for a day; the cache is used when offline).
+const brand = (si, color) => icons[si] ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path${color ? ` style="fill:${color}"` : ''} d="${icons[si].path}"/></svg>` : '';
+const STATS_FILE = path.join(site, 'content', 'stats.json');
+const statsCache = fs.existsSync(STATS_FILE) ? JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) : { fetched: 0, repos: {}, npm: {} };
+const fresh = Date.now() - statsCache.fetched < 24 * 3600e3;
+async function getJson(url) {
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': 'renderlint-site-build', Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+    return r.ok ? await r.json() : null;
+  } catch { return null; }
+}
+async function stats(list) {
+  const missing = list.some((x) => (x.repo && !statsCache.repos[x.repo]) || (x.npm && !statsCache.npm[x.npm]));
+  if (!fresh || missing) {
+    let got = 0;
+    await Promise.all(list.map(async (x) => {
+      if (x.repo) { const j = await getJson(`https://api.github.com/repos/${x.repo}`); if (j?.stargazers_count) { statsCache.repos[x.repo] = j.stargazers_count; got++; } }
+      if (x.npm) { const j = await getJson(`https://api.npmjs.org/downloads/point/last-week/${x.npm}`); if (j?.downloads) { statsCache.npm[x.npm] = j.downloads; got++; } }
+    }));
+    if (got) { statsCache.fetched = Date.now(); statsCache.date = new Date().toISOString().slice(0, 10); }
+  }
+  return list.map((x) => ({ ...x, stars: statsCache.repos[x.repo], downloads: statsCache.npm[x.npm] }));
+}
+const compact = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e8 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e5 ? 0 : 1)}k` : String(n);
+const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 5.8 6.3.9-4.6 4.4 1.1 6.3L12 17.2l-5.6 3 1.1-6.3L2.9 9.5l6.3-.9z"/></svg>';
+const DOWN = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6.5 11 12 16.5 17.5 11M5 20h14"/></svg>';
+function chip(x, hidden) {
+  const nums = [x.stars && `<span class="n">${STAR}${compact(x.stars)}<span class="sr"> GitHub stars</span></span>`, x.downloads && `<span class="n">${DOWN}${compact(x.downloads)}/wk<span class="sr"> npm downloads a week</span></span>`].filter(Boolean).join('');
+  const inner = `<span class="mk">${x.mark}</span><span class="tx"><b>${esc(x.name)}</b><span class="nums">${nums || `<span class="n">${esc(x.note || '')}</span>`}</span></span>`;
+  return `<li style="--c:${x.color}">${x.href ? `<a class="card" href="${x.href}" rel="noopener"${hidden ? ' tabindex="-1"' : ''}>${inner}</a>` : `<span class="card">${inner}</span>`}</li>`;
+}
+// An endless strip: one real list, then copies for the loop (hidden from assistive tech and the keyboard).
+function marquee(items, { min = 10, reverse = false, seconds = 40 } = {}) {
+  const reps = Math.max(1, Math.ceil(min / items.length));
+  const set = (hidden) => `<ul class="set"${hidden ? ' aria-hidden="true"' : ''}>${Array.from({ length: reps }, (_, i) => items.map((x) => chip(x, hidden || i > 0).replace('<li ', i > 0 ? '<li class="dup" aria-hidden="true" ' : '<li ')).join('')).join('')}</ul>`;
+  return `<div class="marquee${reverse ? ' rev' : ''}" style="--t:${seconds}s" data-renderlint-ignore="text-clipped content-overflow viewport-overflow obscured-content element-overlap" data-renderlint-reason="endless logo strip: chips scroll through a clipped window on purpose"><div class="track">${set(false)}${set(true)}</div></div>`;
+}
+const WW = await stats([
+  ['Next.js', 'siNextdotjs', '#000000', 'vercel/next.js', 'next'], ['React', 'siReact', '#149eca', 'facebook/react', 'react'], ['Vue', 'siVuedotjs', '#42b883', 'vuejs/core', 'vue'],
+  ['Nuxt', 'siNuxt', '#00DC82', 'nuxt/nuxt', 'nuxt'], ['Svelte / SvelteKit', 'siSvelte', '#FF3E00', 'sveltejs/svelte', 'svelte'], ['Astro', 'siAstro', '#BC52EE', 'withastro/astro', 'astro'],
+  ['Angular', 'siAngular', '#DD0031', 'angular/angular', '@angular/core'], ['React Router / Remix', 'siReactrouter', '#CA4245', 'remix-run/react-router', 'react-router'],
+  ['TanStack Router', 'siTanstack', '#1f1f1f', 'TanStack/router', '@tanstack/react-router'], ['Vite', 'siVite', '#9135FF', 'vitejs/vite', 'vite'],
+  ['Storybook', 'siStorybook', '#FF4785', 'storybookjs/storybook', 'storybook'], ['Playwright', null, '#2EAD33', 'microsoft/playwright', '@playwright/test'],
+  ['WordPress', 'siWordpress', '#21759B', 'WordPress/WordPress', null], ['Elementor', 'siElementor', '#92003B', 'elementor/elementor', null],
+  ['Claude Code', 'siClaude', '#D97757', 'anthropics/claude-code', '@anthropic-ai/claude-code'], ['GitHub Actions', 'siGithubactions', '#2088FF', null, null, 'CI annotations on PRs'],
+].map(([name, si, color, repo, npm, note]) => ({ name, color, repo, npm, note, mark: si ? brand(si, color) : `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="${color}"/></svg>` })));
+export const WORKS_WITH = marquee(WW, { min: 16, seconds: 70 });
+
+// Projects that merged fixes for bugs renderlint found (PRs merged 19–24 November 2026; Hugo's maintainer landed ours as hugoDocs#3860, co-authored).
+// Panda CSS is not in Simple Icons: its mark is from the project's own repo (apps/playground/src/components/Logo.tsx).
+export const MERGED_POST = '/blog/layout-bugs-fixed-ant-design-mantine-nuxt-ui-panda-css/';
+const PANDA_COLOR = '<svg viewBox="0 0 95 96" aria-hidden="true"><path fill="#F6E458" d="M0 11C0 4.92487 4.92487 0 11 0H84C90.0751 0 95 4.92487 95 11V85C95 91.0751 90.0751 96 84 96H11C4.92487 96 0 91.0751 0 85V11Z"/><path fill="#111" d="M60.8796 21.4585C55.6382 19.9529 50.2921 19.7483 44.844 20.2355C41.7952 20.5523 38.8641 21.1575 36.037 22.2195C29.9261 24.5149 25.3378 28.4905 22.6019 34.4762C20.6404 38.7674 19.9316 43.3259 19.8577 48.003C19.7796 52.9459 20.399 57.8204 21.3833 62.6531C22.2754 67.0336 23.4635 71.3285 25.1603 75.474C25.3215 75.8679 25.5223 76.0009 25.9526 76C31.3191 75.9884 36.6857 75.9885 42.0523 75.9885C43.641 75.9885 45.2298 75.9885 46.8185 75.9882C46.9401 75.9882 47.0618 75.9815 47.2017 75.9738C47.2731 75.9699 47.3493 75.9657 47.4326 75.962C47.4003 75.8852 47.3715 75.8148 47.3444 75.7486C47.2913 75.6187 47.245 75.5057 47.1934 75.3952C46.8053 74.565 46.4092 73.7383 46.0131 72.9116C45.154 71.1184 44.2948 69.3252 43.5177 67.4972C41.161 61.9527 39.3562 56.244 38.8055 50.2012C38.5625 47.5349 38.5962 44.8838 39.336 42.2858C40.1816 39.3161 41.9962 37.2196 45.0045 36.3431C47.767 35.5383 50.5678 35.5436 53.3153 36.432C55.7674 37.225 57.366 38.8999 58.0461 41.4078C58.5683 43.3338 58.5682 45.2806 58.173 47.2223C57.8688 48.7173 57.2563 50.0816 56.1539 51.1729C54.1763 53.1305 51.7066 53.5806 49.0565 53.4306C48.585 53.4039 48.115 53.3522 47.6306 53.2989C47.4037 53.274 47.1737 53.2487 46.939 53.2255C46.9457 53.3005 46.9495 53.3696 46.9529 53.4343C46.9598 53.5617 46.9658 53.6721 46.992 53.7775C47.1049 54.2314 47.2125 54.687 47.3202 55.1426C47.5794 56.24 47.8387 57.3376 48.172 58.4122C48.8266 60.5223 49.5878 62.5816 50.4507 64.5922C56.6017 64.1122 62.2673 62.5831 68.2805 58.9734C68.3708 58.9165 68.4528 58.865 68.535 58.8138C71.1179 57.2059 73.2084 55.1199 74.6501 52.4264C76.9847 48.0644 77.4398 43.3997 76.7462 38.5848C76.0304 33.6159 73.8004 29.4451 69.9619 26.1735C67.2995 23.9043 64.2208 22.4183 60.8796 21.4585Z"/></svg>';
+const MERGED = await stats([
+  ['Ant Design', brand('siAntdesign', '#0170FE'), '#0170FE', 'ant-design/ant-design', 'antd', 'https://github.com/ant-design/ant-design/pull/59920'],
+  ['Hugo', brand('siHugo', '#FF4088'), '#FF4088', 'gohugoio/hugo', null, 'https://github.com/gohugoio/hugoDocs/pull/3860'],
+  ['Mantine', brand('siMantine', '#339AF0'), '#339AF0', 'mantinedev/mantine', '@mantine/core', 'https://github.com/mantinedev/mantine/pull/9447'],
+  ['Ruby', brand('siRuby', '#CC342D'), '#CC342D', 'ruby/ruby', null, 'https://github.com/ruby/www.ruby-lang.org/pull/4083'],
+  ['Nuxt UI', brand('siNuxt', '#00DC82'), '#00DC82', 'nuxt/ui', '@nuxt/ui', 'https://github.com/nuxt/ui/pull/7445'],
+  ['Panda CSS', PANDA_COLOR, '#E3C600', 'chakra-ui/panda', '@pandacss/dev', 'https://github.com/chakra-ui/panda/pull/4110'],
+].map(([name, mark, color, repo, npm, href]) => ({ name, mark, color, repo, npm, href })));
+export const MERGED_IN = marquee(MERGED, { min: 10, reverse: true, seconds: 45 });
+fs.writeFileSync(STATS_FILE, JSON.stringify(statsCache, null, 1) + '\n');
 
 // ---- shared chrome ----------------------------------------------------------------------------
 export const copyCmd = (cmd, label = 'Copy') => `<div class="cmd"><code>${esc(cmd)}</code><button class="copy" type="button" data-copy="${esc(cmd)}" aria-label="Copy the command ${esc(cmd)}">${ICON.copy}<span>${label}</span></button></div>`;
@@ -72,7 +127,7 @@ function footer() {
 <nav aria-labelledby="f1"><h2 id="f1">Product</h2><ul><li><a href="/get-started/">Get started</a></li><li><a href="/examples/">Before and after</a></li><li><a href="/rules/">All ${Object.keys(RULES).length} rules</a></li><li><a href="/blog/">Blog</a></li></ul></nav>
 <nav aria-labelledby="f2"><h2 id="f2">Project</h2><ul><li><a href="${REPO}">GitHub</a></li><li><a href="${REPO}/tree/master/docs">Documentation</a></li><li><a href="${REPO}/blob/master/CHANGELOG.md">Changelog</a></li><li><a href="${NPM}">npm package</a></li></ul></nav>
 <nav aria-labelledby="f3"><h2 id="f3">Follow</h2><ul><li><a href="/feed.xml">Atom feed</a></li><li><a href="/rss.xml">RSS feed</a></li><li><a href="/llms.txt">llms.txt</a></li><li><a href="https://gitlab.com/anhnn.a05/renderlint">GitLab mirror</a></li></ul></nav>
-<div class="legal"><span>© 2026 renderlint contributors. MIT licensed.</span><span>Framework names and logos belong to their owners and are shown only to say what renderlint works with.</span></div>
+<div class="legal"><span>© 2026 renderlint contributors. MIT licensed.</span><span>Project names and logos belong to their owners. They are shown only to say what renderlint works with and which projects have merged fixes for bugs it found.</span></div>
 </div></footer>`;
 }
 
@@ -105,6 +160,8 @@ function page({ url, title, description, body, current, ld = [], og, type = 'web
 <link rel="preload" href="/fonts/instrument-serif-400.woff2" as="font" type="font/woff2" crossorigin>
 <meta property="og:type" content="${type}">
 <meta property="og:site_name" content="renderlint">
+<meta name="application-name" content="renderlint">
+<meta name="apple-mobile-web-app-title" content="renderlint">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${canonical}">
@@ -162,13 +219,20 @@ async function renderMarkdown(md) {
         return `<h${depth} id="${id}">${inner}</h${depth}>\n`;
       },
       code({ text, lang }) {
-        if (lang === 'text' || lang === 'console') return `<pre class="term"><code>${terminal(text)}</code></pre>\n`;
+        // Quoted tool output can contain emoji from the page it checked (e.g. "🥦 Broccoli"): that is content, not an icon.
+        const quoted = /\p{Extended_Pictographic}/u.test(text) ? ' data-renderlint-ignore="emoji" data-renderlint-reason="quoted renderlint output from another site"' : '';
+        if (lang === 'text' || lang === 'console') return `<pre class="term"${quoted}><code>${terminal(text)}</code></pre>\n`;
         return `<pre><code${lang ? ` class="language-${esc(lang)}"` : ''}>${esc(text)}</code></pre>\n`;
       },
     },
   });
   let html = marked.parse(md);
-  html = html.replace(/<table>/g, '<div class="table-wrap"><table>').replace(/<\/table>/g, '</table></div>');
+  // Tables with 3+ columns (or a long code token) get a minimum width and scroll inside .table-wrap; narrower ones fit the column.
+  html = html.replace(/<table>([\s\S]*?)<\/table>/g, (m, inner) => {
+    const cols = ((inner.match(/<tr>([\s\S]*?)<\/tr>/) || [, ''])[1].match(/<t[hd][\s>]/g) || []).length;
+    const longCode = /<code>[^<]*?[^\s<]{16,}/.test(inner);
+    return `<div class="table-wrap${cols >= 3 || longCode ? ' wide' : ''}"><table>${inner}</table></div>`;
+  });
   // external links open in place but are marked for screen readers? keep plain; add rel for safety
   html = html.replace(/<a href="(https?:\/\/(?!renderlint\.yitec\.net)[^"]+)"/g, '<a href="$1" rel="noopener"');
   return { html, toc };
@@ -198,7 +262,7 @@ for (const f of fs.readdirSync(blogDir).filter((f) => f.endsWith('.md'))) {
   posts.push({ ...data, file: f, body, words, minutes: Math.max(1, Math.round(words / 230)), rules: (data.rule || '').split(',').map((s) => s.trim()).filter(Boolean), tags: (data.tags || '').split(',').map((s) => s.trim()).filter(Boolean) });
 }
 // a stable reading order: the order of the brief
-const ORDER = ['text-overflow-clipped-text-responsive-layouts', 'color-contrast-gradients-images', 'content-you-cant-scroll-to', 'dropdown-cut-off-overflow-hidden-z-index', 'loading-states-layout-shift', 'test-every-route-and-role-behind-login', 'catch-ui-bugs-ai-coding-agents', 'visual-regression-testing-vs-rendered-ui-linting', 'replace-alert-confirm-prompt', 'form-control-layout-bugs'];
+const ORDER = ['layout-bugs-fixed-ant-design-mantine-nuxt-ui-panda-css', 'text-overflow-clipped-text-responsive-layouts', 'color-contrast-gradients-images', 'content-you-cant-scroll-to', 'dropdown-cut-off-overflow-hidden-z-index', 'loading-states-layout-shift', 'test-every-route-and-role-behind-login', 'catch-ui-bugs-ai-coding-agents', 'visual-regression-testing-vs-rendered-ui-linting', 'replace-alert-confirm-prompt', 'form-control-layout-bugs'];
 posts.sort((a, b) => (ORDER.indexOf(a.slug) + 1 || 99) - (ORDER.indexOf(b.slug) + 1 || 99));
 const fmtDate = (d) => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -274,7 +338,7 @@ const mdInline = (s) => new Marked().parseInline(esc(s).replace(/&lt;(\/?)(svg|d
 }
 
 // ---- home, get started, examples, 404 ---------------------------------------------------------
-const ctx = { posts, postCard, copyCmd, ICON, WORKS_WITH, img, image, terminal, esc, crumbs, RULES, VERSION, REPO, NPM, INSTALL, PKG, SITE };
+const ctx = { posts, postCard, copyCmd, ICON, WORKS_WITH, MERGED_IN, MERGED_POST, img, image, terminal, esc, crumbs, RULES, VERSION, REPO, NPM, INSTALL, PKG, SITE };
 const software = {
   '@type': 'SoftwareApplication', '@id': `${SITE}/#software`, name: 'renderlint', alternateName: PKG,
   description: 'An open-source command-line tool that renders a web app in headless Chromium and reports visual UI defects: overflowing and clipped text, low contrast measured from pixels, overlapping elements, unreachable content, hidden menus, broken form controls and missing loading states.',
@@ -286,7 +350,7 @@ const software = {
 page({
   url: '/', title: 'renderlint: a linter for the rendered UI', current: '/', og: 'home',
   description: 'renderlint opens your app in a real browser, finds visual UI defects like overflow, low contrast and hidden menus, and fails the build until they are fixed.',
-  ld: [software, { '@type': 'WebSite', '@id': `${SITE}/#website`, name: 'renderlint', url: `${SITE}/`, publisher: { '@id': `${SITE}/#org` } }, faqLd(FAQ)],
+  ld: [software, { '@type': 'WebSite', '@id': `${SITE}/#website`, name: 'renderlint', alternateName: ['renderlint CLI', 'renderlint.yitec.net'], url: `${SITE}/`, inLanguage: 'en', publisher: { '@id': `${SITE}/#org` } }, faqLd(FAQ)],
   body: await home(ctx), llms: 'What renderlint is, what it catches, how it works, results and FAQ.',
   extraHead: '<link rel="preload" href="/media/hero-poster.webp" as="image" type="image/webp" fetchpriority="high">\n',
 });
@@ -373,6 +437,7 @@ Key facts:
 - Works with any framework that renders in a browser: Next.js, React, Vue, Nuxt, Svelte/SvelteKit, Astro, Angular, React Router/Remix, TanStack Router, Vite, plain HTML, WordPress and Elementor. Integrations: build scripts, a Vite plugin, a Claude Code Stop hook, AGENTS.md and skills for other agents, Playwright Test, Storybook, GitHub Actions annotations.
 - No baseline images: it judges each page on its own, unlike visual regression testing.
 - In an experiment with 22 headless Claude Code sessions, the 11 apps built without renderlint had 229 errors between them; the 11 built with it finished at 0.
+- Bugs it found on the websites and docs of Ant Design, Hugo, Mantine, Ruby (ruby-lang.org), Nuxt UI and Panda CSS were fixed and merged upstream in November 2026: ${SITE}${MERGED_POST}
 - Install: \`${INSTALL}\` then \`npx renderlint\`. Requires Node.js 18.17+. Source: ${REPO}
 `;
 write('llms.txt', `${llmsIntro}

@@ -52,7 +52,7 @@ npx renderlint explain contrast                 # what a rule means and how to f
 
 <h2 id="build">How do you fail the build on UI defects?</h2>
 <p><code>init</code> appends the check to your <code>build</code> script. By hand:</p>
-<div class="table-wrap"><table><thead><tr><th scope="col">Framework</th><th scope="col"><code>build</code> script</th></tr></thead><tbody>
+<div class="table-wrap wide"><table><thead><tr><th scope="col">Framework</th><th scope="col"><code>build</code> script</th></tr></thead><tbody>
 <tr><td>Vite (React, Vue, Svelte, Solid, Preact, Lit), Qwik</td><td><code>vite build &amp;&amp; renderlint dist</code></td></tr>
 <tr><td>Next.js</td><td><code>next build &amp;&amp; renderlint --serve "npx next start -p 4319" --url http://localhost:4319</code></td></tr>
 <tr><td>Next.js static export</td><td><code>next build &amp;&amp; renderlint out</code></td></tr>
